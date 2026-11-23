@@ -161,6 +161,8 @@ jobs:
         working-directory: apps/desktop
         run: |
           $ErrorActionPreference = 'Stop'
+          # Sem isto, exit code != 0 de comando nativo (pnpm) não interrompe o script.
+          $PSNativeCommandUseErrorActionPreference = $true
           pnpm install --frozen-lockfile
           # JSON inline não sobrevive ao shim `pnpm.cmd`: o PowerShell tira as aspas
           # internas (`{version:0.1.0-beta.1}`). `--config` também aceita caminho de arquivo.
