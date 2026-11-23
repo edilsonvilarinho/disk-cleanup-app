@@ -32,6 +32,8 @@ function skipText(s: SkippedDto): string {
     </div>
     <div class="actions">
       <button type="button" class="btn" data-test="reclassify" :disabled="store.status === 'running'" @click="reload">{{ t('classify.reclassify') }}</button>
+      <RouterLink v-if="store.total.count > 0" class="btn btn-primary" to="/plano" data-test="to-plan">{{ t('classify.toPlan') }}</RouterLink>
+      <button v-else type="button" class="btn btn-primary" disabled data-test="to-plan">{{ t('classify.toPlan') }}</button>
     </div>
   </header>
 
@@ -138,8 +140,6 @@ function skipText(s: SkippedDto): string {
           <span>{{ t('classify.total') }}</span><span class="num" style="font-size: 18px">{{ gb(store.total.bytes) }}</span>
         </div>
         <span class="small muted">{{ t('classify.selected', { n: store.total.count }) }}</span>
-        <RouterLink v-if="store.total.count > 0" class="btn btn-primary btn-lg" to="/plano" data-test="to-plan">{{ t('classify.toPlan') }}</RouterLink>
-        <button v-else type="button" class="btn btn-primary btn-lg" disabled data-test="to-plan">{{ t('classify.toPlan') }}</button>
       </section>
     </aside>
   </div>

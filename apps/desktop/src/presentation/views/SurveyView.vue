@@ -47,13 +47,15 @@ function start() {
       </label>
       <button
         type="button"
-        class="btn btn-primary"
+        class="btn"
+        :class="{ 'btn-primary': !report }"
         data-test="start-survey"
         :disabled="!system.info || survey.status === 'running'"
         @click="start"
       >
         {{ report ? t('survey.again') : t('survey.start') }}
       </button>
+      <RouterLink v-if="report" class="btn btn-primary" to="/classificacao" data-test="to-classify">{{ t('survey.toClassify') }}</RouterLink>
     </div>
   </header>
 
@@ -130,9 +132,6 @@ function start() {
       <p class="small muted">{{ t('survey.cloudNote') }}</p>
     </section>
 
-    <div class="footer-actions">
-      <span class="small muted">{{ t('survey.footer') }}</span>
-      <RouterLink class="btn btn-primary btn-lg" to="/classificacao" data-test="to-classify">{{ t('survey.toClassify') }}</RouterLink>
-    </div>
+    <p class="small muted">{{ t('survey.footer') }}</p>
   </template>
 </template>

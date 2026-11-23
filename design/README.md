@@ -33,6 +33,25 @@ Os tokens (`prototypes/assets/app.css`) são a fonte do CSS do app em
 | Execução | plano aprovado |
 | Relatório | ao menos um tier executado |
 
+**Nova análise** (cabeçalho do Relatório): volta ao Survey vazio e tranca as abas 2–5 de novo — limpa
+o estado de varredura, classificação, plano, execução, relatório e exportação na interface. O
+histórico de varreduras e as Configurações ficam. Sem confirmação: nada no disco muda, e o aviso ao
+lado do botão lembra de exportar antes.
+
+**Avançar fica no topo.** A ação que leva à próxima etapa é a única primária e fica no cabeçalho
+da etapa (`.page-head .actions`, à direita), nunca no rodapé: o usuário não precisa rolar a página para
+seguir. Desabilitada enquanto o pré-requisito falta, com o motivo visível perto do controle que o
+resolve (ex.: Plano → "Confirme a revisão do plano para aprovar" no card de aprovação, que é o
+primeiro da coluna lateral). Ações da própria etapa (executar um tier, exportar) ficam secundárias.
+
+| Etapa | Ação primária no cabeçalho |
+|---|---|
+| Survey | Classificar candidatos (após a varredura; antes dela, Iniciar varredura) |
+| Classificação | Montar plano |
+| Plano | Aprovar |
+| Execução | Ver relatório (ao terminar) |
+| Relatório | Nova análise |
+
 Os pré-requisitos são independentes, não em cadeia: rever o Plano descarta a aprovação (tranca a
 Execução), mas o Relatório dos tiers já executados continua acessível.
 
