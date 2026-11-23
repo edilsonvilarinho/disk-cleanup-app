@@ -32,6 +32,18 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg3ODc0MTRGMTFBOTQ0ODIKUldTQ1JLa1JUMEdIaDZlbGJPTXFEMjRVQ25Ma09tZ1RxZjN2SHBHZzJ1T2ppMnpOQXBUL1dCbEoK",
+      "endpoints": [
+        "https://github.com/edilsonvilarinho/disk-cleanup-app/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

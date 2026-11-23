@@ -2,12 +2,15 @@
 import { computed } from 'vue'
 import { useSettingsStore } from '../../application/stores/settings'
 import { useSystemStore } from '../../application/stores/system'
+import { useUpdateStore } from '../../application/stores/update'
 import { useI18n } from '../i18n'
 import { STEPS } from '../router'
 import { useTheme } from '../theme'
+import UpdateNotice from './UpdateNotice.vue'
 
 const system = useSystemStore()
 const settings = useSettingsStore()
+const update = useUpdateStore()
 const theme = useTheme()
 const { t, err } = useI18n()
 const isDark = computed(() => theme.current.value === 'dark')
@@ -27,7 +30,7 @@ function toggleTheme() {
       </svg>
       <div style="display: flex; flex-direction: column">
         <span class="brand-name">Disk Cleanup</span>
-        <span class="small muted">{{ t('app.version') }}</span>
+        <span class="small muted mono" data-test="app-version">{{ update.version ? `v${update.version}` : '—' }}</span>
       </div>
     </div>
 
@@ -59,6 +62,7 @@ function toggleTheme() {
     </div>
 
     <div class="spacer" />
+    <UpdateNotice />
     <button type="button" class="btn btn-lg" data-test="theme-toggle" @click="toggleTheme">
       <svg v-if="isDark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
         <circle cx="12" cy="12" r="4" />

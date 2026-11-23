@@ -53,6 +53,8 @@ version comes from the tag, and CI builds and publishes every package.
    - Linux: `disk-cleanup_X.Y.Z_linux_amd64.deb`, `disk-cleanup_X.Y.Z_linux_x86_64.rpm`,
      `disk-cleanup_X.Y.Z_linux_x64.AppImage`
    - macOS: `disk-cleanup_X.Y.Z_macos_arm64.dmg` and `disk-cleanup_X.Y.Z_macos_x64.dmg`
+   - Updater: `latest.json`, `disk-cleanup_X.Y.Z_macos_{arm64,x64}.app.tar.gz`, and a `.sig` next to
+     the setup `.exe`, the AppImage and both `.app.tar.gz`
    A release missing any of them is incomplete and must be reported as such.
 10. The release notes come from the workflow's `Generate release notes` step (commits since the
     previous stable tag). Do not write them by hand or create the release with `gh release create`.
@@ -64,6 +66,9 @@ version comes from the tag, and CI builds and publishes every package.
 - Do not reintroduce local packaging as a release gate.
 - A macOS-only failure is not acceptable: `build-macos` blocks `publish-release`; a green release
   without both DMGs means the workflow was edited or skipped.
-- The repository is **private**: macOS runners bill 10× the Linux minute. Never dispatch the release
-  workflow in a loop to "see if it passes"; read the failed log first.
+- Never dispatch the release workflow in a loop to "see if it passes"; read the failed log first.
+- Every release must carry `latest.json` plus a `.sig` for the NSIS installer, the AppImage and both
+  `.app.tar.gz`. A release without them strands installed copies on the old version.
+- Never rotate or regenerate the updater key: installed copies only trust the public key they were
+  built with.
 - Prefer the current workflow and code over these notes when they disagree, and fix the notes.

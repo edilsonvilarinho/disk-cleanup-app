@@ -310,3 +310,11 @@ details[open] summary { margin-bottom: 10px; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- Atualização ---------- */
+.update-notice {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px; border-radius: 10px; font-size: 12px;
+  border: 1px solid var(--border-strong); background: var(--surface-2);
+}
+.update-notice .btn { justify-content: center; }

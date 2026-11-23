@@ -29,6 +29,11 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
+# Atualização automática: `bundle.createUpdaterArtifacts` faz o Tauri assinar
+# (minisign) o instalador NSIS, o AppImage e o `.app.tar.gz`. A chave privada só
+# existe nos secrets; a pública está em `tauri.conf.json` > plugins.updater.
+# `publish-release` monta o `latest.json` a partir das assinaturas.
+
 jobs:
   # A tag tem de ser `vX.Y.Z` (ou `vX.Y.Z-beta.N`), anotada e apontar para um
   # commit que já está na `main` — antes de gastar runner de macOS.
@@ -151,6 +156,8 @@ jobs:
         shell: pwsh
         env:
           VERSION: ${{ needs.verify-version.outputs.version }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         working-directory: apps/desktop
         run: |
           $ErrorActionPreference = 'Stop'
@@ -159,7 +166,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path ../../dist-build | Out-Null
           $exe = Get-ChildItem ../../target/release/bundle/nsis -Filter "*_$($env:VERSION)_x64-setup.exe" | Select-Object -First 1
           if (-not $exe) { throw "NSIS installer for $env:VERSION not found" }
-          Copy-Item $exe.FullName "../../dist-build/disk-cleanup_$($env:VERSION)_windows_x64-setup.exe"
+          $name = "disk-cleanup_$($env:VERSION)_windows_x64-setup.exe"
+          Copy-Item $exe.FullName "../../dist-build/$name"
+          if (-not (Test-Path "$($exe.FullName).sig")) { throw "assinatura do updater ausente: $($exe.Name).sig" }
+          Copy-Item "$($exe.FullName).sig" "../../dist-build/$name.sig"
           Get-ChildItem ../../dist-build | Format-Table Name, Length
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -200,6 +210,8 @@ jobs:
       - name: Build Linux packages
         env:
           VERSION: ${{ needs.verify-version.outputs.version }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         working-directory: apps/desktop
         run: |
           set -euo pipefail
@@ -210,7 +222,11 @@ jobs:
           b=../../target/release/bundle
           cp "$(find "$b/deb" -name '*.deb' | head -n1)" "$out/disk-cleanup_${VERSION}_linux_amd64.deb"
           cp "$(find "$b/rpm" -name '*.rpm' | head -n1)" "$out/disk-cleanup_${VERSION}_linux_x86_64.rpm"
-          cp "$(find "$b/appimage" -name '*.AppImage' | head -n1)" "$out/disk-cleanup_${VERSION}_linux_x64.AppImage"
+          appimage="$(find "$b/appimage" -name '*.AppImage' | head -n1)"
+          cp "$appimage" "$out/disk-cleanup_${VERSION}_linux_x64.AppImage"
+          # Só o AppImage se atualiza sozinho; deb/rpm ficam com o gerenciador de pacotes.
+          test -f "$appimage.sig" || { echo "::error::assinatura do updater ausente: $appimage.sig"; exit 1; }
+          cp "$appimage.sig" "$out/disk-cleanup_${VERSION}_linux_x64.AppImage.sig"
           ls -la "$out"
       # Mesma ideia do "Validate Debian dependencies" do usage-monitor: o pacote
       # declara as dependências que o instalador do usuário vai exigir.
@@ -265,15 +281,22 @@ jobs:
       - name: Build macOS disk image
         env:
           VERSION: ${{ needs.verify-version.outputs.version }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         working-directory: apps/desktop
         run: |
           set -euo pipefail
           pnpm install --frozen-lockfile
-          pnpm tauri build --bundles dmg --config "{\"version\":\"$VERSION\"}"
+          # `app` explícito: o artefato do updater (`.app.tar.gz` + `.sig`) sai do bundle `.app`.
+          pnpm tauri build --bundles app,dmg --config "{\"version\":\"$VERSION\"}"
           dmg="$(find ../../target/release/bundle/dmg -name '*.dmg' | head -n1)"
           if [ -z "$dmg" ]; then echo "::error::DMG não encontrado"; exit 1; fi
           mkdir -p ../../dist-build
           cp "$dmg" "../../dist-build/disk-cleanup_${VERSION}_macos_${{ matrix.arch }}.dmg"
+          archive="$(find ../../target/release/bundle/macos -name '*.app.tar.gz' | head -n1)"
+          if [ -z "$archive" ] || [ ! -f "$archive.sig" ]; then echo "::error::artefato do updater (.app.tar.gz/.sig) não encontrado"; exit 1; fi
+          cp "$archive" "../../dist-build/disk-cleanup_${VERSION}_macos_${{ matrix.arch }}.app.tar.gz"
+          cp "$archive.sig" "../../dist-build/disk-cleanup_${VERSION}_macos_${{ matrix.arch }}.app.tar.gz.sig"
           ls -la ../../dist-build
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -343,6 +366,44 @@ jobs:
           } > "$notes_path"
           cat "$notes_path"
           echo "notes_path=$notes_path" >> "$GITHUB_OUTPUT"
+
+      # Manifesto do updater, publicado em TODA release (beta inclusive): o canal
+      # estável lê `/releases/latest/download/latest.json`; o beta, o da maior
+      # versão publicada. A assinatura é o conteúdo do `.sig` gerado no build.
+      - name: Generate updater manifest
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify-version.outputs.version }}
+          RELEASE_TAG: ${{ needs.verify-version.outputs.tag }}
+          NOTES_PATH: ${{ steps.release_notes.outputs.notes_path }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import datetime, json, os, pathlib, sys
+          version, tag = os.environ["VERSION"], os.environ["RELEASE_TAG"]
+          base = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{tag}"
+          dist = pathlib.Path("dist-build")
+          files = {
+              "windows-x86_64": f"disk-cleanup_{version}_windows_x64-setup.exe",
+              "linux-x86_64": f"disk-cleanup_{version}_linux_x64.AppImage",
+              "darwin-aarch64": f"disk-cleanup_{version}_macos_arm64.app.tar.gz",
+              "darwin-x86_64": f"disk-cleanup_{version}_macos_x64.app.tar.gz",
+          }
+          platforms = {}
+          for key, name in files.items():
+              sig = dist / f"{name}.sig"
+              if not (dist / name).is_file() or not sig.is_file():
+                  sys.exit(f"::error::{key}: {name} ou {sig.name} ausente")
+              platforms[key] = {"signature": sig.read_text().strip(), "url": f"{base}/{name}"}
+          manifest = {
+              "version": version,
+              "notes": pathlib.Path(os.environ["NOTES_PATH"]).read_text(),
+              "pub_date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "platforms": platforms,
+          }
+          (dist / "latest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          print(json.dumps({k: v["url"] for k, v in platforms.items()}, indent=2))
+          PY
 
       # Rascunho até todo asset subir (lição #582 do usage-monitor): publicada
       # antes, a release fica visível sem o instalador da plataforma.

@@ -13,6 +13,7 @@ import { gatewayPlugin } from './application/gatewayPlugin'
 import { settingsPlugin } from './application/settings'
 import { useSettingsStore } from './application/stores/settings'
 import { ThemeController } from './application/theme'
+import { updaterPlugin } from './application/updater'
 import {
   applyThemeToDocument,
   localStorageSettingsStorage,
@@ -21,17 +22,20 @@ import {
 } from './infrastructure/browserTheme'
 import { DemoGateway } from './infrastructure/demoGateway'
 import { TauriGateway } from './infrastructure/tauriGateway'
+import { DemoUpdater, TauriUpdater } from './infrastructure/updater'
 import App from './presentation/App.vue'
 import { vueErrorHandler } from './presentation/errorHandler'
 import { createAppRouter } from './presentation/router'
 import { THEME_KEY } from './presentation/theme'
 
 // Fora do Tauri (navegador, `pnpm dev`) usa dados de demonstração.
-const gateway = '__TAURI_INTERNALS__' in window ? new TauriGateway() : new DemoGateway()
+const inTauri = '__TAURI_INTERNALS__' in window
+const gateway = inTauri ? new TauriGateway() : new DemoGateway()
 
 const pinia = createPinia()
 pinia.use(gatewayPlugin(gateway))
 pinia.use(settingsPlugin(localStorageSettingsStorage))
+pinia.use(updaterPlugin(inTauri ? new TauriUpdater() : new DemoUpdater()))
 
 const theme = new ThemeController(systemPrefersDark, applyThemeToDocument)
 watchSystemTheme(() => theme.refresh())

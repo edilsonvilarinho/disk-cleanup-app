@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyThemeToDocument, localStorageSettingsStorage, systemPrefersDark, watchSystemTheme } from './browserTheme'
 import { DemoGateway } from './demoGateway'
 import { TauriGateway } from './tauriGateway'
+import { DemoUpdater, TauriUpdater } from './updater'
 
 describe('TauriGateway', () => {
   it('mapeia cada operação para o comando Tauri correspondente', async () => {
@@ -129,7 +130,7 @@ describe('browserTheme', () => {
 
   it('persiste as Configurações no localStorage e tolera storage bloqueado', () => {
     expect(localStorageSettingsStorage.load()).toBeNull()
-    const settings = { language: 'en' as const, theme: 'dark' as const, extraExclusions: ['/a'], defaultDepth: 1 as const }
+    const settings = { language: 'en' as const, theme: 'dark' as const, extraExclusions: ['/a'], defaultDepth: 1 as const, autoUpdate: true, betaUpdates: false }
     localStorageSettingsStorage.save(settings)
     expect(localStorageSettingsStorage.load()).toEqual(settings)
     vi.stubGlobal('localStorage', {
@@ -159,5 +160,51 @@ describe('browserTheme', () => {
   it('aplica o tema no elemento raiz', () => {
     applyThemeToDocument('dark')
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+  })
+})
+
+describe('TauriUpdater', () => {
+  it('mapeia versão, verificação e instalação para os comandos do updater', async () => {
+    const invoke = vi.fn(async (cmd: string) => (cmd === 'app_version' ? '0.1.0' : null))
+    const updater = new TauriUpdater(invoke as never, vi.fn() as never)
+    expect(await updater.appVersion()).toBe('0.1.0')
+    expect(await updater.check(true)).toBeNull()
+    await updater.install()
+    expect(invoke).toHaveBeenCalledWith('check_update', { beta: true })
+    expect(invoke).toHaveBeenCalledWith('install_update')
+  })
+
+  it('assina o progresso do download e cancela no fim, mesmo com erro', async () => {
+    const unlisten = vi.fn()
+    let handler: ((event: { payload: unknown }) => void) | undefined
+    const listen = vi.fn(async (_event: string, h: typeof handler) => {
+      handler = h
+      return unlisten
+    })
+    const invoke = vi.fn(async () => {
+      handler!({ payload: { downloaded: 1, total: 2, percent: 50 } })
+    })
+    const onProgress = vi.fn()
+    await new TauriUpdater(invoke as never, listen as never).download(onProgress)
+    expect(listen).toHaveBeenCalledWith('update-progress', expect.any(Function))
+    expect(invoke).toHaveBeenCalledWith('download_update')
+    expect(onProgress).toHaveBeenCalledWith({ downloaded: 1, total: 2, percent: 50 })
+    expect(unlisten).toHaveBeenCalledTimes(1)
+
+    const failing = new TauriUpdater(vi.fn(async () => Promise.reject(new Error('x'))) as never, listen as never)
+    await expect(failing.download(onProgress)).rejects.toThrow('x')
+    expect(unlisten).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('DemoUpdater', () => {
+  it('fora do Tauri informa a versão de demonstração e nunca tem atualização', async () => {
+    const updater = new DemoUpdater()
+    expect(await updater.appVersion()).toBe('0.0.0-demo')
+    expect(await updater.check(true)).toBeNull()
+    const onProgress = vi.fn()
+    await expect(updater.download(onProgress)).rejects.toEqual({ code: 'update_none', params: {} })
+    await expect(updater.install()).rejects.toEqual({ code: 'update_not_downloaded', params: {} })
+    expect(onProgress).not.toHaveBeenCalled()
   })
 })

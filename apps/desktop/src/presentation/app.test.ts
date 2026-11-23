@@ -9,7 +9,9 @@ import { settingsPlugin, type Settings } from '../application/settings'
 import { usePlanStore } from '../application/stores/plan'
 import { useSettingsStore } from '../application/stores/settings'
 import { ThemeController } from '../application/theme'
+import { updaterPlugin, type UpdaterPort } from '../application/updater'
 import { fakeGateway } from '../test/fakeGateway'
+import { fakeUpdater, updateInfo } from '../test/fakeUpdater'
 import { approval, classification, report, runA, survey } from '../test/fixtures'
 import App from './App.vue'
 import { SYSTEM_LANGUAGES_KEY } from './i18n'
@@ -20,13 +22,16 @@ import { THEME_KEY, useTheme } from './theme'
 interface MountOptions {
   languages?: string[]
   saved?: Partial<Settings>
+  updater?: UpdaterPort
 }
 
 async function mountApp(path: string, gateway: DiskCleanupGateway = fakeGateway(), options: MountOptions = {}) {
   const saved: Settings[] = []
   const pinia = createPinia()
+  const updater = options.updater ?? fakeUpdater()
   pinia.use(gatewayPlugin(gateway))
   pinia.use(settingsPlugin({ load: () => options.saved ?? null, save: (s) => saved.push(structuredClone(s)) }))
+  pinia.use(updaterPlugin(updater))
   const router = createAppRouter(createMemoryHistory())
   const apply = vi.fn()
   const theme = new ThemeController(() => true, apply)
@@ -42,7 +47,7 @@ async function mountApp(path: string, gateway: DiskCleanupGateway = fakeGateway(
     },
   })
   await flushPromises()
-  return { wrapper, gateway, router, theme, pinia, saved, apply }
+  return { wrapper, gateway, router, theme, pinia, saved, apply, updater }
 }
 
 describe('useTheme', () => {
@@ -394,7 +399,14 @@ describe('Configurações', () => {
     await wrapper.get('[data-test="theme-light"]').setValue(true)
     expect(theme.current.value).toBe('light')
     await wrapper.get('[data-test="default-depth"]').setValue('1')
-    expect(saved.at(-1)).toEqual({ language: 'en', theme: 'light', extraExclusions: [], defaultDepth: 1 })
+    expect(saved.at(-1)).toEqual({
+      language: 'en',
+      theme: 'light',
+      extraExclusions: [],
+      defaultDepth: 1,
+      autoUpdate: true,
+      betaUpdates: false,
+    })
   })
 
   it('adiciona e remove pastas extras, que vão para a classificação', async () => {
@@ -541,5 +553,92 @@ describe('ramos de apresentação', () => {
     const { pt } = await import('../i18n/messages')
     const pending = [{ ...report.pending[0]!, cause: { code: 'exit' as const, detail: null, exitCode: null } }]
     expect(reportMarkdown({ ...report, pending }, (k, p) => translate(pt, k, p), 'pt')).toContain('(parcial): saída ?: ')
+  })
+})
+
+describe('Atualizações', () => {
+  it('na instalação padrão verifica o canal estável ao abrir e mostra a versão instalada', async () => {
+    const { wrapper, updater, router } = await mountApp('/')
+    expect(updater.check).toHaveBeenCalledWith(false)
+    expect(wrapper.get('[data-test="app-version"]').text()).toBe('v0.1.0')
+    expect(wrapper.find('[data-test="update-notice"]').exists()).toBe(false)
+    await router.push('/configuracoes')
+    await flushPromises()
+    expect(wrapper.get('[data-test="update-settings"]').text()).toContain('Versão instalada: 0.1.0')
+    expect(wrapper.get('[data-test="update-status"]').text()).toBe('Você está na versão mais recente.')
+    expect((wrapper.get('[data-test="auto-update"]').element as HTMLInputElement).checked).toBe(true)
+    expect((wrapper.get('[data-test="beta-updates"]').element as HTMLInputElement).checked).toBe(false)
+  })
+
+  it('baixa em segundo plano e reinicia para atualizar pelo aviso da barra lateral', async () => {
+    const updater = fakeUpdater({ check: vi.fn(async () => updateInfo) })
+    const { wrapper } = await mountApp('/', fakeGateway(), { updater })
+    const notice = wrapper.get('[data-test="update-notice"]')
+    expect(notice.text()).toContain('Versão 0.2.0 pronta para instalar')
+    await wrapper.get('[data-test="update-restart"]').trigger('click')
+    await flushPromises()
+    expect(updater.install).toHaveBeenCalledTimes(1)
+  })
+
+  it('com atualização automática desligada: verificar agora no canal beta e baixar manualmente', async () => {
+    const updater = fakeUpdater({ check: vi.fn(async () => updateInfo) })
+    const { wrapper, saved } = await mountApp('/configuracoes', fakeGateway(), { updater, saved: { autoUpdate: false } })
+    expect(updater.check).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test="update-status"]').exists()).toBe(false)
+    await wrapper.get('[data-test="beta-updates"]').setValue(true)
+    await wrapper.get('[data-test="auto-update"]').setValue(true)
+    expect(saved.at(-1)).toMatchObject({ autoUpdate: true, betaUpdates: true })
+    await wrapper.get('[data-test="update-check"]').trigger('click')
+    await flushPromises()
+    expect(updater.check).toHaveBeenCalledWith(true)
+    expect(wrapper.get('[data-test="update-notice"]').text()).toContain('Versão 0.2.0 disponível')
+    await wrapper.get('[data-test="update-download"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="update-notice"]').text()).toContain('pronta para instalar')
+    await wrapper.get('[data-test="auto-update"]').setValue(false)
+    expect(saved.at(-1)).toMatchObject({ autoUpdate: false })
+  })
+
+  it('mostra progresso do download, instalação em curso e erro traduzido', async () => {
+    let finish: () => void = () => {}
+    let report: (p: { downloaded: number; total: number | null; percent: number | null }) => void = () => {}
+    const download = vi.fn((onProgress: typeof report) => {
+      report = onProgress
+      return new Promise<void>((resolve) => (finish = resolve))
+    })
+    let installed: () => void = () => {}
+    const install = vi.fn(() => new Promise<void>((resolve) => (installed = resolve)))
+    const updater = fakeUpdater({ check: vi.fn(async () => updateInfo), download, install })
+    const { wrapper } = await mountApp('/', fakeGateway(), { updater })
+    const text = () => wrapper.get('[data-test="update-notice"]').text()
+    expect(text()).toContain('Baixando 0.2.0…')
+    report({ downloaded: 42, total: 100, percent: 42 })
+    await flushPromises()
+    expect(text()).toContain('Baixando 0.2.0… 42%')
+    finish()
+    await flushPromises()
+    await wrapper.get('[data-test="update-restart"]').trigger('click')
+    expect(text()).toContain('Instalando…')
+    installed()
+    await flushPromises()
+
+    const failing = fakeUpdater({ check: vi.fn(async () => Promise.reject({ code: 'update_feed', params: { detail: 'offline' } })) })
+    const ctx = await mountApp('/configuracoes', fakeGateway(), { updater: failing })
+    expect(ctx.wrapper.get('[data-test="update-status"]').text()).toBe(
+      'Falha na atualização: não foi possível ler as releases: offline',
+    )
+    expect(ctx.wrapper.find('[data-test="update-notice"]').exists()).toBe(false)
+  })
+
+  it('sem versão legível mostra traço; em inglês o aviso é traduzido', async () => {
+    const updater = fakeUpdater({
+      appVersion: vi.fn(async () => Promise.reject(new Error('sem IPC'))),
+      check: vi.fn(async () => updateInfo),
+    })
+    const { wrapper } = await mountApp('/configuracoes', fakeGateway(), { updater, saved: { language: 'en' } })
+    expect(wrapper.get('[data-test="app-version"]').text()).toBe('—')
+    expect(wrapper.get('[data-test="update-settings"]').text()).toContain('Installed version: —')
+    expect(wrapper.get('[data-test="update-notice"]').text()).toContain('Version 0.2.0 ready to install')
+    expect(wrapper.get('[data-test="update-restart"]').text()).toBe('Restart and update')
   })
 })

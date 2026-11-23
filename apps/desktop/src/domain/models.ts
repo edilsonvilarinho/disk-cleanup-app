@@ -180,3 +180,17 @@ export interface ReportDto {
   blocked: CandidateDto[]
   exclusions: ExclusionDto[]
 }
+
+export interface UpdateInfo {
+  version: string
+  currentVersion: string
+  notes: string | null
+  date: string | null
+}
+
+export interface UpdateProgress {
+  downloaded: number
+  total: number | null
+  /** 0–100; `null` quando o servidor não informa o tamanho. */
+  percent: number | null
+}

@@ -2,11 +2,13 @@
 import { computed, ref } from 'vue'
 import type { ThemeMode } from '../../application/settings'
 import { useSettingsStore } from '../../application/stores/settings'
+import { useUpdateStore } from '../../application/stores/update'
 import type { LanguagePreference } from '../../i18n/i18n'
 import { useI18n } from '../i18n'
 
 const settings = useSettingsStore()
-const { t, systemLocale } = useI18n()
+const update = useUpdateStore()
+const { t, err, systemLocale } = useI18n()
 const newPath = ref('')
 
 const systemName = computed(() => (systemLocale.value === 'pt' ? t('settings.langPt') : t('settings.langEn')))
@@ -21,6 +23,16 @@ function onLanguage(event: Event) {
 function onDepth(event: Event) {
   settings.setDefaultDepth(Number((event.target as HTMLSelectElement).value) as 1 | 2)
 }
+
+const checked = (event: Event) => (event.target as HTMLInputElement).checked
+
+// Disponível/baixando/pronta aparecem no aviso da barra lateral, com a ação.
+const updateStatus = computed(() => {
+  if (update.status === 'checking') return t('update.checking')
+  if (update.status === 'upToDate') return t('update.upToDate')
+  if (update.status === 'error') return t('update.failed', { error: err(update.error!) })
+  return ''
+})
 
 function add() {
   if (settings.addExclusion(newPath.value)) newPath.value = ''
@@ -88,6 +100,35 @@ function add() {
       <Transition name="fade">
         <p v-if="!settings.extraExclusions.length" class="muted" data-test="no-exclusions">{{ t('settings.noExclusions') }}</p>
       </Transition>
+    </section>
+
+    <section class="card" data-test="update-settings">
+      <div class="card-head">
+        <h2>{{ t('update.title') }}</h2>
+        <span class="small muted mono">{{ t('update.installed', { version: update.version ?? '—' }) }}</span>
+      </div>
+      <label class="option">
+        <input type="checkbox" data-test="auto-update" :checked="settings.autoUpdate" @change="settings.setAutoUpdate(checked($event))" />
+        <span style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-weight: 600">{{ t('update.auto') }}</span>
+          <span class="small muted">{{ t('update.autoHint') }}</span>
+        </span>
+      </label>
+      <label class="option">
+        <input type="checkbox" data-test="beta-updates" :checked="settings.betaUpdates" @change="settings.setBetaUpdates(checked($event))" />
+        <span style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-weight: 600">{{ t('update.beta') }}</span>
+          <span class="small muted">{{ t('update.betaHint') }}</span>
+        </span>
+      </label>
+      <div class="actions" style="align-items: center">
+        <button type="button" class="btn" data-test="update-check" :disabled="update.busy" @click="update.check(settings.betaUpdates)">
+          {{ t('update.check') }}
+        </button>
+        <Transition name="fade" mode="out-in">
+          <span v-if="updateStatus" :key="update.status" class="small" role="status" data-test="update-status">{{ updateStatus }}</span>
+        </Transition>
+      </div>
     </section>
   </div>
 </template>

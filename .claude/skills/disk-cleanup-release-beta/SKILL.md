@@ -52,7 +52,9 @@ Same model as usage-monitor's `usage-monitor-release-beta`. Publishing is the st
    - `gh release view vX.Y.Z-beta.N --json isPrerelease` → `true`;
    - `/releases/latest` unchanged: `gh api repos/{owner}/{repo}/releases/latest --jq .tag_name`;
    - every artifact family present with a `sha256:` digest (same list as the stable skill, with
-     `X.Y.Z-beta.N` in the names).
+     `X.Y.Z-beta.N` in the names), including `latest.json` and the `.sig` files.
+   Testers only receive the **next** beta automatically if they turned on Settings → Updates →
+   *Receive beta versions*; say so in the report.
    Published as Latest by mistake → `gh release edit vX.Y.Z-beta.N --prerelease --latest=false` and
    report it.
 

@@ -10,15 +10,28 @@ export interface Settings {
   /** Pastas protegidas pelo usuário; somam às exclusões obrigatórias. */
   extraExclusions: string[]
   defaultDepth: 1 | 2
+  /** Verifica e baixa ao abrir; vem ligada na instalação. */
+  autoUpdate: boolean
+  /** Inclui as versões beta (prereleases) na busca. */
+  betaUpdates: boolean
 }
 
-export const DEFAULT_SETTINGS: Settings = { language: 'auto', theme: 'system', extraExclusions: [], defaultDepth: 2 }
+export const DEFAULT_SETTINGS: Settings = {
+  language: 'auto',
+  theme: 'system',
+  extraExclusions: [],
+  defaultDepth: 2,
+  autoUpdate: true,
+  betaUpdates: false,
+}
 
 /** Porta de persistência das preferências. */
 export interface SettingsStorage {
   load(): unknown
   save(settings: Settings): void
 }
+
+const flag = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback)
 
 const pick = <T>(value: unknown, allowed: readonly T[], fallback: T): T =>
   allowed.includes(value as T) ? (value as T) : fallback
@@ -35,6 +48,8 @@ export function sanitizeSettings(raw: unknown): Settings {
     theme: pick(r.theme, ['system', 'light', 'dark'] as const, DEFAULT_SETTINGS.theme),
     extraExclusions: exclusions,
     defaultDepth: pick(r.defaultDepth, [1, 2] as const, DEFAULT_SETTINGS.defaultDepth),
+    autoUpdate: flag(r.autoUpdate, DEFAULT_SETTINGS.autoUpdate),
+    betaUpdates: flag(r.betaUpdates, DEFAULT_SETTINGS.betaUpdates),
   }
 }
 
