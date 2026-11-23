@@ -10,9 +10,12 @@ import type {
   StepDto,
   SurveyDto,
   SystemInfoDto,
+  TextDto,
   TierRunDto,
   UsageEntryDto,
 } from '../domain/models'
+
+const text = (pt: string, en = pt): TextDto => ({ pt, en })
 
 export const systemInfo: SystemInfoDto = {
   os: 'windows',
@@ -57,26 +60,29 @@ export const candidate = (
   extra: Partial<CandidateDto> = {},
 ): CandidateDto => ({
   id,
-  label: `Rótulo ${id}`,
+  label: text(`Rótulo ${id}`, `Label ${id}`),
   tier,
   kind: 'path',
   target: `C:\\x\\${id}`,
   sizeBytes: gb * GIB,
   risk: 'none',
-  note: '',
-  blockedReason: null,
+  note: text(''),
+  blocked: null,
   ...extra,
 })
 
 export const classification: ClassificationDto = {
   candidates: [
-    candidate('npm-cache', 'A', 6.4, { kind: 'command', target: 'npm cache clean --force', note: 'comando oficial' }),
+    candidate('npm-cache', 'A', 6.4, { kind: 'command', target: 'npm cache clean --force', note: text('comando oficial', 'official command') }),
     candidate('nvidia-dxcache', 'A', 4.8),
     candidate('gradle-caches', 'C', 14.2, { risk: 'redownload' }),
-    candidate('cuda', 'C', 2.64, { blockedReason: 'variável CUDA_PATH aponta para este caminho' }),
+    candidate('cuda', 'C', 2.64, { blocked: { code: 'env_var', value: 'CUDA_PATH' } }),
   ],
-  skipped: [{ id: 'yarn-cache', reason: 'caminho não existe: C:\\Yarn' }],
-  exclusions: [{ pattern: 'C:\\Windows\\Installer', reason: 'cache do MSI' }],
+  skipped: [
+    { id: 'yarn-cache', code: 'not_found', detail: 'C:\\Yarn', reason: null },
+    { id: 'meu-projeto', code: 'excluded', detail: null, reason: text('excluída nas Configurações', 'excluded in Settings') },
+  ],
+  exclusions: [{ pattern: 'C:\\Windows\\Installer', reason: text('cache do MSI', 'MSI cache') }],
   selectableBytes: 25.4 * GIB,
 }
 
@@ -93,18 +99,18 @@ export const plan: PlanDto = {
 export const approval: ApprovalDto = { tiers: ['A', 'C'], itemCount: 3, estimatedBytes: 25.4 * GIB }
 
 export const stepsA: StepDto[] = [
-  { id: 'npm-cache', label: 'Rótulo npm-cache', tier: 'A', kind: 'command', target: 'npm cache clean --force', estimatedBytes: 6.4 * GIB },
-  { id: 'nvidia-dxcache', label: 'Rótulo nvidia-dxcache', tier: 'A', kind: 'path', target: 'C:\\x\\nvidia-dxcache', estimatedBytes: 4.8 * GIB },
+  { id: 'npm-cache', label: text('Rótulo npm-cache', 'Label npm-cache'), tier: 'A', kind: 'command', target: 'npm cache clean --force', estimatedBytes: 6.4 * GIB },
+  { id: 'nvidia-dxcache', label: text('Rótulo nvidia-dxcache', 'Label nvidia-dxcache'), tier: 'A', kind: 'path', target: 'C:\\x\\nvidia-dxcache', estimatedBytes: 4.8 * GIB },
 ]
 
 const result = (id: string, tier: ItemResultDto['tier'], gb: number, freedGb: number, extra: Partial<ItemResultDto> = {}): ItemResultDto => ({
   id,
-  label: `Rótulo ${id}`,
+  label: text(`Rótulo ${id}`, `Label ${id}`),
   tier,
   estimatedBytes: gb * GIB,
   freedBytes: freedGb * GIB,
   status: 'ok',
-  detail: null,
+  cause: null,
   ...extra,
 })
 
@@ -116,7 +122,7 @@ export const runA: TierRunDto = {
   estimatedBytes: 11.2 * GIB,
   items: [
     result('npm-cache', 'A', 6.4, 6.4),
-    result('nvidia-dxcache', 'A', 4.8, 4.2, { status: 'parcial', detail: 'dx.bin: em uso' }),
+    result('nvidia-dxcache', 'A', 4.8, 4.2, { status: 'partial', cause: { code: 'partial_os', detail: 'dx.bin: em uso', exitCode: null } }),
   ],
 }
 

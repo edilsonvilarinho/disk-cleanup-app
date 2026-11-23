@@ -1,13 +1,17 @@
 use std::cell::RefCell;
 
 use disk_cleanup_application::{
-    Catalog, CatalogRepository, CatalogRule, Environment, FileRecord, FileWalker, PathInspector,
-    PortError, RuleTarget, VolumeInfo, WalkStats,
+    Catalog, CatalogRepository, CatalogRule, FileRecord, FileWalker, PathInspector, PortError,
+    RuleTarget, VolumeInfo, WalkStats,
 };
 use disk_cleanup_desktop_lib::{
-    build_plan, classify, run_survey, system_info, CallbackProgress, Session, SurveyRequestDto,
+    build_plan, classify, run_survey, system_info, CallbackProgress, CandidateDto, Session,
+    SurveyRequestDto,
 };
-use disk_cleanup_domain::{path_components, ByteSize, ExclusionList, Risk, Tier, VolumeUsage};
+use disk_cleanup_domain::{
+    path_components, Action, Availability, BlockReason, ByteSize, Candidate, ExclusionList,
+    LocalizedText, Risk, Tier, VolumeUsage,
+};
 use disk_cleanup_infrastructure::{SkillPlanJsonCodec, SnapshotEnvironment};
 
 struct Walker;
@@ -52,10 +56,10 @@ impl CatalogRepository for Catalogue {
     fn load(&self) -> Result<Catalog, PortError> {
         let rule = |id: &str, tier, path: &str| CatalogRule {
             id: id.into(),
-            label: id.into(),
+            label: LocalizedText::new(&format!("rótulo {id}"), &format!("label {id}")),
             tier,
             risk: Risk::Redownload,
-            note: "n".into(),
+            note: LocalizedText::new("nota", "note"),
             target: RuleTarget::Path { path: path.into() },
             watch_env: vec!["CUDA_PATH".into()],
         };
@@ -71,6 +75,7 @@ impl CatalogRepository for Catalogue {
                     },
                     ..rule("pip", Tier::A, "")
                 },
+                rule("excluido", Tier::C, r"C:\Projetos\cache"),
             ],
             exclusions: vec![],
         })
@@ -88,21 +93,22 @@ fn env() -> SnapshotEnvironment {
 #[test]
 fn system_info_derives_volume_root_and_profile_per_os() {
     let windows = system_info(&env(), "windows");
-    assert_eq!(windows.os, "windows");
-    assert_eq!(windows.volume_root, r"C:\");
+    assert_eq!(
+        (windows.os.as_str(), windows.volume_root.as_str()),
+        ("windows", r"C:\")
+    );
     assert_eq!(windows.profile.as_deref(), Some(r"C:\Users\u"));
     assert_eq!(windows.catalog, "windows");
-
     let linux = system_info(
         &SnapshotEnvironment::from_pairs(vec![("HOME".into(), "/home/u".into())]),
         "linux",
     );
-    assert_eq!(linux.volume_root, "/");
-    assert_eq!(linux.profile.as_deref(), Some("/home/u"));
-
+    assert_eq!(
+        (linux.volume_root.as_str(), linux.profile.as_deref()),
+        ("/", Some("/home/u"))
+    );
     let bare = system_info(&SnapshotEnvironment::from_pairs(vec![]), "windows");
-    assert_eq!(bare.volume_root, r"C:\");
-    assert_eq!(bare.profile, None);
+    assert_eq!((bare.volume_root.as_str(), bare.profile), (r"C:\", None));
 }
 
 #[test]
@@ -115,43 +121,46 @@ fn survey_maps_report_to_camel_case_dto_and_reports_progress() {
         depth: 2,
     };
     let dto = run_survey(&Walker, &Volume, &progress, &request).unwrap();
-
-    assert_eq!(dto.volume.total_bytes, 10_000);
-    assert_eq!(dto.volume.used_bytes, 9_500);
-    assert_eq!(dto.volume.health, "critical");
-    assert_eq!(dto.roots[0].name, "Users");
-    assert_eq!(dto.roots[0].key, ["Users"]);
+    assert_eq!(
+        (
+            dto.volume.total_bytes,
+            dto.volume.used_bytes,
+            dto.volume.health
+        ),
+        (10_000, 9_500, "critical")
+    );
+    assert_eq!(
+        (dto.roots[0].name.as_str(), dto.roots[0].key.clone()),
+        ("Users", vec!["Users".to_string()])
+    );
     assert_eq!(dto.cloud[0].placeholder_bytes, 540);
     assert!(dto.cloud[0].is_cloud);
     assert_eq!(dto.children.len(), 2);
-    assert_eq!(dto.profile[0].name, "OneDrive");
-    assert_eq!((dto.files, dto.unreadable), (2, 1));
-    assert_eq!(dto.unattributed_bytes, 9_500 - 360);
+    assert_eq!(
+        (dto.files, dto.unreadable, dto.unattributed_bytes),
+        (2, 1, 9_500 - 360)
+    );
     assert_eq!(*seen.borrow(), vec![(2, 900)]);
     assert_eq!(format!("{progress:?}"), "CallbackProgress");
-
     let json = serde_json::to_value(&dto).unwrap();
-    assert!(json["volume"]["usedPercent"].is_number());
-    assert!(json["roots"][0]["logicalBytes"].is_number());
-    assert!(json.get("elapsedMs").is_some());
+    assert!(json["volume"]["usedPercent"].is_number() && json.get("elapsedMs").is_some());
 
     let bad = SurveyRequestDto {
         depth: 5,
         ..request
     };
-    assert!(run_survey(&Walker, &Volume, &progress, &bad)
-        .unwrap_err()
-        .contains("profundidade"));
+    let err = run_survey(&Walker, &Volume, &progress, &bad).unwrap_err();
+    assert_eq!(
+        (err.code.as_str(), err.params["depth"].as_str()),
+        ("invalid_depth", "5")
+    );
 }
 
 #[test]
-fn classification_is_stored_in_session_and_feeds_the_plan() {
+fn classification_is_bilingual_structured_and_feeds_the_plan() {
     let session = Session::default();
-    assert!(
-        build_plan(&session, "C:", &["npm".into()], &SkillPlanJsonCodec)
-            .unwrap_err()
-            .contains("classificação")
-    );
+    let err = build_plan(&session, "C:", &["npm".into()], &SkillPlanJsonCodec).unwrap_err();
+    assert_eq!(err.code, "classification_required");
 
     let dto = classify(
         &session,
@@ -159,24 +168,56 @@ fn classification_is_stored_in_session_and_feeds_the_plan() {
         &env(),
         &Inspector,
         ExclusionList::default(),
+        &[r"C:\Projetos".into()],
     )
     .unwrap();
     let ids: Vec<_> = dto.candidates.iter().map(|c| c.id.as_str()).collect();
     assert_eq!(ids, ["npm", "cuda", "pip"]);
-    assert_eq!(dto.candidates[0].kind, "path");
-    assert_eq!(dto.candidates[0].target, r"C:\L\npm-cache");
-    assert_eq!(dto.candidates[0].risk, "redownload");
-    assert_eq!(dto.candidates[0].tier, "A");
-    assert_eq!(dto.candidates[0].blocked_reason, None);
-    assert!(dto.candidates[1]
-        .blocked_reason
-        .as_deref()
-        .unwrap()
-        .contains("CUDA_PATH"));
-    assert_eq!(dto.candidates[2].kind, "command");
-    assert_eq!(dto.candidates[2].target, "pip cache purge");
-    assert_eq!(dto.skipped[0].id, "ausente");
-    assert!(dto.skipped[0].reason.contains("não existe"));
+    let npm = &dto.candidates[0];
+    assert_eq!(
+        (npm.label.pt.as_str(), npm.label.en.as_str()),
+        ("rótulo npm", "label npm")
+    );
+    assert_eq!(
+        (npm.note.pt.as_str(), npm.note.en.as_str()),
+        ("nota", "note")
+    );
+    assert_eq!(
+        (
+            npm.kind.as_str(),
+            npm.target.as_str(),
+            npm.risk,
+            npm.tier.as_str()
+        ),
+        ("path", r"C:\L\npm-cache", "redownload", "A")
+    );
+    assert!(npm.blocked.is_none());
+    let cuda = dto.candidates[1].blocked.as_ref().unwrap();
+    assert_eq!((cuda.code, cuda.value.as_str()), ("env_var", "CUDA_PATH"));
+    assert_eq!(
+        (
+            dto.candidates[2].kind.as_str(),
+            dto.candidates[2].target.as_str()
+        ),
+        ("command", "pip cache purge")
+    );
+
+    let skipped: Vec<_> = dto
+        .skipped
+        .iter()
+        .map(|s| (s.id.as_str(), s.code, s.detail.clone()))
+        .collect();
+    assert_eq!(
+        skipped[0],
+        ("ausente", "not_found", Some(r"C:\nada".to_string()))
+    );
+    assert_eq!((skipped[1].0, skipped[1].1), ("excluido", "excluded"));
+    assert_eq!(
+        dto.skipped[1].reason.as_ref().unwrap().en,
+        "excluded in Settings"
+    );
+    assert_eq!(dto.exclusions[0].pattern, r"C:\Projetos");
+    assert_eq!(dto.exclusions[0].reason.pt, "excluída nas Configurações");
     assert_eq!(dto.selectable_bytes, 4096);
 
     let plan = build_plan(
@@ -186,21 +227,24 @@ fn classification_is_stored_in_session_and_feeds_the_plan() {
         &SkillPlanJsonCodec,
     )
     .unwrap();
-    assert_eq!(plan.item_count, 2);
-    assert_eq!(plan.estimated_bytes, 4096);
-    assert_eq!(plan.tiers[0].tier, "A");
-    assert_eq!(plan.tiers[0].item_count, 2);
-    assert!(plan.json.contains("\"volume\": \"C:\""));
-
-    assert!(
-        build_plan(&session, "C:", &["cuda".into()], &SkillPlanJsonCodec)
-            .unwrap_err()
-            .contains("bloqueado")
+    assert_eq!(
+        (
+            plan.item_count,
+            plan.estimated_bytes,
+            plan.tiers[0].tier.as_str()
+        ),
+        (2, 4096, "A")
+    );
+    assert!(plan.json.contains("\"label\": \"rótulo npm\""));
+    let err = build_plan(&session, "C:", &["cuda".into()], &SkillPlanJsonCodec).unwrap_err();
+    assert_eq!(
+        (err.code.as_str(), err.params["id"].as_str()),
+        ("plan_blocked", "cuda")
     );
 }
 
 #[test]
-fn classification_errors_are_returned_as_messages() {
+fn classification_errors_become_codes() {
     struct Broken;
     impl CatalogRepository for Broken {
         fn load(&self) -> Result<Catalog, PortError> {
@@ -213,18 +257,19 @@ fn classification_errors_are_returned_as_messages() {
         &env(),
         &Inspector,
         ExclusionList::default(),
+        &[],
     )
     .unwrap_err();
-    assert!(err.contains("dados inválidos"));
+    assert_eq!(err.code, "invalid_data");
 }
 
 #[test]
-fn uninstall_and_other_risks_are_serialized() {
-    use disk_cleanup_desktop_lib::CandidateDto;
-    use disk_cleanup_domain::{Action, Availability, Candidate};
-    let c = Candidate {
+fn every_skip_and_block_code_is_mapped() {
+    use disk_cleanup_application::{ClassificationReport, SkipReason, SkippedRule};
+    use disk_cleanup_desktop_lib::ClassificationDto;
+    let base = Candidate {
         id: "x".into(),
-        label: "X".into(),
+        label: LocalizedText::same("X"),
         tier: Tier::B,
         action: Action::Uninstall {
             display_name: "App".into(),
@@ -232,23 +277,68 @@ fn uninstall_and_other_risks_are_serialized() {
         },
         size: ByteSize::from_bytes(1),
         risk: Risk::Low,
-        note: String::new(),
-        availability: Availability::Selectable,
+        note: LocalizedText::default(),
+        availability: Availability::Blocked {
+            reason: BlockReason::PathEntry {
+                entry: "/opt/x/bin".into(),
+            },
+        },
     };
-    let dto = CandidateDto::from(&c);
+    let dto = CandidateDto::from(&base);
     assert_eq!(
         (dto.kind.as_str(), dto.target.as_str(), dto.risk),
         ("uninstall", "App", "low")
     );
-    let none = CandidateDto::from(&Candidate {
-        risk: Risk::None,
-        ..c.clone()
-    });
-    assert_eq!(none.risk, "none");
-    let long = CandidateDto::from(&Candidate {
-        risk: Risk::LongRunning,
-        ..c
-    });
-    assert_eq!(long.risk, "long-running");
-    let _ = env().var("x");
+    assert_eq!(
+        dto.blocked.as_ref().map(|b| (b.code, b.value.as_str())),
+        Some(("path_entry", "/opt/x/bin"))
+    );
+    assert_eq!(
+        CandidateDto::from(&Candidate {
+            risk: Risk::None,
+            ..base.clone()
+        })
+        .risk,
+        "none"
+    );
+    assert_eq!(
+        CandidateDto::from(&Candidate {
+            risk: Risk::LongRunning,
+            ..base
+        })
+        .risk,
+        "long-running"
+    );
+
+    let report = ClassificationReport {
+        candidates: vec![],
+        skipped: vec![
+            SkippedRule {
+                id: "a".into(),
+                reason: SkipReason::Empty,
+            },
+            SkippedRule {
+                id: "b".into(),
+                reason: SkipReason::UnresolvedVariable("V".into()),
+            },
+            SkippedRule {
+                id: "c".into(),
+                reason: SkipReason::Unmeasurable("e".into()),
+            },
+        ],
+        exclusions: ExclusionList::default(),
+    };
+    let codes: Vec<_> = ClassificationDto::from(&report)
+        .skipped
+        .into_iter()
+        .map(|s| (s.code, s.detail))
+        .collect();
+    assert_eq!(
+        codes,
+        vec![
+            ("empty", None),
+            ("unresolved_variable", Some("V".into())),
+            ("unmeasurable", Some("e".into()))
+        ]
+    );
 }

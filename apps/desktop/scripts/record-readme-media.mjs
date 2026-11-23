@@ -114,6 +114,22 @@ async function executeReport(page) {
   await pause(page, 2200)
 }
 
+async function settings(page) {
+  await page.goto(`${BASE}/#/configuracoes`)
+  await page.waitForSelector('[data-test="language"]')
+  await pause(page, 1000)
+  await page.selectOption('[data-test="language"]', 'en')
+  await pause(page, 1400)
+  await page.click('[data-test="theme-light"]')
+  await pause(page, 1200)
+  await page.fill('[data-test="new-exclusion"]', 'D:\\Projects\\client-a')
+  await page.click('[data-test="add-exclusion"]')
+  await pause(page, 1200)
+  await page.click('[data-test="theme-dark"]')
+  await page.selectOption('[data-test="language"]', 'pt')
+  await pause(page, 1500)
+}
+
 async function terminal(page) {
   await page.goto(pathToFileURL(resolve('scripts/terminal.html')).href)
   await page.waitForSelector('body[data-done="1"]', { timeout: 30_000 })
@@ -126,6 +142,7 @@ const ALL = {
   survey: [survey, { width: 720 }],
   'classify-plan': [classify, { width: 720 }],
   'execute-report': [executeReport, { width: 720 }],
+  settings: [settings, { width: 720 }],
   theme: [theme, { theme: 'light', width: 720 }],
   terminal: [terminal, { width: 720 }],
 }

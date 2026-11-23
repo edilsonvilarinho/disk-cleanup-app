@@ -5,15 +5,15 @@ import {
   defaultSelection,
   isSelectable,
   selectionTotal,
-  TIER_LABEL,
   TIERS,
   toggle,
   toggleTier,
   totalsByTier,
 } from './selection'
 
-function candidate(id: string, tier: Tier, sizeBytes: number, blockedReason: string | null = null): CandidateDto {
-  return { id, label: id, tier, kind: 'path', target: id, sizeBytes, risk: 'none', note: '', blockedReason }
+function candidate(id: string, tier: Tier, sizeBytes: number, blockedBy: string | null = null): CandidateDto {
+  const blocked = blockedBy ? { code: 'env_var' as const, value: blockedBy } : null
+  return { id, label: { pt: id, en: id }, tier, kind: 'path', target: id, sizeBytes, risk: 'none', note: { pt: '', en: '' }, blocked }
 }
 
 const candidates = [
@@ -24,9 +24,8 @@ const candidates = [
 ]
 
 describe('selection', () => {
-  it('expõe os tiers na ordem de execução com rótulos', () => {
+  it('expõe os tiers na ordem de execução', () => {
     expect(TIERS).toEqual(['A', 'B', 'C', 'D'])
-    expect(TIER_LABEL.B).toBe('Desinstalar')
   })
 
   it('seleciona por padrão só o que não está bloqueado', () => {

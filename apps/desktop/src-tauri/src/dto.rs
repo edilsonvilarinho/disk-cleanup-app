@@ -1,12 +1,31 @@
 //! Objetos de transferência para a interface (JSON camelCase). Só mapeamento:
-//! nenhuma regra de negócio aqui.
+//! nenhuma regra de negócio e nenhuma frase pronta — textos vão em `{pt, en}`
+//! e motivos vão como código + detalhe, traduzidos pela interface.
 
-use disk_cleanup_application::{ClassificationReport, SkippedRule, SurveyReport};
+use disk_cleanup_application::{
+    ClassificationReport, PlannedStep, SkipReason, SkippedRule, SurveyReport,
+};
 use disk_cleanup_domain::{
-    Action, AggregateEntry, Availability, Candidate, Exclusion, Plan, Risk, Tier, VolumeHealth,
-    VolumeUsage,
+    Action, AggregateEntry, ApprovedPlan, Availability, BlockReason, Candidate, CleanupReport,
+    Exclusion, FailCause, ItemResult, ItemStatus, LocalizedText, Plan, Risk, SafetyViolation,
+    SkipCause, Tier, TierRun, VolumeHealth, VolumeUsage,
 };
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TextDto {
+    pub pt: String,
+    pub en: String,
+}
+
+impl From<&LocalizedText> for TextDto {
+    fn from(t: &LocalizedText) -> Self {
+        Self {
+            pt: t.pt.clone(),
+            en: t.en.clone(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -113,19 +132,41 @@ impl SurveyDto {
     }
 }
 
+/// Por que um candidato está bloqueado: `env_var` (nome) ou `path_entry` (entrada).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BlockDto {
+    pub code: &'static str,
+    pub value: String,
+}
+
+impl From<&BlockReason> for BlockDto {
+    fn from(r: &BlockReason) -> Self {
+        match r {
+            BlockReason::EnvVar { name } => Self {
+                code: "env_var",
+                value: name.clone(),
+            },
+            BlockReason::PathEntry { entry } => Self {
+                code: "path_entry",
+                value: entry.clone(),
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CandidateDto {
     pub id: String,
-    pub label: String,
+    pub label: TextDto,
     pub tier: String,
     pub kind: String,
     /// Caminho, comando ou nome do aplicativo, conforme `kind`.
     pub target: String,
     pub size_bytes: u64,
     pub risk: &'static str,
-    pub note: String,
-    pub blocked_reason: Option<String>,
+    pub note: TextDto,
+    pub blocked: Option<BlockDto>,
 }
 
 fn risk_name(risk: Risk) -> &'static str {
@@ -137,59 +178,73 @@ fn risk_name(risk: Risk) -> &'static str {
     }
 }
 
+fn target_of(action: &Action) -> String {
+    match action {
+        Action::RemovePath { path } => path.clone(),
+        Action::Command { command } => command.clone(),
+        Action::Uninstall { display_name, .. } => display_name.clone(),
+    }
+}
+
 impl From<&Candidate> for CandidateDto {
     fn from(c: &Candidate) -> Self {
-        let target = match &c.action {
-            Action::RemovePath { path } => path.clone(),
-            Action::Command { command } => command.clone(),
-            Action::Uninstall { display_name, .. } => display_name.clone(),
-        };
-        let blocked_reason = match &c.availability {
-            Availability::Selectable => None,
-            Availability::Blocked { reason } => Some(reason.clone()),
-        };
         Self {
             id: c.id.clone(),
-            label: c.label.clone(),
+            label: TextDto::from(&c.label),
             tier: c.tier.to_string(),
             kind: c.action.kind().to_string(),
-            target,
+            target: target_of(&c.action),
             size_bytes: c.size.bytes(),
             risk: risk_name(c.risk),
-            note: c.note.clone(),
-            blocked_reason,
+            note: TextDto::from(&c.note),
+            blocked: match &c.availability {
+                Availability::Selectable => None,
+                Availability::Blocked { reason } => Some(BlockDto::from(reason)),
+            },
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SkippedDto {
     pub id: String,
-    pub reason: String,
+    /// `not_found` | `empty` | `unresolved_variable` | `excluded` | `unmeasurable`.
+    pub code: &'static str,
+    /// Caminho, variável ou mensagem do sistema, conforme o código.
+    pub detail: Option<String>,
+    /// Motivo da exclusão, quando `excluded`.
+    pub reason: Option<TextDto>,
 }
 
 impl From<&SkippedRule> for SkippedDto {
     fn from(s: &SkippedRule) -> Self {
+        let (code, detail, reason) = match &s.reason {
+            SkipReason::NotFound(p) => ("not_found", Some(p.clone()), None),
+            SkipReason::Empty => ("empty", None, None),
+            SkipReason::UnresolvedVariable(v) => ("unresolved_variable", Some(v.clone()), None),
+            SkipReason::Excluded(r) => ("excluded", None, Some(TextDto::from(r))),
+            SkipReason::Unmeasurable(e) => ("unmeasurable", Some(e.clone()), None),
+        };
         Self {
             id: s.id.clone(),
-            reason: s.reason.to_string(),
+            code,
+            detail,
+            reason,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ExclusionDto {
     pub pattern: String,
-    pub reason: String,
+    pub reason: TextDto,
 }
 
 impl From<&Exclusion> for ExclusionDto {
     fn from(e: &Exclusion) -> Self {
         Self {
             pattern: e.pattern.clone(),
-            reason: e.reason.clone(),
+            reason: TextDto::from(&e.reason),
         }
     }
 }
@@ -265,8 +320,8 @@ pub struct ApprovalDto {
     pub estimated_bytes: u64,
 }
 
-impl From<&disk_cleanup_domain::ApprovedPlan> for ApprovalDto {
-    fn from(a: &disk_cleanup_domain::ApprovedPlan) -> Self {
+impl From<&ApprovedPlan> for ApprovalDto {
+    fn from(a: &ApprovedPlan) -> Self {
         let plan = a.plan();
         Self {
             tiers: plan.tiers().iter().map(Tier::to_string).collect(),
@@ -280,18 +335,18 @@ impl From<&disk_cleanup_domain::ApprovedPlan> for ApprovalDto {
 #[serde(rename_all = "camelCase")]
 pub struct StepDto {
     pub id: String,
-    pub label: String,
+    pub label: TextDto,
     pub tier: String,
     pub kind: &'static str,
     pub target: String,
     pub estimated_bytes: u64,
 }
 
-impl From<&disk_cleanup_application::PlannedStep> for StepDto {
-    fn from(s: &disk_cleanup_application::PlannedStep) -> Self {
+impl From<&PlannedStep> for StepDto {
+    fn from(s: &PlannedStep) -> Self {
         Self {
             id: s.id.clone(),
-            label: s.label.clone(),
+            label: TextDto::from(&s.label),
             tier: s.tier.to_string(),
             kind: s.kind,
             target: s.target.clone(),
@@ -300,29 +355,76 @@ impl From<&disk_cleanup_application::PlannedStep> for StepDto {
     }
 }
 
+/// Causa de um item que não terminou `ok`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CauseDto {
+    /// `partial_os` | `partial_locked` | `missing` | `too_broad` | `protected` |
+    /// `uninstall_unsupported` | `io` | `exit`.
+    pub code: &'static str,
+    pub detail: Option<String>,
+    pub exit_code: Option<i32>,
+}
+
+impl CauseDto {
+    fn of(status: &ItemStatus) -> Option<Self> {
+        let (code, detail, exit_code) = match status {
+            ItemStatus::Done => return None,
+            ItemStatus::Partial {
+                detail: Some(d), ..
+            } => ("partial_os", Some(d.clone()), None),
+            ItemStatus::Partial { detail: None, .. } => ("partial_locked", None, None),
+            ItemStatus::Skipped {
+                cause: SkipCause::Missing,
+            } => ("missing", None, None),
+            ItemStatus::Skipped {
+                cause: SkipCause::UninstallUnsupported,
+            } => ("uninstall_unsupported", None, None),
+            ItemStatus::Skipped {
+                cause: SkipCause::Unsafe(SafetyViolation::TooBroad { target }),
+            } => ("too_broad", Some(target.clone()), None),
+            ItemStatus::Skipped {
+                cause: SkipCause::Unsafe(SafetyViolation::Protected { path }),
+            } => ("protected", Some(path.clone()), None),
+            ItemStatus::Failed {
+                cause: FailCause::Io(m),
+            } => ("io", Some(m.clone()), None),
+            ItemStatus::Failed {
+                cause: FailCause::Exit { code, last_line },
+            } => ("exit", Some(last_line.clone()), *code),
+        };
+        Some(Self {
+            code,
+            detail,
+            exit_code,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemResultDto {
     pub id: String,
-    pub label: String,
+    pub label: TextDto,
     pub tier: String,
     pub estimated_bytes: u64,
     /// Espaço livre ganho (negativo se o volume encheu durante o item).
     pub freed_bytes: i64,
+    /// `ok` | `partial` | `skipped` | `failed`.
     pub status: &'static str,
-    pub detail: Option<String>,
+    pub cause: Option<CauseDto>,
 }
 
-impl From<&disk_cleanup_domain::ItemResult> for ItemResultDto {
-    fn from(r: &disk_cleanup_domain::ItemResult) -> Self {
+impl From<&ItemResult> for ItemResultDto {
+    fn from(r: &ItemResult) -> Self {
         Self {
             id: r.id.clone(),
-            label: r.label.clone(),
+            label: TextDto::from(&r.label),
             tier: r.tier.to_string(),
             estimated_bytes: r.estimated.bytes(),
             freed_bytes: r.freed(),
-            status: r.status.label(),
-            detail: r.status.detail().map(str::to_string),
+            status: r.status.code(),
+            cause: CauseDto::of(&r.status),
         }
     }
 }
@@ -338,8 +440,8 @@ pub struct TierRunDto {
     pub items: Vec<ItemResultDto>,
 }
 
-impl From<&disk_cleanup_domain::TierRun> for TierRunDto {
-    fn from(r: &disk_cleanup_domain::TierRun) -> Self {
+impl From<&TierRun> for TierRunDto {
+    fn from(r: &TierRun) -> Self {
         Self {
             tier: r.tier.to_string(),
             free_before_bytes: r.free_before.bytes(),
@@ -377,10 +479,7 @@ pub struct ReportDto {
 }
 
 impl ReportDto {
-    pub fn new(
-        report: &disk_cleanup_domain::CleanupReport,
-        classification: Option<&ClassificationReport>,
-    ) -> Self {
+    pub fn new(report: &CleanupReport, classification: Option<&ClassificationReport>) -> Self {
         let blocked = classification
             .map(|c| {
                 c.candidates

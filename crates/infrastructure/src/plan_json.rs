@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use disk_cleanup_application::{PlanCodec, PortError};
-use disk_cleanup_domain::{Action, ByteSize, Plan, PlanItem, Tier};
+use disk_cleanup_domain::{Action, ByteSize, LocalizedText, Plan, PlanItem, Tier};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -68,7 +68,7 @@ impl From<&PlanItem> for ItemModel {
         };
         Self {
             id: item.id.clone(),
-            label: item.label.clone(),
+            label: item.label.pt.clone(),
             kind,
             estimated_bytes: item.estimated.bytes(),
         }
@@ -90,7 +90,7 @@ impl From<ItemModel> for PlanItem {
         };
         Self {
             id: model.id,
-            label: model.label,
+            label: LocalizedText::same(&model.label),
             action,
             estimated: ByteSize::from_bytes(model.estimated_bytes),
         }

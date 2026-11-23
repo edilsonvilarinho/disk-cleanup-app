@@ -80,6 +80,21 @@ tier, lista divergências e pendências e é copiado em Markdown.
 <tr>
 <td width="50%" valign="middle">
 
+### Configurações e idiomas
+
+Português e inglês no app inteiro — inclusive os motivos e erros que vêm do núcleo Rust, que agora
+fala em códigos que a interface traduz. **Automático** segue o idioma do sistema. O tema segue o
+sistema ou fica claro/escuro, pastas extras podem ser protegidas além das exclusões obrigatórias, e
+a profundidade padrão da varredura fica salva.
+
+</td>
+<td width="50%">
+  <img src="docs/assets/readme/settings.gif" alt="Trocando o idioma para inglês, o tema para claro e adicionando uma pasta extra excluída" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
 ### Claro e escuro
 
 Visual neutro e profissional nos dois temas. Segue a preferência do sistema e lembra a sua escolha.
@@ -95,8 +110,8 @@ Visual neutro e profissional nos dois temas. Segue a preferência do sistema e l
 ### Testado por construção
 
 Arquitetura limpa em Rust (domínio → aplicação → infraestrutura) e Vue, feita com TDD. Os portões de
-cobertura falham o build abaixo de 95%: hoje o núcleo Rust está em 98% das linhas e a interface em
-100%.
+cobertura falham o build abaixo de 95%: hoje o núcleo Rust está em 98,9% das linhas (91 testes) e a
+interface em 100% das linhas (90 testes).
 
 </td>
 <td width="50%">
@@ -110,10 +125,15 @@ cobertura falham o build abaixo de 95%: hoje o núcleo Rust está em 98% das lin
 | Etapa | Estado |
 |---|---|
 | 1. Survey | pronto |
-| 2. Classificação | pronto (catálogo do Windows, tiers A e C) |
+| 2. Classificação | pronto — catálogos de Windows, Linux e macOS (tiers A e C) |
 | 3. Plano e aprovação | pronto — `plan.json` no formato da skill `disk-cleanup` |
 | 4. Execução | pronto — caminhos e comandos; desinstaladores (tier B), DISM e helper elevado são o próximo passo |
 | 5. Relatório | pronto — copiado em Markdown |
+
+Cada sistema tem o próprio catálogo embutido (`catalog/windows.toml`, `linux.toml`, `macos.toml`) e as
+próprias exclusões obrigatórias (pastas do sistema, bancos de pacotes, chaves, iCloud Drive, backups de
+aparelhos). Os catálogos de Linux e macOS seguem os caminhos documentados das plataformas e ainda
+precisam de validação em máquinas reais.
 
 ## Instalação
 

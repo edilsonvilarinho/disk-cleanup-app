@@ -1,4 +1,4 @@
-use crate::{ByteSize, Tier};
+use crate::{ByteSize, LocalizedText, Tier};
 
 /// O que executar para liberar o espaço de um candidato.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,8 +53,17 @@ pub enum Availability {
     Selectable,
     /// Existe, mas não pode entrar no plano (ex.: ferramenta ainda no PATH).
     Blocked {
-        reason: String,
+        reason: BlockReason,
     },
+}
+
+/// Por que uma ferramenta ainda está em uso (pitfall #5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BlockReason {
+    /// Variável monitorada pela regra aponta para o alvo (ex.: `CUDA_PATH`).
+    EnvVar { name: String },
+    /// Entrada do `PATH` está dentro do alvo.
+    PathEntry { entry: String },
 }
 
 impl Availability {
@@ -67,11 +76,11 @@ impl Availability {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Candidate {
     pub id: String,
-    pub label: String,
+    pub label: LocalizedText,
     pub tier: Tier,
     pub action: Action,
     pub size: ByteSize,
     pub risk: Risk,
-    pub note: String,
+    pub note: LocalizedText,
     pub availability: Availability,
 }

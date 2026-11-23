@@ -7,24 +7,20 @@
 #   kind      path    -> remove `path`
 #             command -> executa `command`; o ganho é medido em `measure`
 #   watch_env variáveis que, apontando para o alvo, o bloqueiam (pitfall #5)
+#   label/note em português; label_en/note_en em inglês (ausente = igual)
 #
-# Fora desta versão (dependem de adaptadores ainda não implementados):
-#   - tier B (desinstaladores via registro: MSI/NSIS/Inno/VS/NVIDIA)
-#   - DISM /StartComponentCleanup (estimativa vem de /AnalyzeComponentStore)
-#   - %TEMP% com filtro de idade (> 3 dias)
-#   - Android SDK/NDK (devem sair via sdkmanager, não removendo a pasta)
-
-# ---------------------------------------------------------------- exclusões
-# Além da linha de base obrigatória do domínio (Installer, WinSxS, Package
-# Cache, WindowsApps, pagefile.sys, LocalState, DriverStore, Search).
+# Fora desta versão: tier B (desinstaladores), DISM, %TEMP% com filtro de
+# idade, Android SDK/NDK (devem sair via sdkmanager).
 
 [[exclusion]]
 pattern = '%USERPROFILE%\.claude\projects'
 reason = "histórico de conversa do Claude Code"
+reason_en = "Claude Code conversation history"
 
 [[exclusion]]
 pattern = '%USERPROFILE%\.codex\sessions'
 reason = "histórico de conversa do Codex"
+reason_en = "Codex conversation history"
 
 # ------------------------------------------------------------------ tier A
 
@@ -34,6 +30,7 @@ label = "npm cache"
 tier = "A"
 risk = "none"
 note = "comando oficial; não apagar a pasta inteira"
+note_en = "official command; do not delete the whole folder"
 kind = "command"
 command = "npm cache clean --force"
 measure = '%LOCALAPPDATA%\npm-cache'
@@ -44,6 +41,7 @@ label = "pip cache"
 tier = "A"
 risk = "none"
 note = "comando oficial"
+note_en = "official command"
 kind = "command"
 command = "pip cache purge"
 measure = '%LOCALAPPDATA%\pip\cache'
@@ -63,6 +61,7 @@ label = "pnpm store"
 tier = "A"
 risk = "none"
 note = "remove só pacotes não referenciados"
+note_en = "removes unreferenced packages only"
 kind = "command"
 command = "pnpm store prune"
 measure = '%LOCALAPPDATA%\pnpm\store'
@@ -82,6 +81,7 @@ label = "Cargo registry cache"
 tier = "A"
 risk = "none"
 note = "só os .crate baixados; o índice fica"
+note_en = "downloaded .crate files only; the index stays"
 kind = "path"
 path = '%USERPROFILE%\.cargo\registry\cache'
 
@@ -104,9 +104,11 @@ path = '%LOCALAPPDATA%\electron\Cache'
 [[rule]]
 id = "vscode-vsix"
 label = "VS Code — VSIX em cache"
+label_en = "VS Code — cached VSIX"
 tier = "A"
 risk = "none"
 note = ".vsix de extensões já instaladas"
+note_en = ".vsix of extensions already installed"
 kind = "path"
 path = '%APPDATA%\Code\CachedExtensionVSIXs'
 
@@ -121,9 +123,11 @@ path = '%APPDATA%\Code\CachedData'
 [[rule]]
 id = "chrome-ondevice-model"
 label = "Chrome — modelo on-device"
+label_en = "Chrome — on-device model"
 tier = "A"
 risk = "none"
 note = "re-baixado pelo Chrome"
+note_en = "downloaded again by Chrome"
 kind = "path"
 path = '%LOCALAPPDATA%\Google\Chrome\User Data\OptGuideOnDeviceModel'
 
@@ -141,6 +145,7 @@ label = "NVIDIA DXCache"
 tier = "A"
 risk = "none"
 note = "arquivos abertos pelo driver podem ficar (resíduo de MB)"
+note_en = "files held by the driver may stay (MB of leftovers)"
 kind = "path"
 path = '%LOCALAPPDATA%\NVIDIA\DXCache'
 
@@ -158,12 +163,14 @@ label = "Crash dumps"
 tier = "A"
 risk = "none"
 note = "só servem para depurar crash"
+note_en = "only useful to debug a crash"
 kind = "path"
 path = '%LOCALAPPDATA%\CrashDumps'
 
 [[rule]]
 id = "wer-user"
 label = "Relatórios de erro (usuário)"
+label_en = "Error reports (user)"
 tier = "A"
 risk = "none"
 kind = "path"
@@ -172,9 +179,11 @@ path = '%LOCALAPPDATA%\Microsoft\Windows\WER'
 [[rule]]
 id = "wer-system"
 label = "Relatórios de erro (sistema)"
+label_en = "Error reports (system)"
 tier = "A"
 risk = "none"
 note = "requer administrador"
+note_en = "requires administrator"
 kind = "path"
 path = '%PROGRAMDATA%\Microsoft\Windows\WER'
 
@@ -184,6 +193,7 @@ label = "Windows Update — Download"
 tier = "A"
 risk = "none"
 note = "remover com o serviço wuauserv parado; requer administrador"
+note_en = "remove with the wuauserv service stopped; requires administrator"
 kind = "path"
 path = '%SystemRoot%\SoftwareDistribution\Download'
 
@@ -193,6 +203,7 @@ label = "Delivery Optimization"
 tier = "A"
 risk = "none"
 note = "requer administrador"
+note_en = "requires administrator"
 kind = "path"
 path = '%SystemRoot%\SoftwareDistribution\DeliveryOptimization'
 
@@ -202,6 +213,7 @@ label = "Ollama — updates"
 tier = "A"
 risk = "none"
 note = "binários de atualização antigos"
+note_en = "old update binaries"
 kind = "path"
 path = '%LOCALAPPDATA%\Ollama\updates_v2'
 
@@ -237,6 +249,7 @@ label = "Gradle caches"
 tier = "C"
 risk = "redownload"
 note = "rodar 'gradle --stop' antes; o daemon segura arquivos"
+note_en = "run 'gradle --stop' first; the daemon holds files"
 kind = "path"
 path = '%USERPROFILE%\.gradle\caches'
 watch_env = ["GRADLE_USER_HOME"]
@@ -244,6 +257,7 @@ watch_env = ["GRADLE_USER_HOME"]
 [[rule]]
 id = "gradle-wrapper"
 label = "Gradle wrapper (distribuições)"
+label_en = "Gradle wrapper (distributions)"
 tier = "C"
 risk = "redownload"
 kind = "path"
@@ -255,6 +269,7 @@ label = "Maven repository"
 tier = "C"
 risk = "redownload"
 note = "re-baixado no próximo mvn"
+note_en = "downloaded again on the next mvn run"
 kind = "path"
 path = '%USERPROFILE%\.m2\repository'
 
@@ -264,6 +279,7 @@ label = "NVIDIA NGX models"
 tier = "C"
 risk = "redownload"
 note = "re-baixado pela NVIDIA App"
+note_en = "downloaded again by the NVIDIA App"
 kind = "path"
 path = '%PROGRAMDATA%\NVIDIA\NGX\models'
 
@@ -273,6 +289,7 @@ label = "NVIDIA App — UpdateFramework"
 tier = "C"
 risk = "redownload"
 note = "payloads de driver antigos"
+note_en = "old driver payloads"
 kind = "path"
 path = '%PROGRAMDATA%\NVIDIA Corporation\NVIDIA app\UpdateFramework'
 
@@ -282,6 +299,7 @@ label = "HuggingFace cache"
 tier = "C"
 risk = "redownload"
 note = "modelos re-baixados sob demanda"
+note_en = "models downloaded again on demand"
 kind = "path"
 path = '%USERPROFILE%\.cache\huggingface'
 watch_env = ["HF_HOME", "HUGGINGFACE_HUB_CACHE"]

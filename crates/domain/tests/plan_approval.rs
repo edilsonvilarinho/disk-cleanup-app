@@ -8,12 +8,12 @@ use disk_cleanup_domain::{
 fn candidate(id: &str, tier: Tier, action: Action, gb_bytes: u64) -> Candidate {
     Candidate {
         id: id.into(),
-        label: id.to_uppercase(),
+        label: disk_cleanup_domain::LocalizedText::same(&id.to_uppercase()),
         tier,
         action,
         size: ByteSize::from_bytes(gb_bytes),
         risk: Risk::None,
-        note: String::new(),
+        note: disk_cleanup_domain::LocalizedText::default(),
         availability: Availability::Selectable,
     }
 }
@@ -33,7 +33,9 @@ fn sample() -> Vec<Candidate> {
         5,
     );
     blocked.availability = Availability::Blocked {
-        reason: "CUDA_PATH".into(),
+        reason: disk_cleanup_domain::BlockReason::EnvVar {
+            name: "CUDA_PATH".into(),
+        },
     };
     vec![
         candidate("npm", Tier::A, remove(r"C:\L\npm-cache"), 10),
@@ -81,7 +83,9 @@ fn plan_rejects_unknown_blocked_excluded_duplicate_and_empty_selection() {
         Plan::from_selection("C:", &c, &["cuda"], &ex),
         Err(PlanError::Blocked {
             id: "cuda".into(),
-            reason: "CUDA_PATH".into()
+            reason: disk_cleanup_domain::BlockReason::EnvVar {
+                name: "CUDA_PATH".into()
+            }
         })
     );
     assert!(matches!(
@@ -131,7 +135,10 @@ fn action_reports_the_paths_it_touches_and_its_kind() {
     assert_eq!(un.touched_paths(), vec!["p"]);
     assert_eq!(un.kind(), "uninstall");
     assert!(Availability::Selectable.is_selectable());
-    assert!(!Availability::Blocked { reason: "r".into() }.is_selectable());
+    assert!(!Availability::Blocked {
+        reason: disk_cleanup_domain::BlockReason::PathEntry { entry: "r".into() }
+    }
+    .is_selectable());
 }
 
 fn decisions() -> Vec<Decision> {
@@ -218,7 +225,7 @@ fn plan_from_parts_rebuilds_a_plan_and_drops_empty_tiers() {
     use disk_cleanup_domain::PlanItem;
     let item = PlanItem {
         id: "npm".into(),
-        label: "npm".into(),
+        label: disk_cleanup_domain::LocalizedText::same("npm"),
         action: remove(r"C:\L\npm-cache"),
         estimated: ByteSize::from_bytes(4),
     };

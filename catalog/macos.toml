@@ -1,0 +1,196 @@
+# Catálogo de alvos de limpeza — macOS.
+# Mesmo formato de windows.toml. `~` e `${VAR}` são expandidos.
+# Snapshots locais do Time Machine e caches do sistema exigem root e ficam
+# fora até existir o helper elevado.
+
+[[exclusion]]
+pattern = '~/.claude/projects'
+reason = "histórico de conversa do Claude Code"
+reason_en = "Claude Code conversation history"
+
+[[exclusion]]
+pattern = '~/.codex/sessions'
+reason = "histórico de conversa do Codex"
+reason_en = "Codex conversation history"
+
+[[exclusion]]
+pattern = '~/Library/Developer/Xcode/Archives'
+reason = "builds arquivados para distribuição; dado do usuário"
+reason_en = "archived builds for distribution; user data"
+
+# ------------------------------------------------------------------ tier A
+
+[[rule]]
+id = "npm-cache"
+label = "npm cache"
+tier = "A"
+risk = "none"
+note = "comando oficial"
+note_en = "official command"
+kind = "command"
+command = "npm cache clean --force"
+measure = '~/.npm/_cacache'
+
+[[rule]]
+id = "pip-cache"
+label = "pip cache"
+tier = "A"
+risk = "none"
+note = "comando oficial"
+note_en = "official command"
+kind = "command"
+command = "pip cache purge"
+measure = '~/Library/Caches/pip'
+
+[[rule]]
+id = "yarn-cache"
+label = "Yarn cache"
+tier = "A"
+risk = "none"
+kind = "command"
+command = "yarn cache clean"
+measure = '~/Library/Caches/Yarn'
+
+[[rule]]
+id = "homebrew-cache"
+label = "Homebrew — downloads"
+tier = "A"
+risk = "none"
+note = "comando oficial; remove downloads e versões antigas"
+note_en = "official command; removes downloads and old versions"
+kind = "command"
+command = "brew cleanup -s"
+measure = '~/Library/Caches/Homebrew'
+
+[[rule]]
+id = "cocoapods-cache"
+label = "CocoaPods cache"
+tier = "A"
+risk = "none"
+note = "comando oficial"
+note_en = "official command"
+kind = "command"
+command = "pod cache clean --all"
+measure = '~/Library/Caches/CocoaPods'
+
+[[rule]]
+id = "cargo-registry-cache"
+label = "Cargo registry cache"
+tier = "A"
+risk = "none"
+note = "só os .crate baixados; o índice fica"
+note_en = "downloaded .crate files only; the index stays"
+kind = "path"
+path = '~/.cargo/registry/cache'
+
+[[rule]]
+id = "go-build-cache"
+label = "Go build cache"
+tier = "A"
+risk = "none"
+note = "comando oficial"
+note_en = "official command"
+kind = "command"
+command = "go clean -cache"
+measure = '~/Library/Caches/go-build'
+
+[[rule]]
+id = "chrome-cache"
+label = "Chrome — cache"
+tier = "A"
+risk = "none"
+kind = "path"
+path = '~/Library/Caches/Google/Chrome'
+
+[[rule]]
+id = "vscode-vsix"
+label = "VS Code — VSIX em cache"
+label_en = "VS Code — cached VSIX"
+tier = "A"
+risk = "none"
+note = ".vsix de extensões já instaladas"
+note_en = ".vsix of extensions already installed"
+kind = "path"
+path = '~/Library/Application Support/Code/CachedExtensionVSIXs'
+
+[[rule]]
+id = "vscode-cached-data"
+label = "VS Code — CachedData"
+tier = "A"
+risk = "none"
+kind = "path"
+path = '~/Library/Application Support/Code/CachedData'
+
+[[rule]]
+id = "trash"
+label = "Lixeira"
+label_en = "Trash"
+tier = "A"
+risk = "low"
+note = "confirmar com o usuário: é o último lugar dos arquivos apagados"
+note_en = "confirm with the user: it is the last place of deleted files"
+kind = "path"
+path = '~/.Trash'
+
+# ------------------------------------------------------------------ tier C
+
+[[rule]]
+id = "xcode-derived-data"
+label = "Xcode — DerivedData"
+tier = "C"
+risk = "redownload"
+note = "builds intermediários; o próximo build fica mais lento"
+note_en = "intermediate builds; the next build is slower"
+kind = "path"
+path = '~/Library/Developer/Xcode/DerivedData'
+
+[[rule]]
+id = "xcode-device-support"
+label = "Xcode — iOS DeviceSupport"
+tier = "C"
+risk = "redownload"
+note = "símbolos de versões do iOS; voltam ao conectar o aparelho"
+note_en = "iOS version symbols; they come back when a device connects"
+kind = "path"
+path = '~/Library/Developer/Xcode/iOS DeviceSupport'
+
+[[rule]]
+id = "simulator-caches"
+label = "Simuladores — caches"
+label_en = "Simulators — caches"
+tier = "C"
+risk = "redownload"
+kind = "path"
+path = '~/Library/Developer/CoreSimulator/Caches'
+
+[[rule]]
+id = "gradle-caches"
+label = "Gradle caches"
+tier = "C"
+risk = "redownload"
+note = "rodar 'gradle --stop' antes; o daemon segura arquivos"
+note_en = "run 'gradle --stop' first; the daemon holds files"
+kind = "path"
+path = '~/.gradle/caches'
+watch_env = ["GRADLE_USER_HOME"]
+
+[[rule]]
+id = "maven-repository"
+label = "Maven repository"
+tier = "C"
+risk = "redownload"
+note = "re-baixado no próximo mvn"
+note_en = "downloaded again on the next mvn run"
+kind = "path"
+path = '~/.m2/repository'
+
+[[rule]]
+id = "huggingface-cache"
+label = "HuggingFace cache"
+tier = "C"
+risk = "redownload"
+note = "modelos re-baixados sob demanda"
+note_en = "models downloaded again on demand"
+kind = "path"
+path = '~/.cache/huggingface'
+watch_env = ["HF_HOME", "HUGGINGFACE_HUB_CACHE"]

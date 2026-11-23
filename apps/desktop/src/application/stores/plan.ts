@@ -1,18 +1,19 @@
 import { defineStore } from 'pinia'
+import { markRaw } from 'vue'
 import type { ApprovalDto, PlanDto, Tier } from '../../domain/models'
 import { TIERS } from '../../domain/selection'
-import { messageOf } from '../gateway'
+import { errorInfo, type ErrorInfo } from '../../i18n/i18n'
 import type { AsyncStatus } from './survey'
 
 export const usePlanStore = defineStore('plan', {
   state: () => ({
     status: 'idle' as AsyncStatus,
     plan: null as PlanDto | null,
-    error: null as string | null,
+    error: null as ErrorInfo | null,
     approvedTiers: [] as Tier[],
     acknowledged: false,
     approval: null as ApprovalDto | null,
-    approveError: null as string | null,
+    approveError: null as ErrorInfo | null,
   }),
   getters: {
     canApprove: (state): boolean => state.plan !== null && state.approvedTiers.length > 0 && state.acknowledged,
@@ -22,13 +23,13 @@ export const usePlanStore = defineStore('plan', {
       this.status = 'running'
       this.error = null
       try {
-        this.plan = await this.gateway.buildPlan(volume, selected)
+        this.plan = markRaw(await this.gateway.buildPlan(volume, selected))
         this.approvedTiers = this.plan.tiers.map((t) => t.tier)
         this.status = 'done'
       } catch (e) {
         this.plan = null
         this.approvedTiers = []
-        this.error = messageOf(e)
+        this.error = errorInfo(e)
         this.status = 'error'
       }
       // Plano novo nunca herda aprovação: o núcleo também a descarta.
@@ -50,7 +51,7 @@ export const usePlanStore = defineStore('plan', {
         this.approveError = null
       } catch (e) {
         this.approval = null
-        this.approveError = messageOf(e)
+        this.approveError = errorInfo(e)
       }
     },
   },

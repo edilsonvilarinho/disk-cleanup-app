@@ -1,26 +1,32 @@
 // Gateway de demonstração: permite abrir a interface no navegador (`pnpm dev`)
-// sem o núcleo Rust. Dados baseados no caso documentado na skill.
+// sem o núcleo Rust. Dados baseados no caso documentado na skill; mesmo
+// contrato do núcleo (textos `{pt, en}`, motivos e erros como código).
 import type { DiskCleanupGateway, SurveyRequest } from '../application/gateway'
 import { GIB } from '../domain/format'
 import type {
   ApprovalDto,
   CandidateDto,
+  ClassificationDto,
+  ErrorDto,
+  ExclusionDto,
   ExecutionEventDto,
   ItemResultDto,
-  ReportDto,
-  StepDto,
-  TierRunDto,
-  ClassificationDto,
   PlanDto,
+  ReportDto,
   ScanProgressDto,
+  StepDto,
   SurveyDto,
   SystemInfoDto,
+  TextDto,
   Tier,
+  TierRunDto,
   UsageEntryDto,
 } from '../domain/models'
 import { TIERS } from '../domain/selection'
 
 const gb = (n: number) => Math.round(n * GIB)
+const text = (pt: string, en = pt): TextDto => ({ pt, en })
+const fail = (code: string, params: Record<string, string> = {}): ErrorDto => ({ code, params })
 
 const entry = (name: string, logical: number, real = logical, key = [name]): UsageEntryDto => ({
   key,
@@ -34,7 +40,7 @@ const entry = (name: string, logical: number, real = logical, key = [name]): Usa
 
 const candidate = (
   id: string,
-  label: string,
+  label: TextDto,
   tier: Tier,
   size: number,
   target: string,
@@ -47,26 +53,37 @@ const candidate = (
   target,
   sizeBytes: gb(size),
   risk: tier === 'C' ? 'redownload' : 'none',
-  note: '',
-  blockedReason: null,
+  note: text(''),
+  blocked: null,
   ...extra,
 })
 
 const CANDIDATES: CandidateDto[] = [
-  candidate('npm-cache', 'npm cache', 'A', 6.4, 'npm cache clean --force', { kind: 'command', note: 'comando oficial' }),
-  candidate('pip-cache', 'pip cache', 'A', 3.1, 'pip cache purge', { kind: 'command' }),
-  candidate('nvidia-dxcache', 'NVIDIA DXCache', 'A', 4.8, '%LOCALAPPDATA%\\NVIDIA\\DXCache', {
-    note: 'arquivos abertos pelo driver podem ficar',
+  candidate('npm-cache', text('npm cache'), 'A', 6.4, 'npm cache clean --force', {
+    kind: 'command',
+    note: text('comando oficial', 'official command'),
   }),
-  candidate('chrome-ondevice-model', 'Chrome — modelo on-device', 'A', 3.9, '%LOCALAPPDATA%\\Google\\Chrome\\User Data\\OptGuideOnDeviceModel'),
-  candidate('windows-update-download', 'Windows Update — Download', 'A', 5.3, 'C:\\Windows\\SoftwareDistribution\\Download', {
-    note: 'requer administrador',
+  candidate('pip-cache', text('pip cache'), 'A', 3.1, 'pip cache purge', { kind: 'command' }),
+  candidate('nvidia-dxcache', text('NVIDIA DXCache'), 'A', 4.8, '%LOCALAPPDATA%\\NVIDIA\\DXCache', {
+    note: text('arquivos abertos pelo driver podem ficar', 'files held by the driver may stay'),
   }),
-  candidate('gradle-caches', 'Gradle caches', 'C', 14.2, '%USERPROFILE%\\.gradle\\caches', { note: "rodar 'gradle --stop' antes" }),
-  candidate('maven-repository', 'Maven repository', 'C', 6.8, '%USERPROFILE%\\.m2\\repository'),
-  candidate('huggingface-cache', 'HuggingFace cache', 'C', 5.5, '%USERPROFILE%\\.cache\\huggingface', {
-    blockedReason: 'variável HF_HOME aponta para este caminho',
+  candidate('chrome-ondevice-model', text('Chrome — modelo on-device', 'Chrome — on-device model'), 'A', 3.9,
+    '%LOCALAPPDATA%\\Google\\Chrome\\User Data\\OptGuideOnDeviceModel'),
+  candidate('windows-update-download', text('Windows Update — Download'), 'A', 5.3, 'C:\\Windows\\SoftwareDistribution\\Download', {
+    note: text('requer administrador', 'requires administrator'),
   }),
+  candidate('gradle-caches', text('Gradle caches'), 'C', 14.2, '%USERPROFILE%\\.gradle\\caches', {
+    note: text("rodar 'gradle --stop' antes", "run 'gradle --stop' first"),
+  }),
+  candidate('maven-repository', text('Maven repository'), 'C', 6.8, '%USERPROFILE%\\.m2\\repository'),
+  candidate('huggingface-cache', text('HuggingFace cache'), 'C', 5.5, '%USERPROFILE%\\.cache\\huggingface', {
+    blocked: { code: 'env_var', value: 'HF_HOME' },
+  }),
+]
+
+const EXCLUSIONS: ExclusionDto[] = [
+  { pattern: 'C:\\Windows\\Installer', reason: text('cache do MSI; sem ele a desinstalação quebra', 'MSI cache; without it uninstalling breaks') },
+  { pattern: 'C:\\Windows\\WinSxS', reason: text('só via DISM', 'only through DISM') },
 ]
 
 const TOTAL = gb(953)
@@ -85,6 +102,7 @@ function volume(free: number) {
 
 export class DemoGateway implements DiskCleanupGateway {
   private planned: CandidateDto[] = []
+  private extra: string[] = []
   private approved: Tier[] = []
   private runs: TierRunDto[] = []
   private free = INITIAL_FREE
@@ -104,17 +122,8 @@ export class DemoGateway implements DiskCleanupGateway {
       await this.wait()
       onProgress({ files, logicalBytes: gb(files / 1500) })
     }
-    const total = gb(953)
-    const free = gb(61.6)
     return {
-      volume: {
-        totalBytes: total,
-        freeBytes: free,
-        usedBytes: total - free,
-        usedPercent: ((total - free) / total) * 100,
-        freePercent: (free / total) * 100,
-        health: 'critical',
-      },
+      volume: volume(INITIAL_FREE),
       roots: [
         entry('Users', 412.6),
         entry('Program Files', 158.3),
@@ -124,13 +133,7 @@ export class DemoGateway implements DiskCleanupGateway {
         entry('pagefile.sys', 24),
       ],
       children: [],
-      profile: [
-        entry('AppData', 186.4),
-        entry('OneDrive - Empresa', 60, 9.1),
-        entry('workspace', 44.7),
-        entry('Downloads', 38.5),
-        entry('.gradle', 14.2),
-      ],
+      profile: [entry('AppData', 186.4), entry('OneDrive - Empresa', 60, 9.1), entry('workspace', 44.7), entry('Downloads', 38.5), entry('.gradle', 14.2)],
       cloud: [entry('OneDrive - Empresa', 60, 9.1)],
       files: 1_100_000,
       unreadable: 37,
@@ -139,22 +142,26 @@ export class DemoGateway implements DiskCleanupGateway {
     }
   }
 
-  async classify(): Promise<ClassificationDto> {
+  async classify(extraExclusions: string[]): Promise<ClassificationDto> {
     await this.wait()
+    this.extra = [...extraExclusions]
+    const extra = this.extra.map((pattern) => ({ pattern, reason: text('excluída nas Configurações', 'excluded in Settings') }))
+    const isExcluded = (c: CandidateDto) => this.extra.some((p) => c.target.toLowerCase().startsWith(p.toLowerCase()))
+    const candidates = CANDIDATES.filter((c) => !isExcluded(c))
     return {
-      candidates: CANDIDATES,
-      skipped: [{ id: 'yarn-cache', reason: 'caminho não existe: %LOCALAPPDATA%\\Yarn\\Cache' }],
-      exclusions: [
-        { pattern: 'C:\\Windows\\Installer', reason: 'cache do MSI; sem ele a desinstalação quebra' },
-        { pattern: 'C:\\Windows\\WinSxS', reason: 'só via DISM' },
+      candidates,
+      skipped: [
+        { id: 'yarn-cache', code: 'not_found', detail: '%LOCALAPPDATA%\\Yarn\\Cache', reason: null },
+        ...CANDIDATES.filter(isExcluded).map((c) => ({ id: c.id, code: 'excluded' as const, detail: null, reason: extra[0]!.reason })),
       ],
-      selectableBytes: CANDIDATES.filter((c) => !c.blockedReason).reduce((s, c) => s + c.sizeBytes, 0),
+      exclusions: [...EXCLUSIONS, ...extra],
+      selectableBytes: candidates.filter((c) => !c.blocked).reduce((s, c) => s + c.sizeBytes, 0),
     }
   }
 
-  async buildPlan(volume: string, selected: string[]): Promise<PlanDto> {
+  async buildPlan(volumeName: string, selected: string[]): Promise<PlanDto> {
     const items = CANDIDATES.filter((c) => selected.includes(c.id))
-    if (items.length === 0) throw new Error('nenhum item selecionado')
+    if (items.length === 0) throw fail('plan_empty')
     this.planned = items
     this.approved = []
     this.runs = []
@@ -165,13 +172,13 @@ export class DemoGateway implements DiskCleanupGateway {
     }).filter((t) => t.itemCount > 0)
     const json = JSON.stringify(
       {
-        volume,
+        volume: volumeName,
         tiers: Object.fromEntries(
           tiers.map((t) => [
             t.tier,
             items
               .filter((c) => c.tier === t.tier)
-              .map((c) => ({ id: c.id, label: c.label, kind: c.kind, target: c.target, estimatedBytes: c.sizeBytes })),
+              .map((c) => ({ id: c.id, label: c.label.pt, kind: c.kind, target: c.target, estimatedBytes: c.sizeBytes })),
           ]),
         ),
       },
@@ -182,9 +189,9 @@ export class DemoGateway implements DiskCleanupGateway {
   }
 
   async approvePlan(tiers: Tier[], acknowledged: boolean): Promise<ApprovalDto> {
-    if (!acknowledged) throw new Error('revisão do plano não confirmada')
-    if (this.planned.length === 0) throw new Error('monte o plano antes de aprovar')
-    if (tiers.length === 0) throw new Error('nenhum tier aprovado')
+    if (this.planned.length === 0) throw fail('plan_required')
+    if (tiers.length === 0) throw fail('approval_no_tier')
+    if (!acknowledged) throw fail('approval_not_acknowledged')
     this.approved = [...tiers]
     this.runs = []
     const items = this.planned.filter((c) => tiers.includes(c.tier))
@@ -192,24 +199,17 @@ export class DemoGateway implements DiskCleanupGateway {
   }
 
   private itemsOf(tier: Tier): CandidateDto[] {
-    if (!this.approved.includes(tier)) throw new Error('nenhum plano aprovado para este tier')
+    if (!this.approved.includes(tier)) throw fail('not_approved')
     return this.planned.filter((c) => c.tier === tier)
   }
 
   async previewTier(tier: Tier): Promise<StepDto[]> {
-    return this.itemsOf(tier).map((c) => ({
-      id: c.id,
-      label: c.label,
-      tier,
-      kind: c.kind,
-      target: c.target,
-      estimatedBytes: c.sizeBytes,
-    }))
+    return this.itemsOf(tier).map((c) => ({ id: c.id, label: c.label, tier, kind: c.kind, target: c.target, estimatedBytes: c.sizeBytes }))
   }
 
   async executeTier(tier: Tier, onEvent: (event: ExecutionEventDto) => void): Promise<TierRunDto> {
     const items = this.itemsOf(tier)
-    if (this.runs.some((r) => r.tier === tier)) throw new Error(`tier ${tier} já executado nesta aprovação`)
+    if (this.runs.some((r) => r.tier === tier)) throw fail('tier_already_run', { tier })
     const before = this.free
     const results: ItemResultDto[] = []
     for (const c of items) {
@@ -225,8 +225,8 @@ export class DemoGateway implements DiskCleanupGateway {
         tier,
         estimatedBytes: c.sizeBytes,
         freedBytes: freed,
-        status: partial ? 'parcial' : 'ok',
-        detail: partial ? 'arquivos abertos pelo driver' : null,
+        status: partial ? 'partial' : 'ok',
+        cause: partial ? { code: 'partial_locked', detail: null, exitCode: null } : null,
       }
       results.push(result)
       onEvent({ kind: 'finished', id: c.id, result })
@@ -244,8 +244,7 @@ export class DemoGateway implements DiskCleanupGateway {
   }
 
   async report(): Promise<ReportDto> {
-    if (this.runs.length === 0) throw new Error('nenhuma execução nesta sessão')
-    const classification = await this.classify()
+    if (this.runs.length === 0) throw fail('no_execution')
     return {
       initial: volume(INITIAL_FREE),
       last: volume(this.free),
@@ -253,9 +252,9 @@ export class DemoGateway implements DiskCleanupGateway {
       estimatedBytes: this.runs.reduce((s, r) => s + r.estimatedBytes, 0),
       itemCount: this.runs.reduce((s, r) => s + r.items.length, 0),
       runs: this.runs,
-      pending: this.runs.flatMap((r) => r.items.filter((i) => i.status === 'parcial' || i.status === 'erro')),
-      blocked: classification.candidates.filter((c) => c.blockedReason !== null),
-      exclusions: classification.exclusions,
+      pending: this.runs.flatMap((r) => r.items.filter((i) => i.status === 'partial' || i.status === 'failed')),
+      blocked: CANDIDATES.filter((c) => c.blocked !== null),
+      exclusions: [...EXCLUSIONS, ...this.extra.map((pattern) => ({ pattern, reason: text('excluída nas Configurações', 'excluded in Settings') }))],
     }
   }
 }

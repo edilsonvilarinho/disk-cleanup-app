@@ -5,6 +5,13 @@ import vue from '@vitejs/plugin-vue'
 // Porta fixa: o Tauri aponta para ela em tauri.conf.json (devUrl).
 export default defineConfig({
   plugins: [vue()],
+  // Flags do build esm-bundler declaradas explicitamente (guia de produção do Vue):
+  // sem devtools nem detalhes de hidratação no binário final.
+  define: {
+    __VUE_OPTIONS_API__: 'true',
+    __VUE_PROD_DEVTOOLS__: 'false',
+    __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
+  },
   clearScreen: false,
   server: { port: 1420, strictPort: true },
   build: { target: 'es2022', outDir: 'dist', emptyOutDir: true },

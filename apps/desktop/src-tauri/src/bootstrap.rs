@@ -6,18 +6,20 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use disk_cleanup_infrastructure::{
-    platform_exclusions, FsActionRunner, JwalkFileWalker, SkillPlanJsonCodec, SnapshotEnvironment,
-    SysinfoVolumeInfo, TomlCatalogRepository, WalkerPathInspector,
+    catalog_for, exclusions_for, FsActionRunner, JwalkFileWalker, SkillPlanJsonCodec,
+    SnapshotEnvironment, SysinfoVolumeInfo, WalkerPathInspector,
 };
 
 use crate::dto::{
     ApprovalDto, ClassificationDto, PlanDto, ReportDto, StepDto, SurveyDto, SurveyRequestDto,
     SystemInfoDto, TierRunDto,
 };
+use crate::error::ErrorDto;
 use crate::service::{self, CallbackExecution, CallbackProgress, Session};
 
 const PROGRESS_EVENT: &str = "survey-progress";
 const EXECUTION_EVENT: &str = "execution-progress";
+const OS: &str = std::env::consts::OS;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,13 +28,17 @@ struct ProgressPayload {
     logical_bytes: u64,
 }
 
-#[tauri::command]
-fn system_info() -> SystemInfoDto {
-    service::system_info(&SnapshotEnvironment::from_process(), std::env::consts::OS)
+fn join_error(e: tauri::Error) -> ErrorDto {
+    ErrorDto::new("internal").with("detail", e)
 }
 
 #[tauri::command]
-async fn run_survey(app: AppHandle, request: SurveyRequestDto) -> Result<SurveyDto, String> {
+fn system_info() -> SystemInfoDto {
+    service::system_info(&SnapshotEnvironment::from_process(), OS)
+}
+
+#[tauri::command]
+async fn run_survey(app: AppHandle, request: SurveyRequestDto) -> Result<SurveyDto, ErrorDto> {
     tauri::async_runtime::spawn_blocking(move || {
         let progress = CallbackProgress::new(|files, logical_bytes| {
             let _ = app.emit(
@@ -46,24 +52,28 @@ async fn run_survey(app: AppHandle, request: SurveyRequestDto) -> Result<SurveyD
         service::run_survey(&JwalkFileWalker, &SysinfoVolumeInfo, &progress, &request)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(join_error)?
 }
 
 #[tauri::command]
-async fn classify(app: AppHandle) -> Result<ClassificationDto, String> {
+async fn classify(
+    app: AppHandle,
+    extra_exclusions: Vec<String>,
+) -> Result<ClassificationDto, ErrorDto> {
     tauri::async_runtime::spawn_blocking(move || {
         let env = SnapshotEnvironment::from_process();
         let session = app.state::<Session>();
         service::classify(
             &session,
-            &TomlCatalogRepository::bundled_windows(),
+            &catalog_for(OS)?,
             &env,
             &WalkerPathInspector::new(JwalkFileWalker),
-            platform_exclusions(&env),
+            exclusions_for(OS, &env),
+            &extra_exclusions,
         )
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(join_error)?
 }
 
 #[tauri::command]
@@ -71,7 +81,7 @@ fn build_plan(
     session: State<'_, Session>,
     volume: String,
     selected: Vec<String>,
-) -> Result<PlanDto, String> {
+) -> Result<PlanDto, ErrorDto> {
     service::build_plan(&session, &volume, &selected, &SkillPlanJsonCodec)
 }
 
@@ -80,18 +90,18 @@ fn approve_plan(
     session: State<'_, Session>,
     tiers: Vec<String>,
     acknowledged: bool,
-) -> Result<ApprovalDto, String> {
+) -> Result<ApprovalDto, ErrorDto> {
     service::approve_plan(&session, &tiers, acknowledged)
 }
 
 #[tauri::command]
-fn preview_tier(session: State<'_, Session>, tier: String) -> Result<Vec<StepDto>, String> {
+fn preview_tier(session: State<'_, Session>, tier: String) -> Result<Vec<StepDto>, ErrorDto> {
     let guard = service::safety_guard(&SnapshotEnvironment::from_process());
     service::preview_tier(&session, &FsActionRunner, &SysinfoVolumeInfo, &guard, &tier)
 }
 
 #[tauri::command]
-async fn execute_tier(app: AppHandle, tier: String) -> Result<TierRunDto, String> {
+async fn execute_tier(app: AppHandle, tier: String) -> Result<TierRunDto, ErrorDto> {
     tauri::async_runtime::spawn_blocking(move || {
         let guard = service::safety_guard(&SnapshotEnvironment::from_process());
         let progress = CallbackExecution::new(|event| {
@@ -108,11 +118,11 @@ async fn execute_tier(app: AppHandle, tier: String) -> Result<TierRunDto, String
         )
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(join_error)?
 }
 
 #[tauri::command]
-fn report(session: State<'_, Session>) -> Result<ReportDto, String> {
+fn report(session: State<'_, Session>) -> Result<ReportDto, ErrorDto> {
     service::report(&session, &SysinfoVolumeInfo)
 }
 

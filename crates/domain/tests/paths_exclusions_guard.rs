@@ -75,7 +75,7 @@ fn windows_baseline_exclusions_cover_the_skill_mandatory_list() {
     ] {
         let hit = list.matching(p);
         assert!(hit.is_some(), "deveria excluir {p}");
-        assert!(!hit.unwrap().reason.is_empty());
+        assert!(!hit.unwrap().reason.pt.is_empty());
     }
     assert!(list
         .matching(r"C:\Users\u\AppData\Local\npm-cache")
@@ -86,10 +86,12 @@ fn windows_baseline_exclusions_cover_the_skill_mandatory_list() {
 
 #[test]
 fn exclusion_list_accepts_extra_entries_but_never_drops_the_baseline() {
-    let list =
-        ExclusionList::windows_baseline("C:", r"C:\L").with(r"D:\Backups", "backups do usuário");
+    let list = ExclusionList::windows_baseline("C:", r"C:\L").with(
+        r"D:\Backups",
+        disk_cleanup_domain::LocalizedText::same("backups do usuário"),
+    );
     assert_eq!(
-        list.matching(r"D:\Backups\2026").unwrap().reason,
+        list.matching(r"D:\Backups\2026").unwrap().reason.pt,
         "backups do usuário"
     );
     assert!(list.matching(r"C:\Windows\Installer").is_some());
@@ -117,8 +119,10 @@ fn toolchain_guard_blocks_target_referenced_by_env_var() {
         &["CUDA_PATH".into()],
     );
     assert_eq!(
-        reason.as_deref(),
-        Some("variável CUDA_PATH aponta para este caminho")
+        reason,
+        Some(disk_cleanup_domain::BlockReason::EnvVar {
+            name: "CUDA_PATH".into()
+        })
     );
     // variável não monitorada pela regra não bloqueia
     assert_eq!(
@@ -137,10 +141,10 @@ fn toolchain_guard_blocks_target_that_contains_a_path_entry() {
         vec![r"C:\tools\cuda\v11.8\bin".into(), String::new()],
     );
     assert_eq!(
-        guard
-            .blocking_reason(r"C:\tools\cuda\v11.8", &[])
-            .as_deref(),
-        Some(r"PATH contém C:\tools\cuda\v11.8\bin")
+        guard.blocking_reason(r"C:\tools\cuda\v11.8", &[]),
+        Some(disk_cleanup_domain::BlockReason::PathEntry {
+            entry: r"C:\tools\cuda\v11.8\bin".into()
+        })
     );
     assert_eq!(guard.blocking_reason(r"C:\tools\other", &[]), None);
 }

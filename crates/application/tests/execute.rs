@@ -7,7 +7,8 @@ use disk_cleanup_application::{
 };
 use disk_cleanup_domain::{
     approve, signed_delta, Action, ApprovedPlan, Availability, ByteSize, Candidate, ExclusionList,
-    ItemResult, ItemStatus, Plan, Risk, SafetyGuard, Tier, VolumeUsage,
+    FailCause, ItemResult, ItemStatus, LocalizedText, Plan, Risk, SafetyGuard, SafetyViolation,
+    SkipCause, Tier, VolumeUsage,
 };
 
 fn b(n: u64) -> ByteSize {
@@ -97,19 +98,19 @@ impl ExecutionProgress for Events {
     fn item_finished(&self, result: &ItemResult) {
         self.0
             .borrow_mut()
-            .push(format!("end {} {}", result.id, result.status.label()));
+            .push(format!("end {} {}", result.id, result.status.code()));
     }
 }
 
 fn candidate(id: &str, tier: Tier, action: Action) -> Candidate {
     Candidate {
         id: id.into(),
-        label: id.into(),
+        label: LocalizedText::same(id),
         tier,
         action,
         size: b(100),
         risk: Risk::None,
-        note: String::new(),
+        note: LocalizedText::default(),
         availability: Availability::Selectable,
     }
 }
@@ -200,7 +201,7 @@ fn preview_lists_the_steps_of_an_approved_tier_without_running_anything() {
     assert!(runner.calls.borrow().is_empty());
     assert_eq!(
         service.preview(&approved(&[Tier::A]), Tier::C).unwrap_err(),
-        AppError::InvalidRequest("tier C não está no plano aprovado".into())
+        AppError::TierNotApproved(Tier::C)
     );
 }
 
@@ -234,33 +235,35 @@ fn execute_runs_every_item_measures_each_one_and_never_aborts_on_failure() {
                 "dx",
                 ItemStatus::Partial {
                     remaining: b(50),
-                    detail: "dx.bin: em uso".into()
-                }
+                    detail: Some("dx.bin: em uso".into()),
+                },
             ),
             (
                 "locked",
                 ItemStatus::Partial {
                     remaining: b(10),
-                    detail: "arquivos em uso ou sem permissão".into()
-                }
+                    detail: None,
+                },
             ),
             (
                 "sumiu",
                 ItemStatus::Skipped {
-                    reason: "caminho não existe mais".into()
-                }
+                    cause: SkipCause::Missing,
+                },
             ),
             (
                 "negado",
                 ItemStatus::Failed {
-                    error: r"erro de E/S: acesso negado: C:\Users\u\AppData\Local\negado".into()
-                }
+                    cause: FailCause::Io(r"acesso negado: C:\Users\u\AppData\Local\negado".into()),
+                },
             ),
             (
                 "amplo",
                 ItemStatus::Skipped {
-                    reason: r#"alvo amplo demais para remoção: "C:\\Users""#.into()
-                }
+                    cause: SkipCause::Unsafe(SafetyViolation::TooBroad {
+                        target: r"C:\Users".into(),
+                    }),
+                },
             ),
         ]
     );
@@ -274,7 +277,7 @@ fn execute_runs_every_item_measures_each_one_and_never_aborts_on_failure() {
     );
     assert_eq!(
         events.0.borrow().last().map(String::as_str),
-        Some("end amplo pulado")
+        Some("end amplo skipped")
     );
     assert_eq!(events.0.borrow().len(), 14);
 }
@@ -296,13 +299,16 @@ fn commands_report_exit_code_and_last_output_line_and_uninstall_is_not_supported
         statuses,
         vec![
             ItemStatus::Failed {
-                error: "saída 3: erro final".into()
+                cause: FailCause::Exit {
+                    code: Some(3),
+                    last_line: "erro final".into(),
+                },
             },
             ItemStatus::Failed {
-                error: "erro de E/S: programa não encontrado".into()
+                cause: FailCause::Io("programa não encontrado".into()),
             },
             ItemStatus::Skipped {
-                reason: "desinstalação ainda não suportada pelo app".into()
+                cause: SkipCause::UninstallUnsupported,
             },
         ]
     );
@@ -321,7 +327,7 @@ fn execute_refuses_unapproved_tier_and_reports_volume_failure() {
     let service = ExecuteService::new(&runner, &volume, &guard, &events);
     assert!(matches!(
         service.execute(&approved(&[Tier::A]), Tier::C),
-        Err(AppError::InvalidRequest(_))
+        Err(AppError::TierNotApproved(Tier::C))
     ));
 
     let failing = ExecuteService::new(&runner, &FailingVolume, &guard, &events);

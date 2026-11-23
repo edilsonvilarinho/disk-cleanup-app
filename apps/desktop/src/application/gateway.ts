@@ -22,7 +22,7 @@ export interface SurveyRequest {
 export interface DiskCleanupGateway {
   systemInfo(): Promise<SystemInfoDto>
   runSurvey(request: SurveyRequest, onProgress: (progress: ScanProgressDto) => void): Promise<SurveyDto>
-  classify(): Promise<ClassificationDto>
+  classify(extraExclusions: string[]): Promise<ClassificationDto>
   buildPlan(volume: string, selected: string[]): Promise<PlanDto>
   approvePlan(tiers: Tier[], acknowledged: boolean): Promise<ApprovalDto>
   previewTier(tier: Tier): Promise<StepDto[]>

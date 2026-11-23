@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useSettingsStore } from '../../application/stores/settings'
 import { useSystemStore } from '../../application/stores/system'
+import { useI18n } from '../i18n'
 import { STEPS } from '../router'
 import { useTheme } from '../theme'
 
 const system = useSystemStore()
+const settings = useSettingsStore()
 const theme = useTheme()
+const { t, err } = useI18n()
 const isDark = computed(() => theme.current.value === 'dark')
+
+function toggleTheme() {
+  settings.setTheme(isDark.value ? 'light' : 'dark')
+}
 </script>
 
 <template>
@@ -19,29 +27,39 @@ const isDark = computed(() => theme.current.value === 'dark')
       </svg>
       <div style="display: flex; flex-direction: column">
         <span class="brand-name">Disk Cleanup</span>
-        <span class="small muted">v0.1</span>
+        <span class="small muted">{{ t('app.version') }}</span>
       </div>
     </div>
 
-    <nav class="nav" aria-label="Etapas" data-test="nav">
+    <nav class="nav" :aria-label="t('nav.steps')" data-test="nav">
       <RouterLink v-for="(step, i) in STEPS" :key="step.name" :to="step.path">
-        <span class="step-num">{{ i + 1 }}</span>{{ step.label }}
+        <span class="step-num">{{ i + 1 }}</span>{{ t(`nav.${step.name}`) }}
+      </RouterLink>
+    </nav>
+
+    <nav class="nav" :aria-label="t('nav.settings')">
+      <RouterLink to="/configuracoes" data-test="nav-settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+        </svg>
+        {{ t('nav.settings') }}
       </RouterLink>
     </nav>
 
     <div class="env">
-      <span class="label-caps">Ambiente</span>
+      <span class="label-caps">{{ t('env.title') }}</span>
       <template v-if="system.info">
-        <div class="env-row"><span class="muted">Sistema</span><span data-test="env-os">{{ system.info.os }}</span></div>
-        <div class="env-row"><span class="muted">Volume</span><span class="mono">{{ system.info.volumeRoot }}</span></div>
-        <div class="env-row"><span class="muted">Catálogo</span><span>{{ system.info.catalog }}</span></div>
+        <div class="env-row"><span class="muted">{{ t('env.system') }}</span><span data-test="env-os">{{ system.info.os }}</span></div>
+        <div class="env-row"><span class="muted">{{ t('env.volume') }}</span><span class="mono">{{ system.info.volumeRoot }}</span></div>
+        <div class="env-row"><span class="muted">{{ t('env.catalog') }}</span><span>{{ system.info.catalog }}</span></div>
       </template>
-      <p v-else-if="system.error" class="small err" data-test="env-error">{{ system.error }}</p>
-      <div class="env-row"><span class="muted">Modo</span><span style="font-weight: 600">Aprovação explícita</span></div>
+      <p v-else-if="system.error" class="small err" data-test="env-error">{{ err(system.error) }}</p>
+      <div class="env-row"><span class="muted">{{ t('env.mode') }}</span><span style="font-weight: 600">{{ t('env.explicit') }}</span></div>
     </div>
 
     <div class="spacer" />
-    <button type="button" class="btn btn-lg" data-test="theme-toggle" @click="theme.toggle()">
+    <button type="button" class="btn btn-lg" data-test="theme-toggle" @click="toggleTheme">
       <svg v-if="isDark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
         <circle cx="12" cy="12" r="4" />
         <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
@@ -49,7 +67,7 @@ const isDark = computed(() => theme.current.value === 'dark')
       <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
       </svg>
-      <span>{{ isDark ? 'Tema claro' : 'Tema escuro' }}</span>
+      <span>{{ isDark ? t('theme.toLight') : t('theme.toDark') }}</span>
     </button>
   </aside>
 </template>

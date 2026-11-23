@@ -5,10 +5,12 @@ use std::path::{Path, PathBuf};
 use disk_cleanup_application::{
     Catalog, CatalogExclusion, CatalogRepository, CatalogRule, PortError, RuleTarget,
 };
-use disk_cleanup_domain::{Risk, Tier};
+use disk_cleanup_domain::{LocalizedText, Risk, Tier};
 use serde::Deserialize;
 
 const BUNDLED_WINDOWS: &str = include_str!("../../../catalog/windows.toml");
+const BUNDLED_LINUX: &str = include_str!("../../../catalog/linux.toml");
+const BUNDLED_MACOS: &str = include_str!("../../../catalog/macos.toml");
 
 #[derive(Debug, Clone)]
 enum Source {
@@ -35,11 +37,6 @@ impl TomlCatalogRepository {
         }
     }
 
-    /// Catálogo do Windows embutido no binário (`catalog/windows.toml`).
-    pub fn bundled_windows() -> Self {
-        Self::from_text(BUNDLED_WINDOWS)
-    }
-
     fn read(&self) -> Result<String, PortError> {
         match &self.source {
             Source::Text(text) => Ok(text.clone()),
@@ -63,22 +60,41 @@ struct FileModel {
 struct ExclusionModel {
     pattern: String,
     reason: String,
+    reason_en: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 struct RuleModel {
     id: String,
     label: String,
+    label_en: Option<String>,
     tier: String,
     risk: String,
     #[serde(default)]
     note: String,
+    note_en: Option<String>,
     kind: String,
     path: Option<String>,
     command: Option<String>,
     measure: Option<String>,
     #[serde(default)]
     watch_env: Vec<String>,
+}
+
+/// Texto do catálogo: `*_en` ausente repete o português (nomes próprios).
+fn bilingual(pt: &str, en: Option<&str>) -> LocalizedText {
+    LocalizedText::new(pt, en.unwrap_or(pt))
+}
+
+/// Catálogo embutido do sistema (`std::env::consts::OS`). Escolha em tempo de
+/// execução: os três catálogos são testados em qualquer máquina.
+pub fn catalog_for(os: &str) -> Result<TomlCatalogRepository, PortError> {
+    match os {
+        "windows" => Ok(TomlCatalogRepository::from_text(BUNDLED_WINDOWS)),
+        "linux" => Ok(TomlCatalogRepository::from_text(BUNDLED_LINUX)),
+        "macos" => Ok(TomlCatalogRepository::from_text(BUNDLED_MACOS)),
+        other => Err(PortError::Unsupported(format!("sem catálogo para {other}"))),
+    }
 }
 
 fn parse_risk(value: &str) -> Option<Risk> {
@@ -106,11 +122,11 @@ impl RuleModel {
             (other, ..) => return Err(format!("kind '{other}' ainda não suportado pelo catálogo")),
         };
         Ok(CatalogRule {
+            label: bilingual(&self.label, self.label_en.as_deref()),
+            note: bilingual(&self.note, self.note_en.as_deref()),
             id: self.id,
-            label: self.label,
             tier,
             risk,
-            note: self.note,
             target,
             watch_env: self.watch_env,
         })
@@ -137,8 +153,8 @@ impl CatalogRepository for TomlCatalogRepository {
             .exclusion
             .into_iter()
             .map(|e| CatalogExclusion {
+                reason: bilingual(&e.reason, e.reason_en.as_deref()),
                 pattern: e.pattern,
-                reason: e.reason,
             })
             .collect();
         Ok(Catalog { rules, exclusions })
