@@ -35,6 +35,19 @@ apps/desktop/src (Vue)  ──IPC──▶  apps/desktop/src-tauri (comandos, DT
 O gateway entra nos stores por um plugin do Pinia (`this.gateway`); nos testes
 ele é substituído por um fake.
 
+### Histórico de varreduras
+
+- Regras puras em `domain/history.ts`: retrato compacto (`toSnapshot`: volume, contadores e o 1º
+  nível **completo** de `roots` e `profile`; `children` fica de fora), limite de 100 (`appendSnapshot`),
+  comparação (`compareEntries`/`compareSnapshots`) e validação do que vem do disco (`sanitizeHistory`).
+- Porta `HistoryStorage` (`application/history.ts`), injetada por plugin do Pinia como as preferências;
+  adaptador `infrastructure/browserHistory.ts` (`localStorage`, chave `dc-history`). `save` devolve
+  `false` em cota cheia/storage bloqueado e a tela avisa.
+- Gravação automática: `survey.run` concluído chama `history.record` (falha de varredura não grava).
+- Decisão: persistência no WebView, não no núcleo Rust — mesmo mecanismo das preferências, funciona no
+  modo demo e não exige comando novo. Se o volume de dados crescer além da cota, a troca é só do
+  adaptador (ex.: comando Tauri gravando JSON no diretório de dados do app).
+
 ## SOLID na prática
 
 - **S**: cada caso de uso tem um serviço; mapeamento de DTO separado da lógica de comando.

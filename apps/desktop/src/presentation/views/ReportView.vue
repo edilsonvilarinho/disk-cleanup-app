@@ -1,13 +1,20 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { messageOf } from '../../application/gateway'
+import { useExportStore } from '../../application/stores/export'
 import { useReportStore } from '../../application/stores/report'
+import { useSystemStore } from '../../application/stores/system'
+import { useUpdateStore } from '../../application/stores/update'
 import type { ItemResultDto } from '../../domain/models'
 import { reportMarkdown } from '../../domain/report'
+import { reportCardFileName, reportCardSvg } from '../../domain/reportCard'
 import TierBadge from '../components/TierBadge.vue'
 import { useI18n } from '../i18n'
 
 const store = useReportStore()
+const exporter = useExportStore()
+const system = useSystemStore()
+const update = useUpdateStore()
 const { t, txt, err, gb, pct, signedGb, locale } = useI18n()
 const copyStatus = ref('')
 onMounted(() => store.load())
@@ -15,6 +22,19 @@ onMounted(() => store.load())
 function causeText(item: ItemResultDto): string {
   if (!item.cause) return ''
   return t(`cause.${item.cause.code}`, { detail: item.cause.detail ?? '', exitCode: item.cause.exitCode ?? '?' })
+}
+
+function saveImage() {
+  const now = new Date()
+  const card = reportCardSvg({
+    report: store.report!,
+    t,
+    locale: locale.value,
+    generatedAt: now,
+    volumeRoot: system.info?.volumeRoot ?? '',
+    version: update.version,
+  })
+  void exporter.savePng({ ...card, fileName: reportCardFileName(t('reportCard.fileName'), now) })
 }
 
 async function copy() {
@@ -36,8 +56,22 @@ async function copy() {
     <div v-if="store.report" class="actions">
       <span class="small muted" aria-live="polite" data-test="copy-report-status">{{ copyStatus }}</span>
       <button type="button" class="btn" data-test="copy-report" @click="copy">{{ t('report.copy') }}</button>
+      <button type="button" class="btn" data-test="export-pdf" :disabled="exporter.busy" @click="exporter.print()">{{ t('report.exportPdf') }}</button>
+      <button type="button" class="btn" data-test="export-image" :disabled="exporter.busy" @click="saveImage">
+        {{ exporter.busy ? t('report.exporting') : t('report.exportImage') }}
+      </button>
     </div>
   </header>
+
+  <div v-if="exporter.status === 'saved'" class="note no-print" role="status" data-test="export-saved">
+    <span>{{ t('report.imageSaved', { path: exporter.savedPath ?? '' }) }}</span>
+  </div>
+  <div v-else-if="exporter.status === 'cancelled'" class="note no-print" role="status" data-test="export-cancelled">
+    <span>{{ t('report.imageCancelled') }}</span>
+  </div>
+  <div v-else-if="exporter.status === 'error' && exporter.error" class="note warn-note no-print" role="alert" data-test="export-error">
+    <span>{{ t('report.exportFailed', { error: err(exporter.error) }) }}</span>
+  </div>
 
   <div v-if="store.error" class="card empty" data-test="report-error">
     <h2>{{ t('report.emptyTitle') }}</h2>

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useSettingsStore } from '../../application/stores/settings'
 import { useSystemStore } from '../../application/stores/system'
 import { useUpdateStore } from '../../application/stores/update'
 import { useI18n } from '../i18n'
-import { STEPS } from '../router'
+import { isFlowStep } from '../router'
 import { useTheme } from '../theme'
 import UpdateNotice from './UpdateNotice.vue'
 
@@ -14,6 +15,13 @@ const update = useUpdateStore()
 const theme = useTheme()
 const { t, err } = useI18n()
 const isDark = computed(() => theme.current.value === 'dark')
+const route = useRoute()
+const inFlow = computed(() => isFlowStep(route.name))
+/** "Limpeza" volta para a última etapa visitada, não para o início. */
+const lastFlowPath = ref('/')
+watch(() => route.path, (path) => {
+  if (inFlow.value) lastFlowPath.value = path
+}, { immediate: true })
 
 function toggleTheme() {
   settings.setTheme(isDark.value ? 'light' : 'dark')
@@ -34,13 +42,24 @@ function toggleTheme() {
       </div>
     </div>
 
-    <nav class="nav" :aria-label="t('nav.steps')" data-test="nav">
-      <RouterLink v-for="(step, i) in STEPS" :key="step.name" :to="step.path">
-        <span class="step-num">{{ i + 1 }}</span>{{ t(`nav.${step.name}`) }}
+    <nav class="nav" :aria-label="t('nav.sections')">
+      <RouterLink v-slot="{ href, navigate }" :to="lastFlowPath" custom>
+        <a :href="href" :aria-current="inFlow ? 'page' : undefined" data-test="nav-cleanup" @click="navigate">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="3" />
+            <path d="M3 14h18" />
+          </svg>
+          {{ t('nav.cleanup') }}
+        </a>
       </RouterLink>
-    </nav>
-
-    <nav class="nav" :aria-label="t('nav.settings')">
+      <RouterLink to="/historico" data-test="nav-history">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+          <path d="M3 3v5h5" />
+          <path d="M12 7v5l3 2" />
+        </svg>
+        {{ t('nav.history') }}
+      </RouterLink>
       <RouterLink to="/configuracoes" data-test="nav-settings">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="3" />

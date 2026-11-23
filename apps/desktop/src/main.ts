@@ -9,7 +9,9 @@ import './styles/app.css'
 
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
+import { exporterPlugin } from './application/exporter'
 import { gatewayPlugin } from './application/gatewayPlugin'
+import { historyPlugin } from './application/history'
 import { settingsPlugin } from './application/settings'
 import { useSettingsStore } from './application/stores/settings'
 import { ThemeController } from './application/theme'
@@ -20,7 +22,9 @@ import {
   systemPrefersDark,
   watchSystemTheme,
 } from './infrastructure/browserTheme'
+import { localStorageHistoryStorage } from './infrastructure/browserHistory'
 import { DemoGateway } from './infrastructure/demoGateway'
+import { BrowserExporter, TauriExporter } from './infrastructure/exporters'
 import { TauriGateway } from './infrastructure/tauriGateway'
 import { DemoUpdater, TauriUpdater } from './infrastructure/updater'
 import App from './presentation/App.vue'
@@ -35,6 +39,8 @@ const gateway = inTauri ? new TauriGateway() : new DemoGateway()
 const pinia = createPinia()
 pinia.use(gatewayPlugin(gateway))
 pinia.use(settingsPlugin(localStorageSettingsStorage))
+pinia.use(historyPlugin(localStorageHistoryStorage))
+pinia.use(exporterPlugin(inTauri ? new TauriExporter() : new BrowserExporter()))
 pinia.use(updaterPlugin(inTauri ? new TauriUpdater() : new DemoUpdater()))
 
 const theme = new ThemeController(systemPrefersDark, applyThemeToDocument)

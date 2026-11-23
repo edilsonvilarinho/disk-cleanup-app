@@ -4,7 +4,9 @@ import { useSettingsStore } from '../application/stores/settings'
 import { useSystemStore } from '../application/stores/system'
 import { useUpdateStore } from '../application/stores/update'
 import AppSidebar from './components/AppSidebar.vue'
+import FlowTabs from './components/FlowTabs.vue'
 import { useI18n } from './i18n'
+import { isFlowStep } from './router'
 import { useTheme } from './theme'
 
 const system = useSystemStore()
@@ -26,6 +28,7 @@ onMounted(() => {
     <AppSidebar />
     <main class="main">
       <div class="container">
+        <FlowTabs v-if="isFlowStep($route.name)" />
         <!-- Telas são fragmentos: o wrapper com key dá um elemento para animar. -->
         <RouterView v-slot="{ Component, route }">
           <Transition name="page" mode="out-in">

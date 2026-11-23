@@ -30,7 +30,8 @@ env:
   CARGO_TERM_COLOR: always
 
 # Atualização automática: `bundle.createUpdaterArtifacts` faz o Tauri assinar
-# (minisign) o instalador NSIS, o AppImage e o `.app.tar.gz`. A chave privada só
+# (minisign) o instalador NSIS, o AppImage e o `.app.tar.gz`; o .deb e o .rpm são
+# assinados no job Linux com `tauri signer sign`. A chave privada só
 # existe nos secrets; a pública está em `tauri.conf.json` > plugins.updater.
 # `publish-release` monta o `latest.json` a partir das assinaturas.
 
@@ -227,13 +228,21 @@ jobs:
           out=../../dist-build
           mkdir -p "$out"
           b=../../target/release/bundle
-          cp "$(find "$b/deb" -name '*.deb' | head -n1)" "$out/disk-cleanup_${VERSION}_linux_amd64.deb"
-          cp "$(find "$b/rpm" -name '*.rpm' | head -n1)" "$out/disk-cleanup_${VERSION}_linux_x86_64.rpm"
+          deb="$out/disk-cleanup_${VERSION}_linux_amd64.deb"
+          rpm="$out/disk-cleanup_${VERSION}_linux_x86_64.rpm"
+          cp "$(find "$b/deb" -name '*.deb' | head -n1)" "$deb"
+          cp "$(find "$b/rpm" -name '*.rpm' | head -n1)" "$rpm"
           appimage="$(find "$b/appimage" -name '*.AppImage' | head -n1)"
           cp "$appimage" "$out/disk-cleanup_${VERSION}_linux_x64.AppImage"
-          # Só o AppImage se atualiza sozinho; deb/rpm ficam com o gerenciador de pacotes.
           test -f "$appimage.sig" || { echo "::error::assinatura do updater ausente: $appimage.sig"; exit 1; }
           cp "$appimage.sig" "$out/disk-cleanup_${VERSION}_linux_x64.AppImage.sig"
+          # deb/rpm também se atualizam: instalado por pacote, o updater procura
+          # `linux-x86_64-deb`/`-rpm` no latest.json e instala com dpkg/rpm (pkexec).
+          # O bundler só assina o AppImage; estes são assinados aqui, presos à versão.
+          for pkg in "$deb" "$rpm"; do
+            pnpm tauri signer sign --app-version "$VERSION" "$pkg"
+            test -f "$pkg.sig" || { echo "::error::assinatura do updater ausente: $pkg.sig"; exit 1; }
+          done
           ls -la "$out"
       # Mesma ideia do "Validate Debian dependencies" do usage-monitor: o pacote
       # declara as dependências que o instalador do usuário vai exigir.
@@ -392,7 +401,10 @@ jobs:
           dist = pathlib.Path("dist-build")
           files = {
               "windows-x86_64": f"disk-cleanup_{version}_windows_x64-setup.exe",
+              # Sem sufixo = AppImage (fallback do updater); com sufixo = instalado por pacote.
               "linux-x86_64": f"disk-cleanup_{version}_linux_x64.AppImage",
+              "linux-x86_64-deb": f"disk-cleanup_{version}_linux_amd64.deb",
+              "linux-x86_64-rpm": f"disk-cleanup_{version}_linux_x86_64.rpm",
               "darwin-aarch64": f"disk-cleanup_{version}_macos_arm64.app.tar.gz",
               "darwin-x86_64": f"disk-cleanup_{version}_macos_x64.app.tar.gz",
           }

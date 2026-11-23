@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { createApp, defineComponent } from 'vue'
 import { createMemoryHistory } from 'vue-router'
 import type { DiskCleanupGateway } from '../application/gateway'
+import { exporterPlugin, type ReportExporter } from '../application/exporter'
 import { gatewayPlugin } from '../application/gatewayPlugin'
+import { historyPlugin, memoryHistoryStorage, type HistoryStorage } from '../application/history'
 import { settingsPlugin, type Settings } from '../application/settings'
 import { usePlanStore } from '../application/stores/plan'
 import { useSettingsStore } from '../application/stores/settings'
@@ -13,6 +15,8 @@ import { updaterPlugin, type UpdaterPort } from '../application/updater'
 import { fakeGateway } from '../test/fakeGateway'
 import { fakeUpdater, updateInfo } from '../test/fakeUpdater'
 import { approval, classification, report, runA, survey } from '../test/fixtures'
+import { GIB } from '../domain/format'
+import { toSnapshot, type ScanSnapshot } from '../domain/history'
 import App from './App.vue'
 import { SYSTEM_LANGUAGES_KEY } from './i18n'
 import { volumeLabel } from './labels'
@@ -23,6 +27,17 @@ interface MountOptions {
   languages?: string[]
   saved?: Partial<Settings>
   updater?: UpdaterPort
+  history?: HistoryStorage
+  exporter?: ReportExporter
+}
+
+function fakeExporter(overrides: Partial<ReportExporter> = {}): ReportExporter {
+  return {
+    print: vi.fn(async () => {}),
+    renderPng: vi.fn(async () => new Uint8Array([137, 80, 78, 71])),
+    savePng: vi.fn(async () => 'C:\\Users\\u\\r.png'),
+    ...overrides,
+  }
 }
 
 async function mountApp(path: string, gateway: DiskCleanupGateway = fakeGateway(), options: MountOptions = {}) {
@@ -32,6 +47,8 @@ async function mountApp(path: string, gateway: DiskCleanupGateway = fakeGateway(
   pinia.use(gatewayPlugin(gateway))
   pinia.use(settingsPlugin({ load: () => options.saved ?? null, save: (s) => saved.push(structuredClone(s)) }))
   pinia.use(updaterPlugin(updater))
+  pinia.use(historyPlugin(options.history ?? memoryHistoryStorage()))
+  pinia.use(exporterPlugin(options.exporter ?? fakeExporter()))
   const router = createAppRouter(createMemoryHistory())
   const apply = vi.fn()
   const theme = new ThemeController(() => true, apply)
@@ -68,8 +85,12 @@ describe('labels', () => {
 describe('shell', () => {
   it('mostra as 5 etapas, o ambiente e alterna o tema', async () => {
     const { wrapper, theme } = await mountApp('/')
-    expect(wrapper.findAll('[data-test="nav"] a')).toHaveLength(5)
+    // Início: só o Survey é navegável; as demais abas ficam trancadas.
+    expect(wrapper.findAll('[data-test="nav"] .flow-step')).toHaveLength(5)
+    expect(wrapper.findAll('[data-test="nav"] a')).toHaveLength(1)
     expect(wrapper.get('[data-test="nav"] a[aria-current="page"]').text()).toContain('Survey')
+    expect(wrapper.get('[data-test="step-classify"]').attributes('aria-disabled')).toBe('true')
+    expect(wrapper.get('[data-test="step-classify"]').attributes('title')).toContain('Survey')
     expect(wrapper.get('[data-test="env-os"]').text()).toBe('windows')
     const toggle = wrapper.get('[data-test="theme-toggle"]')
     expect(toggle.text()).toContain('Tema claro')
@@ -77,6 +98,36 @@ describe('shell', () => {
     expect(theme.current.value).toBe('light')
     expect(toggle.text()).toContain('Tema escuro')
     expect(document.documentElement.getAttribute('lang')).toBe('pt-BR')
+  })
+
+  it('libera as abas conforme cada etapa é concluída', async () => {
+    const { wrapper, router, pinia } = await mountApp('/')
+    const isLink = (name: string) => wrapper.get(`[data-test="step-${name}"]`).element.tagName === 'A'
+    await wrapper.get('[data-test="start-survey"]').trigger('click')
+    await flushPromises()
+    expect(isLink('classify')).toBe(true)
+    expect(isLink('plan')).toBe(false)
+
+    await router.push('/classificacao')
+    await flushPromises()
+    expect(isLink('plan')).toBe(true)
+    expect(wrapper.get('[data-test="step-survey"]').classes()).toContain('done')
+    expect(isLink('execute')).toBe(false)
+
+    usePlanStore(pinia).approval = approval
+    await flushPromises()
+    expect(isLink('execute')).toBe(true)
+    expect(isLink('report')).toBe(false)
+  })
+
+  it('tranca o Plano quando a seleção fica vazia', async () => {
+    const { wrapper } = await mountApp('/classificacao')
+    for (const tier of ['A', 'C']) {
+      await wrapper.get(`[data-test="tab-${tier}"]`).trigger('click')
+      for (const box of wrapper.findAll('[data-test="row"] input:not([disabled])')) await box.setValue(false)
+    }
+    expect(wrapper.get('[data-test="step-plan"]').element.tagName).not.toBe('A')
+    expect(wrapper.get('[data-test="to-plan"]').attributes('disabled')).toBeDefined()
   })
 
   it('mostra erro de ambiente quando o núcleo não responde', async () => {
@@ -385,6 +436,160 @@ describe('Relatório', () => {
     const { wrapper } = await mountApp('/relatorio', fakeGateway({ report: vi.fn(async () => empty) }))
     expect(wrapper.get('[data-test="report-pending"]').text()).toContain('Nenhuma pendência')
     expect(wrapper.get('[data-test="report-blocked"]').text()).toContain('Nenhuma divergência')
+  })
+})
+
+function seeded(): ScanSnapshot[] {
+  const base = { volumeRoot: 'C:\\', profilePath: 'C:\\Users\\u', depth: 2 as const }
+  const a = toSnapshot(survey, { ...base, id: 'a', at: new Date('2026-11-20T10:00:00Z') })
+  const b = toSnapshot(
+    { ...survey, volume: { ...survey.volume, usedBytes: survey.volume.usedBytes + 5 * GIB, freeBytes: survey.volume.freeBytes - 5 * GIB } },
+    { ...base, id: 'b', at: new Date('2026-11-23T10:00:00Z') },
+  )
+  b.files = a.files + 1_000
+  b.roots = b.roots.map((r) => (r.name === 'Windows' ? { ...r, bytes: r.bytes + 4 * GIB } : r))
+  b.profile = [...b.profile.filter((p) => p.name !== 'AppData'), { key: 'Downloads', name: 'Downloads', bytes: 2 * GIB }]
+  return [a, b]
+}
+
+describe('Histórico', () => {
+  it('fica nas seções da barra lateral, sem as abas do fluxo', async () => {
+    const { wrapper, router } = await mountApp('/historico')
+    await flushPromises()
+    expect(wrapper.find('[data-test="nav"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="nav-history"]').attributes('aria-current')).toBe('page')
+    expect(wrapper.get('[data-test="history-empty"]').text()).toContain('Nenhuma varredura salva')
+
+    await router.push('/plano')
+    await flushPromises()
+    expect(wrapper.get('[data-test="nav-cleanup"]').attributes('aria-current')).toBe('page')
+    await router.push('/historico')
+    await flushPromises()
+    // "Limpeza" volta para a última etapa visitada.
+    expect(wrapper.get('[data-test="nav-cleanup"]').attributes('href')).toContain('plano')
+  })
+
+  it('mostra KPIs, gráfico, comparação e tabela', async () => {
+    const { wrapper } = await mountApp('/historico', fakeGateway(), { history: memoryHistoryStorage(seeded()) })
+    await flushPromises()
+    expect(wrapper.get('[data-test="kpi-count"]').text()).toContain('2')
+    expect(wrapper.get('[data-test="kpi-previous"]').text()).toContain('+5,0 GB')
+    expect(wrapper.findAll('[data-test="usage-chart"] circle')).toHaveLength(2)
+    expect(wrapper.get('[data-test="cmp-summary"]').text()).toContain('3 dias')
+    expect(wrapper.get('[data-test="diff-roots"]').text()).toContain('Windows')
+    const profile = wrapper.get('[data-test="diff-profile"]').text()
+    expect(profile).toContain('AppData')
+    expect(profile).toContain('sumiu')
+    expect(profile).toContain('nova')
+    const rows = wrapper.findAll('[data-test="history-row"]')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]!.text()).toContain('para')
+    expect(rows[1]!.text()).toContain('de')
+
+    await wrapper.get('[data-test="chart-hit"]').trigger('focus')
+    expect(wrapper.get('[data-test="chart-tip"]').text()).toContain('+5,0 GB vs anterior')
+    await wrapper.get('[data-test="chart-hit"]').trigger('keydown', { key: 'ArrowLeft' })
+    expect(wrapper.get('[data-test="chart-tip"]').text()).not.toContain('vs anterior')
+  })
+
+  it('troca a comparação, exclui e limpa com confirmação', async () => {
+    const storage = memoryHistoryStorage(seeded())
+    const { wrapper } = await mountApp('/historico', fakeGateway(), { history: storage })
+    await flushPromises()
+    await wrapper.get('[data-test="cmp-from"]').setValue('b')
+    expect(wrapper.find('[data-test="cmp-summary"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="same-scan"]').text()).toContain('diferentes')
+    await wrapper.get('[data-test="cmp-from"]').setValue('a')
+    expect(wrapper.get('[data-test="cmp-summary"]').text()).toContain('+5,0 GB')
+    expect(wrapper.get('[data-test="cmp-summary"]').text()).toContain('+1.000')
+    // Ordem invertida (para = a mais antiga): variação negativa.
+    await wrapper.get('[data-test="cmp-from"]').setValue('b')
+    await wrapper.get('[data-test="cmp-to"]').setValue('a')
+    expect(wrapper.get('[data-test="cmp-summary"]').text()).toContain('-1.000')
+    await wrapper.get('[data-test="cmp-from"]').setValue('a')
+    await wrapper.get('[data-test="cmp-to"]').setValue('b')
+
+    await wrapper.findAll('[data-test="remove-scan"]')[0]!.trigger('click')
+    expect(wrapper.findAll('[data-test="history-row"]')).toHaveLength(1)
+    expect(wrapper.find('[data-test="need-two"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="cmp-from"]').exists()).toBe(false)
+    expect(storage.saved.at(-1)).toHaveLength(1)
+
+    await wrapper.get('[data-test="clear-history"]').trigger('click')
+    await wrapper.get('[data-test="clear-cancel"]').trigger('click')
+    expect(wrapper.find('[data-test="clear-confirm"]').exists()).toBe(false)
+    await wrapper.get('[data-test="clear-history"]').trigger('click')
+    expect(wrapper.get('[data-test="clear-confirm"]').text()).toContain('Apagar as 1 varreduras')
+    await wrapper.get('[data-test="clear-ok"]').trigger('click')
+    expect(wrapper.find('[data-test="history-empty"]').exists()).toBe(true)
+    expect(storage.saved.at(-1)).toEqual([])
+  })
+
+  it('avisa quando o perfil difere e quando não consegue gravar', async () => {
+    const [a, b] = seeded()
+    b!.profilePath = 'C:\\Users\\outro'
+    const { wrapper } = await mountApp('/historico', fakeGateway(), { history: { load: () => [a, b], save: () => false } })
+    await flushPromises()
+    expect(wrapper.find('[data-test="profile-differs"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="diff-profile"]').exists()).toBe(false)
+    await wrapper.findAll('[data-test="remove-scan"]')[0]!.trigger('click')
+    expect(wrapper.find('[data-test="history-save-failed"]').exists()).toBe(true)
+  })
+
+  it('o Survey mostra a variação desde a varredura anterior', async () => {
+    const { wrapper } = await mountApp('/', fakeGateway(), { history: memoryHistoryStorage(seeded()) })
+    await wrapper.get('[data-test="start-survey"]').trigger('click')
+    await flushPromises()
+    const link = wrapper.get('[data-test="since-last"]')
+    expect(link.text()).toContain('-5,0 GB desde')
+    expect(link.attributes('href')).toContain('historico')
+  })
+})
+
+describe('Exportação do relatório', () => {
+  it('PDF abre a impressão; imagem gera o cartão e mostra onde gravou', async () => {
+    const exporter = fakeExporter()
+    const { wrapper } = await mountApp('/relatorio', fakeGateway(), { exporter })
+    await flushPromises()
+    await wrapper.get('[data-test="export-pdf"]').trigger('click')
+    expect(exporter.print).toHaveBeenCalled()
+
+    await wrapper.get('[data-test="export-image"]').trigger('click')
+    await flushPromises()
+    const [svg, width] = vi.mocked(exporter.renderPng).mock.calls[0]!
+    expect(svg).toContain('Relatório da limpeza')
+    expect(svg).toContain('C:\\')
+    expect(width).toBe(1200)
+    expect(vi.mocked(exporter.savePng).mock.calls[0]![1]).toMatch(/^disk-cleanup-relatorio-\d{4}-\d{2}-\d{2}\.png$/)
+    expect(wrapper.get('[data-test="export-saved"]').text()).toContain('C:\\Users\\u\\r.png')
+  })
+
+  it('cancelar e falhar aparecem como avisos distintos', async () => {
+    const cancelled = await mountApp('/relatorio', fakeGateway(), { exporter: fakeExporter({ savePng: vi.fn(async () => null) }) })
+    await flushPromises()
+    await cancelled.wrapper.get('[data-test="export-image"]').trigger('click')
+    await flushPromises()
+    expect(cancelled.wrapper.get('[data-test="export-cancelled"]').text()).toContain('cancelada')
+
+    const failing = fakeExporter({ savePng: vi.fn(async () => Promise.reject({ code: 'export_write', params: { detail: 'disco cheio' } })) })
+    const failed = await mountApp('/relatorio', fakeGateway(), { exporter: failing })
+    await flushPromises()
+    await failed.wrapper.get('[data-test="export-image"]').trigger('click')
+    await flushPromises()
+    expect(failed.wrapper.get('[data-test="export-error"]').text()).toContain('não foi possível gravar o arquivo: disco cheio')
+  })
+
+  it('desabilita os botões enquanto gera', async () => {
+    let release: (b: Uint8Array) => void = () => {}
+    const exporter = fakeExporter({ renderPng: vi.fn(() => new Promise<Uint8Array>((r) => (release = r))) })
+    const { wrapper } = await mountApp('/relatorio', fakeGateway(), { exporter })
+    await flushPromises()
+    await wrapper.get('[data-test="export-image"]').trigger('click')
+    expect(wrapper.get('[data-test="export-image"]').text()).toContain('Gerando')
+    expect(wrapper.get('[data-test="export-pdf"]').attributes('disabled')).toBeDefined()
+    release(new Uint8Array([137]))
+    await flushPromises()
+    expect(wrapper.get('[data-test="export-pdf"]').attributes('disabled')).toBeUndefined()
   })
 })
 

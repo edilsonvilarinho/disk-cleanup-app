@@ -35,7 +35,7 @@ Differences from usage-monitor, and why:
 | usage-monitor (Kotlin/jpackage) | disk-cleanup (Tauri 2) | Reason |
 |---|---|---|
 | Linux built in an Ubuntu 20.04 container | `ubuntu-22.04` runner | Tauri 2 needs `webkit2gtk-4.1`, absent before 22.04; 22.04 is the oldest glibc baseline possible |
-| `tar.gz` + user-space `.sh` installer for self-update | AppImage | AppImage is the Linux format the Tauri updater can replace in place |
+| `tar.gz` + user-space `.sh` installer for self-update | AppImage, deb and rpm | `tauri-plugin-updater` 2.14 replaces the AppImage in place and installs deb/rpm with `dpkg -i`/`rpm -U` (pkexec → GUI sudo → sudo); no custom installer needed |
 | Beta builds use the base version for Exe/Dmg/Rpm (jpackage rejects the suffix) | full `X.Y.Z-beta.N` | **Verified for NSIS** (`0.2.0-beta.1` built). deb/rpm/AppImage/dmg **not verified** — the first beta must run as a dry run |
 | No MSI | No MSI | Same lesson: only the per-user NSIS install can update itself silently |
 | DMG unsigned | DMG unsigned | No Apple Developer ID; Gatekeeper needs a manual override |
@@ -50,8 +50,8 @@ runners do not bill minutes. A full release still runs two macOS jobs; do not di
 | Plugin | `tauri-plugin-updater` in `src-tauri/src/bootstrap.rs` (commands `app_version`, `check_update`, `download_update`, `install_update`; event `update-progress`) |
 | Channel rule | `src-tauri/src/update.rs` (tested): stable → `/releases/latest/download/latest.json`; beta → highest SemVer among published releases that carry `latest.json` (`/releases?per_page=30`), falling back to stable |
 | Public key | `tauri.conf.json` > `plugins.updater.pubkey`; Windows `installMode: passive` |
-| Signing | `bundle.createUpdaterArtifacts: true`; secrets `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` in every build job |
-| Manifest | `publish-release` → `Generate updater manifest`: fails if any of the 4 platforms lacks its bundle or `.sig` |
+| Signing | `bundle.createUpdaterArtifacts: true` (NSIS, AppImage, `.app.tar.gz`); deb/rpm signed in `build-linux` with `tauri signer sign --app-version` (the bundler does not sign them); secrets `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` in every build job |
+| Manifest | `publish-release` → `Generate updater manifest`: fails if any entry lacks its bundle or `.sig`. Linux has three keys: `linux-x86_64` (AppImage, also the fallback), `linux-x86_64-deb`, `linux-x86_64-rpm` — the plugin looks for `{os}-{arch}-{bundle_type}` first (bundle type baked into the binary by the bundler) |
 | UI | Settings → Updates: **Update automatically** (on by default), **Receive beta versions** (off by default), **Check now**; sidebar notice with **Download** / **Restart and update** |
 
 Behaviour: with automatic updates on, the app checks on launch and downloads in the background.
@@ -63,8 +63,12 @@ Decisions taken: repository made public; key pair generated outside the reposito
 is only in the owner's machine and in the secrets — **losing it means no installed copy can update
 again**); **no rollback** for now.
 
-Not verified on a real machine yet: AppImage self-replace, and `.app.tar.gz` replacement of an
-unsigned macOS app. A user who installed a beta stays on stable-channel semantics unless they turn on
+Not verified on a real machine yet: AppImage self-replace, deb/rpm install through pkexec, and
+`.app.tar.gz` replacement of an unsigned macOS app. Before the deb/rpm keys, a package install
+fell back to `linux-x86_64` (the AppImage) and failed with `InvalidUpdaterFormat` in
+`install_deb`/`install_rpm`. Installed copies read the manifest of the *new* release, and `v0.1.0-beta.2`
+already ships `tauri-plugin-updater` 2.14.1 (deb/rpm support), so they update normally from the first
+release that carries the keys. A user who installed a beta stays on stable-channel semantics unless they turn on
 **Receive beta versions** — the next beta only reaches testers who opted in.
 
 ## Auto-update — original analysis
@@ -93,7 +97,7 @@ unsigned macOS app. A user who installed a beta stays on stable-channel semantic
 | Integrity | SHA-256 vs GitHub `digest` | **minisign signature** (`.sig` per bundle), public key compiled into the app — stronger: a compromised release upload without the private key is refused |
 | Manifest | GitHub API | `latest.json` asset (`version`, `notes`, `platforms.{os-arch}.{url,signature}`) |
 | Windows | NSIS `/UPDATE` + rename swap | runs the NSIS installer (passive) and exits the app |
-| Linux | `.sh` tree + ACK/rollback | replaces the AppImage; deb/rpm stay with the package manager |
+| Linux | `.sh` tree + ACK/rollback | replaces the AppImage; installs deb/rpm via pkexec (since the deb/rpm manifest keys) |
 | macOS | unsupported | replaces the `.app` from `.app.tar.gz` — **unverified** for an unsigned app |
 | Beta | `/releases` listing | runtime endpoint: Rust resolves the highest non-draft release and points the updater at its `latest.json` |
 | Rollback | ACK token + rollback | **none built in** — would be custom (health ACK as in usage-monitor) |

@@ -40,3 +40,11 @@ export function barWidth(value: number, max: number): string {
 export function formatSignedGb(bytes: number, digits = 1, locale = DEFAULT_LOCALE): string {
   return `${bytes < 0 ? '-' : '+'}${formatGb(Math.abs(bytes), digits, locale)}`
 }
+
+/** Data local curta (`23/11`) ou completa com hora (`23/11/2026 14:48`). */
+export function formatDate(iso: string, withTime = true, locale = DEFAULT_LOCALE): string {
+  const options: Intl.DateTimeFormatOptions = withTime
+    ? { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }
+    : { day: '2-digit', month: '2-digit' }
+  return new Intl.DateTimeFormat(locale, options).format(new Date(iso))
+}

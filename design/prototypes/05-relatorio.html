@@ -15,6 +15,7 @@
 <aside id="sidebar" class="sidebar"></aside>
 <main class="main">
 <div class="container">
+<nav id="flow"></nav>
 
   <header class="page-head">
     <div class="titles">
@@ -22,9 +23,10 @@
       <h1>Relatório da limpeza</h1>
     </div>
     <div class="actions">
-      <button type="button" class="btn">Exportar Markdown</button>
-      <button type="button" class="btn">Exportar JSON</button>
-      <a class="btn btn-primary" href="01-survey.html">Nova análise</a>
+      <span class="small muted" id="export-status" aria-live="polite"></span>
+      <button type="button" class="btn">Copiar Markdown</button>
+      <button type="button" class="btn" onclick="window.print()">Exportar PDF</button>
+      <button type="button" class="btn" onclick="document.getElementById('export-status').textContent='Imagem salva em Documentos\disk-cleanup-relatorio-2026-11-23.png'">Salvar imagem</button>
     </div>
   </header>
 
