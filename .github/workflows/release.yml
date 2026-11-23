@@ -161,8 +161,15 @@ jobs:
         working-directory: apps/desktop
         run: |
           $ErrorActionPreference = 'Stop'
+          # Sem isto, exit code != 0 de comando nativo (pnpm) não interrompe o script.
+          $PSNativeCommandUseErrorActionPreference = $true
           pnpm install --frozen-lockfile
-          pnpm tauri build --bundles nsis --config "{`"version`":`"$env:VERSION`"}"
+          # JSON inline não sobrevive ao shim `pnpm.cmd`: o PowerShell tira as aspas
+          # internas (`{version:0.1.0-beta.1}`). `--config` também aceita caminho de arquivo.
+          $config = Join-Path $env:RUNNER_TEMP 'release.conf.json'
+          @{ version = $env:VERSION } | ConvertTo-Json -Compress | Set-Content -Path $config -Encoding utf8NoBOM
+          Get-Content $config
+          pnpm tauri build --bundles nsis --config $config
           New-Item -ItemType Directory -Force -Path ../../dist-build | Out-Null
           $exe = Get-ChildItem ../../target/release/bundle/nsis -Filter "*_$($env:VERSION)_x64-setup.exe" | Select-Object -First 1
           if (-not $exe) { throw "NSIS installer for $env:VERSION not found" }
