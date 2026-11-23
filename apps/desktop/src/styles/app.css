@@ -272,4 +272,3 @@ td.date { white-space: nowrap; }
 .field { display: flex; align-items: center; gap: 8px; }
 details summary { cursor: pointer; font-weight: 600; }
 details[open] summary { margin-bottom: 10px; }
-.nav .soon { margin-left: auto; font-size: 11px; color: var(--muted); }

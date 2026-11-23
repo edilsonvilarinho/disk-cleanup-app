@@ -256,3 +256,163 @@ impl PlanDto {
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApprovalDto {
+    pub tiers: Vec<String>,
+    pub item_count: usize,
+    pub estimated_bytes: u64,
+}
+
+impl From<&disk_cleanup_domain::ApprovedPlan> for ApprovalDto {
+    fn from(a: &disk_cleanup_domain::ApprovedPlan) -> Self {
+        let plan = a.plan();
+        Self {
+            tiers: plan.tiers().iter().map(Tier::to_string).collect(),
+            item_count: plan.item_count(),
+            estimated_bytes: plan.estimated_total().bytes(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StepDto {
+    pub id: String,
+    pub label: String,
+    pub tier: String,
+    pub kind: &'static str,
+    pub target: String,
+    pub estimated_bytes: u64,
+}
+
+impl From<&disk_cleanup_application::PlannedStep> for StepDto {
+    fn from(s: &disk_cleanup_application::PlannedStep) -> Self {
+        Self {
+            id: s.id.clone(),
+            label: s.label.clone(),
+            tier: s.tier.to_string(),
+            kind: s.kind,
+            target: s.target.clone(),
+            estimated_bytes: s.estimated.bytes(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemResultDto {
+    pub id: String,
+    pub label: String,
+    pub tier: String,
+    pub estimated_bytes: u64,
+    /// Espaço livre ganho (negativo se o volume encheu durante o item).
+    pub freed_bytes: i64,
+    pub status: &'static str,
+    pub detail: Option<String>,
+}
+
+impl From<&disk_cleanup_domain::ItemResult> for ItemResultDto {
+    fn from(r: &disk_cleanup_domain::ItemResult) -> Self {
+        Self {
+            id: r.id.clone(),
+            label: r.label.clone(),
+            tier: r.tier.to_string(),
+            estimated_bytes: r.estimated.bytes(),
+            freed_bytes: r.freed(),
+            status: r.status.label(),
+            detail: r.status.detail().map(str::to_string),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TierRunDto {
+    pub tier: String,
+    pub free_before_bytes: u64,
+    pub free_after_bytes: u64,
+    pub freed_bytes: i64,
+    pub estimated_bytes: u64,
+    pub items: Vec<ItemResultDto>,
+}
+
+impl From<&disk_cleanup_domain::TierRun> for TierRunDto {
+    fn from(r: &disk_cleanup_domain::TierRun) -> Self {
+        Self {
+            tier: r.tier.to_string(),
+            free_before_bytes: r.free_before.bytes(),
+            free_after_bytes: r.free_after.bytes(),
+            freed_bytes: r.freed(),
+            estimated_bytes: r.estimated().bytes(),
+            items: r.items.iter().map(ItemResultDto::from).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecutionEventDto {
+    /// `started` ou `finished`.
+    pub kind: &'static str,
+    pub id: String,
+    pub result: Option<ItemResultDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportDto {
+    pub initial: VolumeDto,
+    pub last: VolumeDto,
+    pub freed_bytes: i64,
+    pub estimated_bytes: u64,
+    pub item_count: usize,
+    pub runs: Vec<TierRunDto>,
+    pub pending: Vec<ItemResultDto>,
+    /// Candidatos bloqueados (PATH/variável): mantidos de propósito.
+    pub blocked: Vec<CandidateDto>,
+    /// Exclusões: nunca tocadas.
+    pub exclusions: Vec<ExclusionDto>,
+}
+
+impl ReportDto {
+    pub fn new(
+        report: &disk_cleanup_domain::CleanupReport,
+        classification: Option<&ClassificationReport>,
+    ) -> Self {
+        let blocked = classification
+            .map(|c| {
+                c.candidates
+                    .iter()
+                    .filter(|x| !x.availability.is_selectable())
+                    .map(CandidateDto::from)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let exclusions = classification
+            .map(|c| {
+                c.exclusions
+                    .entries()
+                    .iter()
+                    .map(ExclusionDto::from)
+                    .collect()
+            })
+            .unwrap_or_default();
+        Self {
+            initial: VolumeDto::from(report.initial()),
+            last: VolumeDto::from(report.last()),
+            freed_bytes: report.freed(),
+            estimated_bytes: report.estimated().bytes(),
+            item_count: report.item_count(),
+            runs: report.runs().iter().map(TierRunDto::from).collect(),
+            pending: report
+                .pending()
+                .into_iter()
+                .map(ItemResultDto::from)
+                .collect(),
+            blocked,
+            exclusions,
+        }
+    }
+}

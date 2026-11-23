@@ -18,7 +18,7 @@
 
 <p align="center">
   Measures the whole volume in one parallel pass, tells real disk usage from cloud placeholders,
-  classifies what is safe to clean and builds a reviewable plan. Nothing is deleted without
+  classifies what is safe to clean, builds a reviewable plan and executes it tier by tier. Nothing is deleted without
   measurement and explicit approval.
 </p>
 
@@ -64,6 +64,22 @@ variable (e.g. `CUDA_PATH`) is **blocked**. The plan exports a `plan.json`.
 <tr>
 <td width="50%" valign="middle">
 
+### Execution and report
+
+Approve the plan tier by tier, read the dry-run, confirm, and watch every item run with the free
+space measured before and after it. A locked file never aborts the tier — it becomes a pending item.
+Removal never follows symlinks or junctions, and broad or protected folders (volume root, profile,
+`Program Files`…) are refused even if the catalog asks. The report compares measured × estimated
+per tier, lists divergences and pending items, and copies as Markdown.
+
+</td>
+<td width="50%">
+  <img src="docs/assets/readme/execute-report.gif" alt="Approving the plan, confirming each tier, watching items run and reading the cleanup report" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
 ### Light and dark
 
 A neutral, professional look in both themes. It follows the system preference and remembers your
@@ -96,8 +112,9 @@ Coverage gates fail the build below 95%: today the Rust core sits at 98% of line
 |---|---|
 | 1. Survey | done |
 | 2. Classification | done (Windows catalog, tiers A and C) |
-| 3. Plan | done — `plan.json` in the format of the `disk-cleanup` skill |
-| 4. Execution · 5. Report | next phase |
+| 3. Plan and approval | done — `plan.json` in the format of the `disk-cleanup` skill |
+| 4. Execution | done — paths and commands; uninstallers (tier B), DISM and an elevated helper are next |
+| 5. Report | done — copies as Markdown |
 
 The user interface is in Brazilian Portuguese for now.
 

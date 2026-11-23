@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type { DiskCleanupGateway } from '../application/gateway'
-import { classification, plan, survey, systemInfo } from './fixtures'
+import { approval, classification, plan, report, runA, runC, stepsA, survey, systemInfo } from './fixtures'
 
 /** Gateway falso com respostas padrão; cada método é um `vi.fn` substituível. */
 export function fakeGateway(overrides: Partial<DiskCleanupGateway> = {}): DiskCleanupGateway {
@@ -12,6 +12,17 @@ export function fakeGateway(overrides: Partial<DiskCleanupGateway> = {}): DiskCl
     }),
     classify: vi.fn(async () => classification),
     buildPlan: vi.fn(async () => plan),
+    approvePlan: vi.fn(async () => approval),
+    previewTier: vi.fn(async () => stepsA),
+    executeTier: vi.fn(async (tier, onEvent) => {
+      const run = tier === 'A' ? runA : runC
+      for (const item of run.items) {
+        onEvent({ kind: 'started', id: item.id, result: null })
+        onEvent({ kind: 'finished', id: item.id, result: item })
+      }
+      return run
+    }),
+    report: vi.fn(async () => report),
     ...overrides,
   }
 }

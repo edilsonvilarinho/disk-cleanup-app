@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { messageOf } from '../../application/gateway'
 import { useClassificationStore } from '../../application/stores/classification'
 import { usePlanStore } from '../../application/stores/plan'
@@ -12,6 +13,7 @@ const system = useSystemStore()
 const classification = useClassificationStore()
 const planStore = usePlanStore()
 const copyStatus = ref('')
+const router = useRouter()
 
 const ready = computed(() => classification.status === 'done' && system.info !== null)
 const items = computed(() => classification.candidates.filter((c) => classification.selected.includes(c.id) && !c.blockedReason))
@@ -19,6 +21,15 @@ const items = computed(() => classification.candidates.filter((c) => classificat
 onMounted(() => {
   if (ready.value) void planStore.build(volumeLabel(system.info!.volumeRoot), [...classification.selected])
 })
+
+async function approve() {
+  await planStore.approve()
+  if (planStore.approval) await router.push('/execucao')
+}
+
+function onAck(event: Event) {
+  planStore.setAcknowledged((event.target as HTMLInputElement).checked)
+}
 
 async function copy(text: string) {
   try {
@@ -81,12 +92,31 @@ async function copy(text: string) {
             <TierBadge :tier="t.tier" /><span class="num">{{ formatGb(t.estimatedBytes) }}</span>
           </div>
         </section>
-        <section class="card">
-          <h2>Execução</h2>
-          <p class="small muted">
-            A execução pelo app entra na próxima fase. Este plan.json já roda com a skill:
-            <span class="mono">cleanup.ps1 -Plan plan.json -Tier A</span> (simulação por padrão).
-          </p>
+        <section class="card" aria-label="Aprovação" data-test="approval">
+          <h2>Aprovação</h2>
+          <p class="small muted">Cada tier roda separado, com dry-run antes e medição do espaço livre a cada item.</p>
+          <fieldset style="border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+            <legend class="label-caps" style="margin-bottom: 6px">Tiers aprovados</legend>
+            <label v-for="t in planStore.plan.tiers" :key="t.tier" class="kv" style="cursor: pointer">
+              <TierBadge :tier="t.tier" />
+              <input
+                type="checkbox"
+                :data-test="`approve-tier-${t.tier}`"
+                :checked="planStore.approvedTiers.includes(t.tier)"
+                @change="planStore.toggleTier(t.tier)"
+              />
+            </label>
+          </fieldset>
+          <div class="divider" />
+          <label style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer">
+            <input type="checkbox" data-test="ack" style="margin-top: 2px" :checked="planStore.acknowledged" @change="onAck" />
+            <span class="small">Revisei itens e riscos. Remover cache também é irreversível.</span>
+          </label>
+          <button type="button" class="btn btn-primary btn-lg" data-test="approve" :disabled="!planStore.canApprove" @click="approve">
+            Aprovar plano
+          </button>
+          <p v-if="planStore.approveError" class="small err" role="alert" data-test="approve-error">{{ planStore.approveError }}</p>
+          <p class="small muted">O plan.json também roda com a skill: <span class="mono">cleanup.ps1 -Plan plan.json -Tier A</span>.</p>
         </section>
       </aside>
     </div>

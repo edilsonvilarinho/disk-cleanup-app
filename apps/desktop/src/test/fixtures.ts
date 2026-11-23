@@ -1,6 +1,18 @@
 // Dados de teste: forma idêntica aos DTOs do núcleo Rust.
 import { GIB } from '../domain/format'
-import type { CandidateDto, ClassificationDto, PlanDto, SurveyDto, SystemInfoDto, UsageEntryDto } from '../domain/models'
+import type {
+  ApprovalDto,
+  CandidateDto,
+  ClassificationDto,
+  ItemResultDto,
+  PlanDto,
+  ReportDto,
+  StepDto,
+  SurveyDto,
+  SystemInfoDto,
+  TierRunDto,
+  UsageEntryDto,
+} from '../domain/models'
 
 export const systemInfo: SystemInfoDto = {
   os: 'windows',
@@ -76,4 +88,55 @@ export const plan: PlanDto = {
     { tier: 'C', itemCount: 1, estimatedBytes: 14.2 * GIB },
   ],
   json: '{\n  "volume": "C:",\n  "tiers": {}\n}',
+}
+
+export const approval: ApprovalDto = { tiers: ['A', 'C'], itemCount: 3, estimatedBytes: 25.4 * GIB }
+
+export const stepsA: StepDto[] = [
+  { id: 'npm-cache', label: 'Rótulo npm-cache', tier: 'A', kind: 'command', target: 'npm cache clean --force', estimatedBytes: 6.4 * GIB },
+  { id: 'nvidia-dxcache', label: 'Rótulo nvidia-dxcache', tier: 'A', kind: 'path', target: 'C:\\x\\nvidia-dxcache', estimatedBytes: 4.8 * GIB },
+]
+
+const result = (id: string, tier: ItemResultDto['tier'], gb: number, freedGb: number, extra: Partial<ItemResultDto> = {}): ItemResultDto => ({
+  id,
+  label: `Rótulo ${id}`,
+  tier,
+  estimatedBytes: gb * GIB,
+  freedBytes: freedGb * GIB,
+  status: 'ok',
+  detail: null,
+  ...extra,
+})
+
+export const runA: TierRunDto = {
+  tier: 'A',
+  freeBeforeBytes: 61.6 * GIB,
+  freeAfterBytes: 72.2 * GIB,
+  freedBytes: 10.6 * GIB,
+  estimatedBytes: 11.2 * GIB,
+  items: [
+    result('npm-cache', 'A', 6.4, 6.4),
+    result('nvidia-dxcache', 'A', 4.8, 4.2, { status: 'parcial', detail: 'dx.bin: em uso' }),
+  ],
+}
+
+export const runC: TierRunDto = {
+  tier: 'C',
+  freeBeforeBytes: 72.2 * GIB,
+  freeAfterBytes: 86.4 * GIB,
+  freedBytes: 14.2 * GIB,
+  estimatedBytes: 14.2 * GIB,
+  items: [result('gradle-caches', 'C', 14.2, 14.2)],
+}
+
+export const report: ReportDto = {
+  initial: survey.volume,
+  last: { ...survey.volume, freeBytes: 86.4 * GIB, usedBytes: 866.6 * GIB, usedPercent: 90.9, freePercent: 9.1 },
+  freedBytes: 24.8 * GIB,
+  estimatedBytes: 25.4 * GIB,
+  itemCount: 3,
+  runs: [runA, runC],
+  pending: [runA.items[1]!],
+  blocked: [classification.candidates[3]!],
+  exclusions: classification.exclusions,
 }

@@ -29,3 +29,8 @@ export function barWidth(value: number, max: number): string {
   if (max <= 0) return '0%'
   return `${Math.min(100, Math.round((value / max) * 1000) / 10)}%`
 }
+
+/** `+24,8 GB` / `-1,0 GB`: variação de espaço livre. */
+export function formatSignedGb(bytes: number, digits = 1): string {
+  return `${bytes < 0 ? '-' : '+'}${formatGb(Math.abs(bytes), digits)}`
+}

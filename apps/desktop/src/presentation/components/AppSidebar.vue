@@ -26,7 +26,6 @@ const isDark = computed(() => theme.current.value === 'dark')
     <nav class="nav" aria-label="Etapas" data-test="nav">
       <RouterLink v-for="(step, i) in STEPS" :key="step.name" :to="step.path">
         <span class="step-num">{{ i + 1 }}</span>{{ step.label }}
-        <span v-if="step.soon" class="soon">em breve</span>
       </RouterLink>
     </nav>
 
@@ -38,7 +37,7 @@ const isDark = computed(() => theme.current.value === 'dark')
         <div class="env-row"><span class="muted">Catálogo</span><span>{{ system.info.catalog }}</span></div>
       </template>
       <p v-else-if="system.error" class="small err" data-test="env-error">{{ system.error }}</p>
-      <div class="env-row"><span class="muted">Modo</span><span class="ok" style="font-weight: 600">Somente leitura</span></div>
+      <div class="env-row"><span class="muted">Modo</span><span style="font-weight: 600">Aprovação explícita</span></div>
     </div>
 
     <div class="spacer" />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { barWidth, formatCount, formatDuration, formatGb, formatPercent, GIB } from './format'
+import { barWidth, formatCount, formatDuration, formatGb, formatPercent, formatSignedGb, GIB } from './format'
 
 describe('format', () => {
   it('formata GB em binário (1024³) com vírgula decimal', () => {
@@ -15,6 +15,12 @@ describe('format', () => {
     expect(formatDuration(12_345)).toBe('12,3 s')
     expect(formatDuration(222_000)).toBe('3 min 42 s')
     expect(formatDuration(120_000)).toBe('2 min 0 s')
+  })
+
+  it('formata variação de espaço com sinal', () => {
+    expect(formatSignedGb(24.8 * GIB)).toBe('+24,8 GB')
+    expect(formatSignedGb(-GIB)).toBe('-1,0 GB')
+    expect(formatSignedGb(0)).toBe('+0,0 GB')
   })
 
   it('calcula a largura da barra relativa ao maior valor', () => {
