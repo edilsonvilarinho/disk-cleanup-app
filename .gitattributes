@@ -1,0 +1,9 @@
+# Quebra de linha LF no repositório em qualquer SO (projeto multiplataforma).
+* text=auto eol=lf
+
+# Binários
+*.png binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary
