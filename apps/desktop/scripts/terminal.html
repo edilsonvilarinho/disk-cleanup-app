@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>terminal</title>
+<style>
+  html, body { margin: 0; background: #08090A; }
+  body { font: 15px/1.55 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace; color: #E6E9EF; }
+  .win { margin: 24px; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; overflow: hidden; background: #0E0F11; }
+  .bar { display: flex; gap: 8px; padding: 12px 14px; background: #141517; border-bottom: 1px solid rgba(255,255,255,.08); }
+  .bar i { width: 12px; height: 12px; border-radius: 50%; background: #2A2C31; }
+  .bar span { margin-left: 8px; color: #8A8F98; font-size: 13px; }
+  pre { margin: 0; padding: 18px 20px; min-height: 560px; white-space: pre-wrap; }
+  .p { color: #10B981; } .c { color: #F7F8F8; } .m { color: #8A8F98; } .ok { color: #10B981; } .h { color: #EAB308; }
+  .cursor { display: inline-block; width: 9px; height: 17px; background: #E6E9EF; vertical-align: -3px; animation: b 1s steps(1) infinite; }
+  @keyframes b { 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+<div class="win"><div class="bar"><i></i><i></i><i></i><span>disk-cleanup-app</span></div><pre id="out"></pre></div>
+<script>
+// Saída real medida no repositório (cargo cov / pnpm coverage), resumida.
+const SCRIPT = [
+  { cmd: 'cargo cov --summary-only' },
+  { out: '<span class="m">   Compiling disk-cleanup-domain v0.1.0</span>' },
+  { out: '<span class="m">   Compiling disk-cleanup-application v0.1.0</span>' },
+  { out: '<span class="m">   Compiling disk-cleanup-infrastructure v0.1.0</span>' },
+  { out: '<span class="m">     Running tests/plan_approval.rs</span>' },
+  { out: 'test result: <span class="ok">ok</span>. 61 passed; 0 failed' },
+  { out: '<span class="h">TOTAL</span>   regions 98.02%   functions 96.95%   lines <span class="ok">98.25%</span>' },
+  { out: '' },
+  { cmd: 'pnpm coverage' },
+  { out: ' Test Files  <span class="ok">6 passed</span> (6)' },
+  { out: '      Tests  <span class="ok">47 passed</span> (47)' },
+  { out: 'Statements   : 99.68% ( 320/321 )' },
+  { out: 'Branches     : 99.02% ( 203/205 )' },
+  { out: 'Functions    : <span class="ok">100%</span> ( 128/128 )' },
+  { out: 'Lines        : <span class="ok">100%</span> ( 263/263 )' },
+]
+const out = document.getElementById('out')
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+async function run() {
+  for (const step of SCRIPT) {
+    if (step.cmd) {
+      out.insertAdjacentHTML('beforeend', '<span class="p">$</span> ')
+      for (const ch of step.cmd) { out.insertAdjacentHTML('beforeend', `<span class="c">${ch}</span>`); await sleep(45) }
+      out.insertAdjacentHTML('beforeend', '\n'); await sleep(500)
+    } else {
+      out.insertAdjacentHTML('beforeend', step.out + '\n'); await sleep(260)
+    }
+  }
+  out.insertAdjacentHTML('beforeend', '<span class="p">$</span> <span class="cursor"></span>')
+  document.body.dataset.done = '1'
+}
+run()
+</script>
+</body>
+</html>
