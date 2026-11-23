@@ -11,8 +11,25 @@ fn mount_contains(mount: &str, path: &str) -> bool {
     path_components(mount).is_empty() || path_is_within(path, mount)
 }
 
+/// `C:` (como o plano guarda o volume) é a raiz da unidade; sem a barra o
+/// Windows o trata como "diretório atual da unidade C".
+fn normalize(path: &str) -> String {
+    let bytes = path.as_bytes();
+    if bytes.len() == 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
+        format!("{path}\\")
+    } else {
+        path.to_string()
+    }
+}
+
 impl VolumeInfo for SysinfoVolumeInfo {
     fn usage(&self, path: &str) -> Result<VolumeUsage, PortError> {
+        let path = normalize(path);
+        // Caminho relativo nunca resolve: no Linux a montagem `/` casaria com ele.
+        if !std::path::Path::new(&path).is_absolute() {
+            return Err(PortError::NotFound(format!("volume de {path}")));
+        }
+        let path = path.as_str();
         let disks = Disks::new_with_refreshed_list();
         let disk = disks
             .list()

@@ -98,10 +98,23 @@ fn volume_info_resolves_the_volume_that_contains_a_path() {
         .unwrap();
     assert!(usage.total() > ByteSize::ZERO);
     assert!(usage.free() <= usage.total());
+    // Relativo nunca resolve (no Linux, `/` casaria com qualquer texto).
     assert!(matches!(
-        SysinfoVolumeInfo.usage("Q:\\nada\\aqui"),
+        SysinfoVolumeInfo.usage("relativo/pasta"),
         Err(PortError::NotFound(_))
     ));
+    if cfg!(windows) {
+        assert!(matches!(
+            SysinfoVolumeInfo.usage("Q:\\nada\\aqui"),
+            Err(PortError::NotFound(_))
+        ));
+        // Volume como o plano guarda (`C:`) é a raiz da unidade, não "relativo".
+        let drive = &dir.path().to_str().unwrap()[..2];
+        assert_eq!(
+            SysinfoVolumeInfo.usage(drive).unwrap().total(),
+            usage.total()
+        );
+    }
 }
 
 #[test]

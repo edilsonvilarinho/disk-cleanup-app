@@ -1,0 +1,389 @@
+name: Release Desktop Packages
+
+# Mesmo modelo do usage-monitor (`release-linux.yml`, #344): release só por tag.
+# A versão vem da tag — nenhum commit de bump passa pela `main`. O build recebe a
+# versão por `tauri build --config '{"version": ...}'`; `tauri.conf.json` mantém
+# só o valor de desenvolvimento.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.2.0). Must already exist on the remote.'
+        required: true
+        type: string
+      publish:
+        description: 'Publish the GitHub Release. Off = dry run: build and verify only.'
+        required: false
+        default: true
+        type: boolean
+
+# Duas execuções da mesma tag nunca correm juntas, e nenhuma cancela a outra:
+# release publicado pela metade é pior que release atrasado.
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # A tag tem de ser `vX.Y.Z` (ou `vX.Y.Z-beta.N`), anotada e apontar para um
+  # commit que já está na `main` — antes de gastar runner de macOS.
+  verify-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      version: ${{ steps.check.outputs.version }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - name: Check tag
+        id: check
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag="$RELEASE_TAG"
+          if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$'; then
+            echo "::error::'$tag' não é uma tag vX.Y.Z nem vX.Y.Z-beta.N"
+            exit 1
+          fi
+          case "$tag" in
+            *-beta.*) prerelease=true ;;
+            *) prerelease=false ;;
+          esac
+          # O checkout pode materializar a tag como leve; buscar de novo traz o
+          # objeto que está no remoto.
+          git fetch --force --no-tags origin "refs/tags/$tag:refs/tags/$tag" "refs/heads/main:refs/remotes/origin/main"
+          if [ "$(git cat-file -t "refs/tags/$tag")" != "tag" ]; then
+            echo "::error::a tag '$tag' é leve; release exige tag anotada (git tag -a)"
+            exit 1
+          fi
+          commit="$(git rev-list -n 1 "refs/tags/$tag")"
+          if ! git merge-base --is-ancestor "$commit" refs/remotes/origin/main; then
+            echo "::error::a tag '$tag' aponta para $commit, que não está na main"
+            exit 1
+          fi
+          version="${tag#v}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Release $tag"
+            echo
+            echo "Commit \`$commit\`, versão \`$version\`, prerelease \`$prerelease\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Gate de testes do release, em paralelo com os builds; só `publish-release`
+  # o exige. Falha aqui deixa os pacotes como artifacts, sem GitHub Release.
+  verify:
+    needs: verify-version
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ needs.verify-version.outputs.tag }}
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: apps/desktop/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: apps/desktop/pnpm-lock.yaml
+      - name: Frontend tests + coverage gate
+        working-directory: apps/desktop
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm coverage
+          pnpm exec vite build
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: false
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
+        with:
+          tool: cargo-llvm-cov
+      - name: Rust tests + coverage gate
+        run: cargo cov --summary-only
+
+  build-windows:
+    needs: verify-version
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ needs.verify-version.outputs.tag }}
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: apps/desktop/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: apps/desktop/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: false
+      # Só NSIS: instalador por usuário, sem UAC — o formato que uma atualização
+      # automática consegue trocar em silêncio. MSI fica fora (lição do usage-monitor:
+      # dois instaladores na mesma pasta, e o do MSI nunca se atualiza).
+      - name: Build Windows installer
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.verify-version.outputs.version }}
+        working-directory: apps/desktop
+        run: |
+          $ErrorActionPreference = 'Stop'
+          pnpm install --frozen-lockfile
+          pnpm tauri build --bundles nsis --config "{`"version`":`"$env:VERSION`"}"
+          New-Item -ItemType Directory -Force -Path ../../dist-build | Out-Null
+          $exe = Get-ChildItem ../../target/release/bundle/nsis -Filter "*_$($env:VERSION)_x64-setup.exe" | Select-Object -First 1
+          if (-not $exe) { throw "NSIS installer for $env:VERSION not found" }
+          Copy-Item $exe.FullName "../../dist-build/disk-cleanup_$($env:VERSION)_windows_x64-setup.exe"
+          Get-ChildItem ../../dist-build | Format-Table Name, Length
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-windows
+          path: dist-build/*
+          if-no-files-found: error
+
+  # webkit2gtk-4.1 (exigido pelo Tauri 2) só existe a partir do Ubuntu 22.04:
+  # é o glibc mais antigo possível, e define o piso de compatibilidade do .deb.
+  build-linux:
+    needs: verify-version
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ needs.verify-version.outputs.tag }}
+      - name: Tauri system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: apps/desktop/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: apps/desktop/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: false
+      - name: Build Linux packages
+        env:
+          VERSION: ${{ needs.verify-version.outputs.version }}
+        working-directory: apps/desktop
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm tauri build --bundles deb,rpm,appimage --config "{\"version\":\"$VERSION\"}"
+          out=../../dist-build
+          mkdir -p "$out"
+          b=../../target/release/bundle
+          cp "$(find "$b/deb" -name '*.deb' | head -n1)" "$out/disk-cleanup_${VERSION}_linux_amd64.deb"
+          cp "$(find "$b/rpm" -name '*.rpm' | head -n1)" "$out/disk-cleanup_${VERSION}_linux_x86_64.rpm"
+          cp "$(find "$b/appimage" -name '*.AppImage' | head -n1)" "$out/disk-cleanup_${VERSION}_linux_x64.AppImage"
+          ls -la "$out"
+      # Mesma ideia do "Validate Debian dependencies" do usage-monitor: o pacote
+      # declara as dependências que o instalador do usuário vai exigir.
+      - name: Validate packages
+        run: |
+          set -euo pipefail
+          deb="$(ls dist-build/*.deb)"
+          echo "Debian depends: $(dpkg-deb -f "$deb" Depends)"
+          dpkg-deb -f "$deb" Depends | grep -q 'libwebkit2gtk-4.1' || { echo "::error::.deb sem libwebkit2gtk-4.1"; exit 1; }
+          test -x "$(ls dist-build/*.AppImage)" || chmod +x dist-build/*.AppImage
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-linux
+          path: dist-build/*
+          if-no-files-found: error
+
+  build-macos:
+    # Não há cross-compile de bundle macOS: o .dmg só sai rodando em macOS.
+    # macos-15-intel é a última imagem x86_64 do GitHub.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    needs: verify-version
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ needs.verify-version.outputs.tag }}
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: apps/desktop/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: apps/desktop/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: false
+      # DMG sem assinatura Apple (sem Developer ID, sem notarização), como no
+      # usage-monitor: o Gatekeeper exige liberação manual no primeiro uso.
+      - name: Build macOS disk image
+        env:
+          VERSION: ${{ needs.verify-version.outputs.version }}
+        working-directory: apps/desktop
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm tauri build --bundles dmg --config "{\"version\":\"$VERSION\"}"
+          dmg="$(find ../../target/release/bundle/dmg -name '*.dmg' | head -n1)"
+          if [ -z "$dmg" ]; then echo "::error::DMG não encontrado"; exit 1; fi
+          mkdir -p ../../dist-build
+          cp "$dmg" "../../dist-build/disk-cleanup_${VERSION}_macos_${{ matrix.arch }}.dmg"
+          ls -la ../../dist-build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-macos-${{ matrix.arch }}
+          path: dist-build/*
+          if-no-files-found: error
+
+  publish-release:
+    # `inputs.publish` só existe no disparo manual; o push da tag sempre publica.
+    if: github.event_name == 'push' || inputs.publish
+    runs-on: ubuntu-latest
+    needs: [verify-version, verify, build-windows, build-linux, build-macos]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ needs.verify-version.outputs.tag }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: release-*
+          path: dist-build
+          merge-multiple: true
+      - name: List packaged artifacts
+        run: ls -la dist-build
+
+      # Notas a partir dos commits. `versionsort.suffix=-` põe `v1.0.0-beta.1`
+      # ANTES de `v1.0.0`: a estável difere da estável anterior (lista a série
+      # beta inteira); a beta difere da tag anterior, beta ou estável.
+      - name: Generate release notes
+        id: release_notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_tag="${{ needs.verify-version.outputs.tag }}"
+          echo "tag=$current_tag" >> "$GITHUB_OUTPUT"
+          git fetch --force --tags
+          all_tags="$(git -c versionsort.suffix=- tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$' || true)"
+          if [ "${{ needs.verify-version.outputs.prerelease }}" = "true" ]; then
+            candidate_tags="$all_tags"
+          else
+            candidate_tags="$(printf '%s\n' "$all_tags" | grep -Ev -- '-beta\.' || true)"
+          fi
+          previous_tag="$(printf '%s\n' "$candidate_tags" | awk -v cur="$current_tag" 'found && NF { print; exit } $0 == cur { found = 1 }')"
+          range_spec="$current_tag"
+          if [ -n "$previous_tag" ]; then
+            range_spec="${previous_tag}..${current_tag}"
+            compare_url="https://github.com/${GITHUB_REPOSITORY}/compare/${previous_tag}...${current_tag}"
+          fi
+          commit_lines="$(git log --no-merges --reverse --pretty='- %s (`%h`)' "$range_spec")"
+          notes_path="$RUNNER_TEMP/release-notes.md"
+          {
+            echo "## Changes"
+            echo
+            if [ -n "$previous_tag" ]; then
+              echo "- Compare: [${previous_tag}...${current_tag}](${compare_url})"
+            else
+              echo "- Initial release"
+            fi
+            echo
+            if [ -n "$commit_lines" ]; then
+              printf '%s\n' "$commit_lines"
+            else
+              echo "- No commits detected in this range."
+            fi
+          } > "$notes_path"
+          cat "$notes_path"
+          echo "notes_path=$notes_path" >> "$GITHUB_OUTPUT"
+
+      # Rascunho até todo asset subir (lição #582 do usage-monitor): publicada
+      # antes, a release fica visível sem o instalador da plataforma.
+      - name: Upload to GitHub Release
+        id: gh_release
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
+        with:
+          tag_name: ${{ steps.release_notes.outputs.tag }}
+          body_path: ${{ steps.release_notes.outputs.notes_path }}
+          files: dist-build/*
+          fail_on_unmatched_files: true
+          draft: true
+          # Beta = prerelease e nunca `latest`: quem não optou pelo canal lê
+          # `/releases/latest`, que a API nunca responde com prerelease.
+          prerelease: ${{ needs.verify-version.outputs.prerelease == 'true' }}
+          make_latest: ${{ needs.verify-version.outputs.prerelease == 'true' && 'false' || 'true' }}
+
+      # Publica só depois de todo asset ter `digest` sha256 (é o hash que a
+      # atualização automática vai exigir). Rascunho não responde em
+      # `/releases/tags/{tag}`, por isso a consulta vai pelo id.
+      - name: Publish release after assets are verifiable
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.gh_release.outputs.id }}
+          RELEASE_TAG: ${{ steps.release_notes.outputs.tag }}
+          PRERELEASE: ${{ needs.verify-version.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            pending="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+              --jq '[.assets[] | select(.state != "uploaded" or ((.digest // "") | startswith("sha256:") | not))] | length')"
+            if [ "$pending" = "0" ]; then break; fi
+            if [ "$attempt" = "30" ]; then
+              echo "::error::${pending} asset(s) sem digest sha256 após 150 s; a release fica em rascunho."
+              exit 1
+            fi
+            sleep 5
+          done
+          if [ "$PRERELEASE" = "true" ]; then
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+          else
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
+          fi
