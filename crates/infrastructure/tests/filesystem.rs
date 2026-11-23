@@ -110,7 +110,10 @@ fn volume_info_resolves_the_volume_that_contains_a_path() {
         ));
         // Volume como o plano guarda (`C:`) é a raiz da unidade, não "relativo".
         let drive = &dir.path().to_str().unwrap()[..2];
-        assert_eq!(SysinfoVolumeInfo.usage(drive).unwrap().total(), usage.total());
+        assert_eq!(
+            SysinfoVolumeInfo.usage(drive).unwrap().total(),
+            usage.total()
+        );
     }
 }
 
