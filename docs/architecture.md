@@ -75,7 +75,15 @@ ele é substituído por um fake.
 - `<Transition>` na troca de tela, `<TransitionGroup>` com `*-move` nas listas, barras e cartões
   animados em CSS; tudo desligado com `prefers-reduced-motion`.
 
+## Atualização automática
+
+- Porta própria na interface (`UpdaterPort`, injetada por plugin do Pinia), separada do gateway de
+  limpeza; `TauriUpdater` fala com os comandos `check_update`/`download_update`/`install_update`.
+- A regra do canal (estável × beta, maior SemVer) mora em `src-tauri/src/update.rs`, sem rede; a
+  chamada HTTP à API do GitHub fica na raiz de composição.
+- Instalar nunca é automático: o download sim, a troca de versão só com o clique do usuário.
+
 ## Próximo passo
 
 Tier B (desinstaladores via registro: MSI/NSIS/Inno/VS), DISM, helper elevado (UAC/polkit), Temp com
-filtro de idade, catálogos macOS/Linux e atualização automática (ver `docs/release.md`).
+filtro de idade, validação dos catálogos macOS/Linux em máquina real e rollback da atualização.

@@ -2,18 +2,23 @@
 import { onMounted, watch } from 'vue'
 import { useSettingsStore } from '../application/stores/settings'
 import { useSystemStore } from '../application/stores/system'
+import { useUpdateStore } from '../application/stores/update'
 import AppSidebar from './components/AppSidebar.vue'
 import { useI18n } from './i18n'
 import { useTheme } from './theme'
 
 const system = useSystemStore()
 const settings = useSettingsStore()
+const update = useUpdateStore()
 const theme = useTheme()
 const { locale } = useI18n()
 
 watch(() => settings.theme, (mode) => theme.setMode(mode), { immediate: true })
 watch(locale, (value) => document.documentElement.setAttribute('lang', value === 'pt' ? 'pt-BR' : 'en'), { immediate: true })
-onMounted(() => system.load())
+onMounted(() => {
+  system.load()
+  update.startup(settings.autoUpdate, settings.betaUpdates)
+})
 </script>
 
 <template>

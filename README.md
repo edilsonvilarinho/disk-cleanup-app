@@ -111,8 +111,8 @@ choice.
 ### Tested by design
 
 Clean architecture in Rust (domain → application → infrastructure) and Vue, built test-first.
-Coverage gates fail the build below 95%: today the Rust core sits at 98.9% of lines (91 tests) and
-the UI at 100% of lines (90 tests).
+Coverage gates fail the build below 95%: today the Rust core sits at 98.9% of lines (99 tests) and
+the UI at 100% of lines (105 tests).
 
 </td>
 <td width="50%">
@@ -182,8 +182,12 @@ Workflow: test first (red), minimal code (green), refactor. See [docs/architectu
 
 A release is an annotated tag on `main`; the version comes from the tag. The Claude Code skills
 `disk-cleanup-release` (stable) and `disk-cleanup-release-beta` (beta channel) cut the tag and follow
-the `Release Desktop Packages` workflow, which builds every OS, verifies, and publishes. Details and
-the auto-update analysis: [docs/release.md](docs/release.md).
+the `Release Desktop Packages` workflow, which builds every OS, verifies, and publishes.
+
+**Auto-update** is on by default: the app checks on launch, downloads in the background and installs
+only when you click **Restart and update**. Every update is verified against a minisign signature.
+Beta versions are opt-in (Settings → Updates → *Receive beta versions*). Details:
+[docs/release.md](docs/release.md).
 
 ## License
 

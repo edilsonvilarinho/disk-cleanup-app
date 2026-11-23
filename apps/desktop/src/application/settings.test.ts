@@ -24,11 +24,28 @@ function setup(storage: SettingsStorage) {
 describe('sanitizeSettings', () => {
   it('aceita valores válidos e troca inválidos pelo padrão', () => {
     expect(sanitizeSettings(null)).toEqual(DEFAULT_SETTINGS)
-    expect(DEFAULT_SETTINGS).toEqual({ language: 'auto', theme: 'system', extraExclusions: [], defaultDepth: 2 })
+    // Atualização automática vem ligada na instalação; o canal beta, desligado.
+    expect(DEFAULT_SETTINGS).toEqual({
+      language: 'auto',
+      theme: 'system',
+      extraExclusions: [],
+      defaultDepth: 2,
+      autoUpdate: true,
+      betaUpdates: false,
+    })
     expect(
-      sanitizeSettings({ language: 'en', theme: 'dark', extraExclusions: ['/a', 3, ' ', '/a'], defaultDepth: 1 }),
-    ).toEqual({ language: 'en', theme: 'dark', extraExclusions: ['/a'], defaultDepth: 1 })
-    expect(sanitizeSettings({ language: 'fr', theme: 'roxo', extraExclusions: 'x', defaultDepth: 7 })).toEqual(DEFAULT_SETTINGS)
+      sanitizeSettings({
+        language: 'en',
+        theme: 'dark',
+        extraExclusions: ['/a', 3, ' ', '/a'],
+        defaultDepth: 1,
+        autoUpdate: false,
+        betaUpdates: true,
+      }),
+    ).toEqual({ language: 'en', theme: 'dark', extraExclusions: ['/a'], defaultDepth: 1, autoUpdate: false, betaUpdates: true })
+    expect(
+      sanitizeSettings({ language: 'fr', theme: 'roxo', extraExclusions: 'x', defaultDepth: 7, autoUpdate: 'sim', betaUpdates: 1 }),
+    ).toEqual(DEFAULT_SETTINGS)
   })
 })
 
@@ -42,7 +59,16 @@ describe('settings store', () => {
     store.setLanguage('en')
     store.setTheme('dark')
     store.setDefaultDepth(1)
-    expect(storage.saved.at(-1)).toEqual({ language: 'en', theme: 'dark', extraExclusions: [], defaultDepth: 1 })
+    store.setAutoUpdate(false)
+    store.setBetaUpdates(true)
+    expect(storage.saved.at(-1)).toEqual({
+      language: 'en',
+      theme: 'dark',
+      extraExclusions: [],
+      defaultDepth: 1,
+      autoUpdate: false,
+      betaUpdates: true,
+    })
   })
 
   it('exclusões extras: aparam espaço, ignoram vazia e repetida (sem diferenciar maiúsculas) e podem ser removidas', () => {

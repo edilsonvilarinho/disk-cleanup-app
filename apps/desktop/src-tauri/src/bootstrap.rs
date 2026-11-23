@@ -2,8 +2,11 @@
 //! comandos. Sem regra de negócio — tudo delega para `service`.
 //! Excluído da medição de cobertura (exige runtime Tauri/WebView).
 
+use std::sync::Mutex;
+
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State, Url};
+use tauri_plugin_updater::{Update, UpdaterExt};
 
 use disk_cleanup_infrastructure::{
     catalog_for, exclusions_for, FsActionRunner, JwalkFileWalker, SkillPlanJsonCodec,
@@ -16,10 +19,22 @@ use crate::dto::{
 };
 use crate::error::ErrorDto;
 use crate::service::{self, CallbackExecution, CallbackProgress, Session};
+use crate::update::{manifest_url, releases_api_url, DownloadProgress, UpdateInfoDto};
 
 const PROGRESS_EVENT: &str = "survey-progress";
 const EXECUTION_EVENT: &str = "execution-progress";
+const UPDATE_EVENT: &str = "update-progress";
 const OS: &str = std::env::consts::OS;
+
+/// Atualização encontrada por `check_update` e, depois, os bytes baixados.
+#[derive(Default)]
+struct UpdateSlot {
+    update: Option<Update>,
+    bytes: Option<Vec<u8>>,
+}
+
+#[derive(Default)]
+struct PendingUpdate(Mutex<UpdateSlot>);
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -126,9 +141,114 @@ fn report(session: State<'_, Session>) -> Result<ReportDto, ErrorDto> {
     service::report(&session, &SysinfoVolumeInfo)
 }
 
+fn update_error(e: impl ToString) -> ErrorDto {
+    ErrorDto::new("update").with("detail", e.to_string())
+}
+
+fn slot(state: &PendingUpdate) -> std::sync::MutexGuard<'_, UpdateSlot> {
+    state
+        .0
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+async fn fetch_releases(url: &str) -> Result<String, ErrorDto> {
+    let feed = |e: reqwest::Error| ErrorDto::new("update_feed").with("detail", e);
+    reqwest::Client::builder()
+        .user_agent(concat!("disk-cleanup/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(feed)?
+        .get(url)
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .and_then(reqwest::Response::error_for_status)
+        .map_err(feed)?
+        .text()
+        .await
+        .map_err(feed)
+}
+
+#[tauri::command]
+fn app_version(app: AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
+#[tauri::command]
+async fn check_update(
+    app: AppHandle,
+    state: State<'_, PendingUpdate>,
+    beta: bool,
+) -> Result<Option<UpdateInfoDto>, ErrorDto> {
+    let feed = if beta {
+        Some(fetch_releases(&releases_api_url()).await)
+    } else {
+        None
+    };
+    let url = manifest_url(beta, |_| feed.unwrap_or_else(|| Ok("[]".into())))?;
+    let endpoint = Url::parse(&url).map_err(update_error)?;
+    let found = app
+        .updater_builder()
+        .endpoints(vec![endpoint])
+        .map_err(update_error)?
+        .build()
+        .map_err(update_error)?
+        .check()
+        .await
+        .map_err(update_error)?;
+    let info = found.as_ref().map(|u| UpdateInfoDto {
+        version: u.version.clone(),
+        current_version: u.current_version.clone(),
+        notes: u.body.clone(),
+        date: u.date.map(|d| d.to_string()),
+    });
+    *slot(&state) = UpdateSlot {
+        update: found,
+        bytes: None,
+    };
+    Ok(info)
+}
+
+#[tauri::command]
+async fn download_update(app: AppHandle, state: State<'_, PendingUpdate>) -> Result<(), ErrorDto> {
+    let update = slot(&state)
+        .update
+        .clone()
+        .ok_or_else(|| ErrorDto::new("update_none"))?;
+    let mut progress = DownloadProgress::default();
+    let bytes = update
+        .download(
+            |chunk, total| {
+                let _ = app.emit(UPDATE_EVENT, progress.add(chunk, total));
+            },
+            || {},
+        )
+        .await
+        .map_err(update_error)?;
+    slot(&state).bytes = Some(bytes);
+    Ok(())
+}
+
+/// No Windows o instalador NSIS (modo passivo) encerra o app sozinho; nos
+/// demais o processo é reiniciado já na versão nova.
+#[tauri::command]
+fn install_update(app: AppHandle, state: State<'_, PendingUpdate>) -> Result<(), ErrorDto> {
+    let (update, bytes) = {
+        let mut guard = slot(&state);
+        match (guard.update.clone(), guard.bytes.take()) {
+            (Some(u), Some(b)) => (u, b),
+            _ => return Err(ErrorDto::new("update_not_downloaded")),
+        }
+    };
+    update.install(bytes).map_err(update_error)?;
+    app.restart()
+}
+
 pub fn run(context: tauri::Context<tauri::Wry>) {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Session::default())
+        .manage(PendingUpdate::default())
         .invoke_handler(tauri::generate_handler![
             system_info,
             run_survey,
@@ -137,7 +257,11 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
             approve_plan,
             preview_tier,
             execute_tier,
-            report
+            report,
+            app_version,
+            check_update,
+            download_update,
+            install_update
         ])
         .run(context)
         .expect("falha ao iniciar o Disk Cleanup");

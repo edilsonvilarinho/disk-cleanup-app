@@ -2,7 +2,6 @@
 // não compila, e o teste confere que nenhuma folha está vazia.
 
 export const pt = {
-  app: { version: 'v0.1' },
   nav: {
     steps: 'Etapas',
     survey: 'Survey',
@@ -188,6 +187,25 @@ export const pt = {
     io: '{detail}',
     exit: 'saída {exitCode}: {detail}',
   },
+  update: {
+    title: 'Atualizações',
+    installed: 'Versão instalada: {version}',
+    auto: 'Atualizar automaticamente',
+    autoHint: 'Verifica ao abrir e baixa em segundo plano. A instalação só acontece quando você clica em reiniciar.',
+    beta: 'Receber versões beta',
+    betaHint: 'Prévias publicadas antes da versão estável, para teste.',
+    check: 'Verificar agora',
+    checking: 'Verificando…',
+    upToDate: 'Você está na versão mais recente.',
+    available: 'Versão {version} disponível',
+    download: 'Baixar',
+    downloading: 'Baixando {version}…',
+    downloadingPercent: 'Baixando {version}… {percent}%',
+    ready: 'Versão {version} pronta para instalar',
+    restart: 'Reiniciar e atualizar',
+    installing: 'Instalando…',
+    failed: 'Falha na atualização: {error}',
+  },
   errors: {
     invalid_depth: 'Profundidade deve ser 1 ou 2 (recebido {depth}).',
     tier_not_approved: 'O tier {tier} não está no plano aprovado.',
@@ -213,6 +231,10 @@ export const pt = {
     tier_already_run: 'O tier {tier} já foi executado nesta aprovação.',
     no_execution: 'Nenhuma execução nesta sessão.',
     internal: 'Erro interno: {detail}',
+    update: 'erro do atualizador: {detail}',
+    update_feed: 'não foi possível ler as releases: {detail}',
+    update_none: 'nenhuma atualização encontrada',
+    update_not_downloaded: 'a atualização ainda não foi baixada',
     unknown: 'Erro inesperado ({code}).',
   },
   markdown: {
@@ -238,7 +260,6 @@ export const pt = {
 export type Messages = typeof pt
 
 export const en: Messages = {
-  app: { version: 'v0.1' },
   nav: {
     steps: 'Steps',
     survey: 'Survey',
@@ -424,6 +445,25 @@ export const en: Messages = {
     io: '{detail}',
     exit: 'exit {exitCode}: {detail}',
   },
+  update: {
+    title: 'Updates',
+    installed: 'Installed version: {version}',
+    auto: 'Update automatically',
+    autoHint: 'Checks on launch and downloads in the background. Installing only happens when you click restart.',
+    beta: 'Receive beta versions',
+    betaHint: 'Previews published ahead of the stable version, for testing.',
+    check: 'Check now',
+    checking: 'Checking…',
+    upToDate: "You're on the latest version.",
+    available: 'Version {version} available',
+    download: 'Download',
+    downloading: 'Downloading {version}…',
+    downloadingPercent: 'Downloading {version}… {percent}%',
+    ready: 'Version {version} ready to install',
+    restart: 'Restart and update',
+    installing: 'Installing…',
+    failed: 'Update failed: {error}',
+  },
   errors: {
     invalid_depth: 'Depth must be 1 or 2 (got {depth}).',
     tier_not_approved: 'Tier {tier} is not in the approved plan.',
@@ -449,6 +489,10 @@ export const en: Messages = {
     tier_already_run: 'Tier {tier} was already run in this approval.',
     no_execution: 'No run in this session.',
     internal: 'Internal error: {detail}',
+    update: 'updater error: {detail}',
+    update_feed: 'could not read the releases: {detail}',
+    update_none: 'no update found',
+    update_not_downloaded: 'the update has not been downloaded yet',
     unknown: 'Unexpected error ({code}).',
   },
   markdown: {

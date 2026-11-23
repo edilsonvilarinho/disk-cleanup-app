@@ -110,8 +110,8 @@ Visual neutro e profissional nos dois temas. Segue a preferência do sistema e l
 ### Testado por construção
 
 Arquitetura limpa em Rust (domínio → aplicação → infraestrutura) e Vue, feita com TDD. Os portões de
-cobertura falham o build abaixo de 95%: hoje o núcleo Rust está em 98,9% das linhas (91 testes) e a
-interface em 100% das linhas (90 testes).
+cobertura falham o build abaixo de 95%: hoje o núcleo Rust está em 98,9% das linhas (99 testes) e a
+interface em 100% das linhas (105 testes).
 
 </td>
 <td width="50%">
@@ -183,7 +183,11 @@ Fluxo: teste primeiro (vermelho), código mínimo (verde), refatoração. Ver
 Release é uma tag anotada na `main`; a versão vem da tag. As skills do Claude Code
 `disk-cleanup-release` (estável) e `disk-cleanup-release-beta` (canal beta) criam a tag e acompanham o
 workflow `Release Desktop Packages`, que gera os pacotes de todos os SOs, verifica e publica. Detalhes e
-a análise da atualização automática: [docs/release.md](docs/release.md).
+o funcionamento da atualização automática: [docs/release.md](docs/release.md).
+
+A **atualização automática** vem ligada: o app verifica ao abrir, baixa em segundo plano e só instala
+quando você clica em **Reiniciar e atualizar**. Toda atualização é conferida por assinatura minisign.
+Versões beta são opcionais (Configurações → Atualizações → *Receber versões beta*).
 
 ## Licença
 

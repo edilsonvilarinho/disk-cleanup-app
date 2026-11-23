@@ -24,6 +24,9 @@ disk-cleanup-infrastructure.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2", features = [] }
+tauri-plugin-updater = "2"
+semver = "1"
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 
 [lints]
 workspace = true

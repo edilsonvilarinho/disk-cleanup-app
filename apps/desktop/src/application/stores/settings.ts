@@ -14,6 +14,8 @@ export const useSettingsStore = defineStore('settings', {
         theme: this.theme,
         extraExclusions: [...this.extraExclusions],
         defaultDepth: this.defaultDepth,
+        autoUpdate: this.autoUpdate,
+        betaUpdates: this.betaUpdates,
       })
     },
     setLanguage(language: LanguagePreference) {
@@ -26,6 +28,14 @@ export const useSettingsStore = defineStore('settings', {
     },
     setDefaultDepth(depth: 1 | 2) {
       this.defaultDepth = depth
+      this.persist()
+    },
+    setAutoUpdate(enabled: boolean) {
+      this.autoUpdate = enabled
+      this.persist()
+    },
+    setBetaUpdates(enabled: boolean) {
+      this.betaUpdates = enabled
       this.persist()
     },
     /** `false` se vazia ou já existente (sem diferenciar maiúsculas). */
