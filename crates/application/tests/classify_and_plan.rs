@@ -4,16 +4,18 @@ use disk_cleanup_application::{
     expand_template, export_plan, AppError, Catalog, CatalogExclusion, CatalogRule,
     ClassifyService, PortError, RuleTarget, SkipReason,
 };
-use disk_cleanup_domain::{Action, Availability, ExclusionList, Plan, Risk, Tier};
+use disk_cleanup_domain::{
+    Action, Availability, BlockReason, ExclusionList, LocalizedText, Plan, Risk, Tier,
+};
 use support::{FakeCatalog, FakeCodec, FakeEnv, FakeInspector};
 
 fn rule(id: &str, tier: Tier, target: RuleTarget) -> CatalogRule {
     CatalogRule {
         id: id.into(),
-        label: format!("rótulo {id}"),
+        label: LocalizedText::new(&format!("rótulo {id}"), &format!("label {id}")),
         tier,
         risk: Risk::None,
-        note: format!("nota {id}"),
+        note: LocalizedText::new(&format!("nota {id}"), &format!("note {id}")),
         target,
         watch_env: vec![],
     }
@@ -91,7 +93,7 @@ fn catalog() -> Catalog {
         ],
         exclusions: vec![CatalogExclusion {
             pattern: r"D:\Backups".into(),
-            reason: "backup".into(),
+            reason: LocalizedText::same("backup"),
         }],
     }
 }
@@ -117,7 +119,7 @@ fn inspector() -> FakeInspector {
 fn classification_builds_candidates_and_explains_every_skipped_rule() {
     let baseline = ExclusionList::windows_baseline("C:", r"C:\Users\u\AppData\Local");
     let report = ClassifyService::new(&FakeCatalog(Ok(catalog())), &env(), &inspector())
-        .run(baseline)
+        .run(baseline, &[])
         .unwrap();
 
     let ids: Vec<_> = report.candidates.iter().map(|c| c.id.as_str()).collect();
@@ -131,8 +133,8 @@ fn classification_builds_candidates_and_explains_every_skipped_rule() {
         }
     );
     assert_eq!(npm.size.bytes(), 600);
-    assert_eq!(npm.label, "rótulo npm");
-    assert_eq!(npm.note, "nota npm");
+    assert_eq!(npm.label, LocalizedText::new("rótulo npm", "label npm"));
+    assert_eq!(npm.note, LocalizedText::new("nota npm", "note npm"));
     assert_eq!(
         report.candidates[1].action,
         Action::RemovePath {
@@ -144,11 +146,13 @@ fn classification_builds_candidates_and_explains_every_skipped_rule() {
     assert_eq!(
         report.candidates[2].availability,
         Availability::Blocked {
-            reason: r"PATH contém C:\gradle\bin".into()
+            reason: BlockReason::PathEntry {
+                entry: r"C:\gradle\bin".into()
+            }
         }
     );
     assert!(
-        matches!(&report.candidates[3].availability, Availability::Blocked { reason } if reason.contains("CUDA_PATH"))
+        matches!(&report.candidates[3].availability, Availability::Blocked { reason: BlockReason::EnvVar { name } } if name == "CUDA_PATH")
     );
 
     let skipped: Vec<_> = report
@@ -170,9 +174,15 @@ fn classification_builds_candidates_and_explains_every_skipped_rule() {
             ),
             (
                 "installer",
-                SkipReason::Excluded("cache do MSI; sem ele a desinstalação quebra".into())
+                SkipReason::Excluded(LocalizedText::new(
+                    "cache do MSI; sem ele a desinstalação quebra",
+                    "MSI cache; without it uninstalling breaks"
+                ))
             ),
-            ("backup", SkipReason::Excluded("backup".into())),
+            (
+                "backup",
+                SkipReason::Excluded(LocalizedText::same("backup"))
+            ),
             (
                 "quebrado",
                 SkipReason::Unmeasurable("erro de E/S: acesso negado".into())
@@ -190,7 +200,7 @@ fn classification_propagates_catalog_failure() {
         &env(),
         &inspector(),
     )
-    .run(ExclusionList::default())
+    .run(ExclusionList::default(), &[])
     .unwrap_err();
     assert_eq!(err, AppError::Port(PortError::InvalidData("toml".into())));
 }
@@ -201,7 +211,7 @@ fn skip_reasons_have_messages() {
         SkipReason::NotFound("p".into()),
         SkipReason::Empty,
         SkipReason::UnresolvedVariable("V".into()),
-        SkipReason::Excluded("e".into()),
+        SkipReason::Excluded(LocalizedText::same("e")),
         SkipReason::Unmeasurable("u".into()),
     ] {
         assert!(!r.to_string().is_empty());
@@ -211,7 +221,7 @@ fn skip_reasons_have_messages() {
 #[test]
 fn export_plan_delegates_to_codec_and_maps_errors() {
     let report = ClassifyService::new(&FakeCatalog(Ok(catalog())), &env(), &inspector())
-        .run(ExclusionList::default())
+        .run(ExclusionList::default(), &[])
         .unwrap();
     let plan = Plan::from_selection(
         "C:",
@@ -239,11 +249,11 @@ fn catalog_exclusion_with_unresolved_variable_is_kept_literally() {
         rules: vec![],
         exclusions: vec![CatalogExclusion {
             pattern: r"%SEM_VAR%\x".into(),
-            reason: "r".into(),
+            reason: LocalizedText::same("r"),
         }],
     };
     let report = ClassifyService::new(&FakeCatalog(Ok(catalog)), &env(), &inspector())
-        .run(ExclusionList::default())
+        .run(ExclusionList::default(), &[])
         .unwrap();
     assert_eq!(report.exclusions.entries()[0].pattern, r"%SEM_VAR%\x");
     assert!(report.candidates.is_empty());
@@ -256,4 +266,24 @@ fn services_have_debug_representation() {
         format!("{:?}", ClassifyService::new(&c, &e, &i)),
         "ClassifyService"
     );
+}
+
+#[test]
+fn settings_exclusions_are_added_on_top_of_the_baseline_and_blank_ones_ignored() {
+    let report = ClassifyService::new(&FakeCatalog(Ok(catalog())), &env(), &inspector())
+        .run(
+            ExclusionList::default(),
+            &[r"C:\gradle".into(), "  ".into()],
+        )
+        .unwrap();
+    assert!(report.candidates.iter().all(|c| c.id != "gradle"));
+    let gradle = report.skipped.iter().find(|s| s.id == "gradle").unwrap();
+    assert_eq!(
+        gradle.reason,
+        SkipReason::Excluded(LocalizedText::new(
+            "excluída nas Configurações",
+            "excluded in Settings"
+        ))
+    );
+    assert_eq!(report.exclusions.len(), 2);
 }

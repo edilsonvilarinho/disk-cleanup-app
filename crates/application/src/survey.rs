@@ -54,10 +54,7 @@ impl<'a> SurveyService<'a> {
 
     pub fn run(&self, request: &SurveyRequest) -> Result<SurveyReport, AppError> {
         if !(1..=2).contains(&request.depth) {
-            return Err(AppError::InvalidRequest(format!(
-                "profundidade deve ser 1 ou 2 (recebido {})",
-                request.depth
-            )));
+            return Err(AppError::InvalidDepth(request.depth));
         }
         let volume = self.volumes.usage(&request.volume_root)?;
         let mut aggregator = SizeAggregator::new(Self::focuses(request));

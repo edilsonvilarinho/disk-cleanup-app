@@ -47,7 +47,7 @@ describe('aprovação (plan store)', () => {
     store.approvedTiers = ['A']
     store.setAcknowledged(true)
     await store.approve()
-    expect(store.approveError).toBe('revisão do plano não confirmada')
+    expect(store.approveError).toEqual({ message: 'revisão do plano não confirmada' })
     expect(store.approval).toBeNull()
   })
 
@@ -90,7 +90,7 @@ describe('execution store', () => {
     await store.confirm('A')
     expect(gateway.executeTier).toHaveBeenCalledWith('A', expect.any(Function))
     expect(store.runs.A).toEqual(runA)
-    expect(store.live['nvidia-dxcache']).toMatchObject({ status: 'parcial' })
+    expect(store.live['nvidia-dxcache']).toMatchObject({ status: 'partial' })
     expect(store.running).toBeNull()
     expect(store.nextTier).toBe('C')
     expect(store.totalFreed).toBe(runA.freedBytes)
@@ -119,10 +119,10 @@ describe('execution store', () => {
     store.request('A')
     await store.confirm('A')
     expect(seen).toBe('running')
-    expect(store.error).toBe('tier A já executado')
+    expect(store.error).toEqual({ message: 'tier A já executado' })
     expect(store.running).toBeNull()
     await store.loadPreview('A')
-    expect(store.error).toBe('nenhum plano aprovado')
+    expect(store.error).toEqual({ message: 'nenhum plano aprovado' })
   })
 })
 
@@ -138,6 +138,6 @@ describe('report store', () => {
     const failing = useReportStore()
     await failing.load()
     expect(failing.status).toBe('error')
-    expect(failing.error).toBe('nenhuma execução nesta sessão')
+    expect(failing.error).toEqual({ message: 'nenhuma execução nesta sessão' })
   })
 })

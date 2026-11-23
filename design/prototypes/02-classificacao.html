@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disk Cleanup — 2 · Classificação</title>
+<script>(function(){var t;try{t=localStorage.getItem('dc-theme')}catch(e){}if(!t)t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t)})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="assets/app.css">
+<script src="assets/app.js" defer></script>
+</head>
+<body data-page="classify" data-mode="ro">
+<div class="layout">
+<aside id="sidebar" class="sidebar"></aside>
+<main class="main">
+<div class="container">
+
+  <header class="page-head">
+    <div class="titles">
+      <span class="label-caps">Etapa 2 de 5 · somente leitura</span>
+      <h1>Classificação dos candidatos</h1>
+    </div>
+    <div class="actions">
+      <span class="small muted">Catálogo: <span class="mono">catalog/windows.toml</span></span>
+      <button type="button" class="btn">Reclassificar</button>
+    </div>
+  </header>
+
+  <div class="note" role="note">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg>
+    <span>Candidatos a verificar, não lista de execução. O caminho existir no disco não prova que ele está sem uso.</span>
+  </div>
+
+  <div class="grid-aside">
+    <section class="card" aria-label="Candidatos por tier">
+      <div class="tabs" role="tablist" aria-label="Tiers" data-tabs>
+        <button type="button" class="tab" role="tab" id="tab-A" aria-controls="panel-A" aria-selected="true"><span class="tier tA"><span class="sq"></span>A</span>Cache<span class="count">10</span></button>
+        <button type="button" class="tab" role="tab" id="tab-B" aria-controls="panel-B" aria-selected="false" tabindex="-1"><span class="tier tB"><span class="sq"></span>B</span>Desinstalar<span class="count">9</span></button>
+        <button type="button" class="tab" role="tab" id="tab-C" aria-controls="panel-C" aria-selected="false" tabindex="-1"><span class="tier tC"><span class="sq"></span>C</span>Regeneráveis<span class="count">7</span></button>
+        <button type="button" class="tab" role="tab" id="tab-D" aria-controls="panel-D" aria-selected="false" tabindex="-1"><span class="tier tD"><span class="sq"></span>D</span>Sistema<span class="count">1</span></button>
+        <button type="button" class="tab" role="tab" id="tab-X" aria-controls="panel-X" aria-selected="false" tabindex="-1">Exclusões<span class="count">8</span></button>
+      </div>
+
+      <!-- Tier A -->
+      <div id="panel-A" role="tabpanel" aria-labelledby="tab-A">
+        <div class="card-head" style="margin-bottom:8px">
+          <p class="small muted">Cache regenerável. Risco: nenhum além do re-download.</p>
+          <button type="button" class="btn" data-select-all="A">Marcar/desmarcar tier</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col"><span class="sr-only" style="position:absolute;left:-9999px">Selecionar</span></th><th scope="col">Item</th><th scope="col" class="num">GB</th><th scope="col">Modificado</th><th scope="col">Ação</th><th scope="col">Observação</th></tr></thead>
+            <tbody>
+              <tr><td><input type="checkbox" id="a1" data-tier="A" data-gb="6.4" checked></td><td><label for="a1">npm cache</label><span class="path">%LOCALAPPDATA%\npm-cache</span></td><td class="num">6,4</td><td class="mono small date">2026-10-25</td><td class="mono small">npm cache clean --force</td><td class="small muted">comando oficial</td></tr>
+              <tr><td><input type="checkbox" id="a2" data-tier="A" data-gb="3.1" checked></td><td><label for="a2">pip cache</label><span class="path">%LOCALAPPDATA%\pip\cache</span></td><td class="num">3,1</td><td class="mono small date">2026-10-19</td><td class="mono small">pip cache purge</td><td class="small muted">comando oficial</td></tr>
+              <tr><td><input type="checkbox" id="a3" data-tier="A" data-gb="4.8" checked></td><td><label for="a3">NVIDIA DXCache</label><span class="path">%LOCALAPPDATA%\NVIDIA\DXCache</span></td><td class="num">4,8</td><td class="mono small date">2026-10-27</td><td class="mono small">remover</td><td><span class="pill warn"><span class="dot"></span>arquivos abertos pelo driver</span></td></tr>
+              <tr><td><input type="checkbox" id="a4" data-tier="A" data-gb="7.9" checked></td><td><label for="a4">Temp (&gt; 3 dias)</label><span class="path">%LOCALAPPDATA%\Temp</span></td><td class="num">7,9</td><td class="mono small date">2026-10-27</td><td class="mono small">remover por LastWriteTime</td><td class="small muted">recentes preservados</td></tr>
+              <tr><td><input type="checkbox" id="a5" data-tier="A" data-gb="3.9" checked></td><td><label for="a5">Chrome — modelo on-device</label><span class="path">%LOCALAPPDATA%\Google\Chrome\User Data\OptGuideOnDeviceModel</span></td><td class="num">3,9</td><td class="mono small date">2026-09-30</td><td class="mono small">remover</td><td class="small muted">re-baixado pelo Chrome</td></tr>
+              <tr><td><input type="checkbox" id="a6" data-tier="A" data-gb="1.2" checked></td><td><label for="a6">VS Code — VSIX em cache</label><span class="path">%APPDATA%\Code\CachedExtensionVSIXs</span></td><td class="num">1,2</td><td class="mono small date">2026-10-22</td><td class="mono small">remover</td><td class="small muted">.vsix já instalados</td></tr>
+              <tr><td><input type="checkbox" id="a7" data-tier="A" data-gb="2.6" checked></td><td><label for="a7">Teams — LocalCache</label><span class="path">%LOCALAPPDATA%\Packages\MSTeams_*\LocalCache</span></td><td class="num">2,6</td><td class="mono small date">2026-10-26</td><td class="mono small">remover LocalCache</td><td><span class="pill neutral">LocalState fica</span></td></tr>
+              <tr><td><input type="checkbox" id="a8" data-tier="A" data-gb="5.3" checked></td><td><label for="a8">Windows Update — Download</label><span class="path">C:\Windows\SoftwareDistribution\Download</span></td><td class="num">5,3</td><td class="mono small date">2026-10-14</td><td class="mono small">parar wuauserv → remover</td><td><span class="pill info"><span class="dot"></span>requer admin</span></td></tr>
+              <tr><td><input type="checkbox" id="a9" data-tier="A" data-gb="2.0" checked></td><td><label for="a9">Crash dumps / WER</label><span class="path">%LOCALAPPDATA%\CrashDumps · ProgramData\Microsoft\Windows\WER</span></td><td class="num">2,0</td><td class="mono small date">2026-08-03</td><td class="mono small">remover</td><td class="small muted">só servem para depurar crash</td></tr>
+              <tr><td><input type="checkbox" id="a10" data-tier="A" data-gb="1.0" checked></td><td><label for="a10">Lixeira</label><span class="path">C:\$Recycle.Bin</span></td><td class="num">1,0</td><td class="mono small date">2026-10-21</td><td class="mono small">Clear-RecycleBin -Force</td><td class="small muted">confirmar com o usuário</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tier B -->
+      <div id="panel-B" role="tabpanel" aria-labelledby="tab-B" hidden>
+        <div class="card-head" style="margin-bottom:8px">
+          <p class="small muted">Sempre pelo desinstalador. Remover a pasta deixa registro órfão e MSI quebrado.</p>
+          <button type="button" class="btn" data-select-all="B">Marcar/desmarcar tier</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col"><span style="position:absolute;left:-9999px">Selecionar</span></th><th scope="col">Aplicativo</th><th scope="col" class="num">GB</th><th scope="col">Instalador</th><th scope="col">Evidência</th></tr></thead>
+            <tbody>
+              <tr><td><input type="checkbox" id="b1" data-tier="B" data-gb="15.35" checked></td><td><label for="b1">NVIDIA ChatRTX 0.5</label><span class="path">programa 4,20 + resíduo ProgramData\NVIDIA Corporation\ChatRTX 11,15</span></td><td class="num">15,35</td><td class="mono small">nvidia-core + AlsoRemove</td><td class="small muted">sem uso desde 2026-03</td></tr>
+              <tr><td><input type="checkbox" id="b2" data-tier="B" data-gb="2.3" checked></td><td><label for="b2">NVIDIA Nsight Compute</label><span class="path">C:\Program Files\NVIDIA Corporation\Nsight Compute</span></td><td class="num">2,30</td><td class="mono small">msi</td><td class="small muted">sem atalho usado</td></tr>
+              <tr><td><input type="checkbox" id="b3" data-tier="B" data-gb="1.9" checked></td><td><label for="b3">NVIDIA Nsight Systems</label><span class="path">C:\Program Files\NVIDIA Corporation\Nsight Systems</span></td><td class="num">1,90</td><td class="mono small">msi</td><td class="small muted">sem atalho usado</td></tr>
+              <tr><td><input type="checkbox" id="b4" data-tier="B" data-gb="3.01" checked></td><td><label for="b4">Android Studio 2025.3 Canary</label><span class="path">C:\Program Files\Android\android-studio2</span></td><td class="num">3,01</td><td class="mono small">nsis /S</td><td><span class="pill ok"><span class="dot"></span>Menu Iniciar aponta para 2024.3</span></td></tr>
+              <tr><td><input type="checkbox" id="b5" data-tier="B" data-gb="1.54" checked></td><td><label for="b5">Android Studio (cópia antiga)</label><span class="path">C:\Program Files\Android\Android Studio1</span></td><td class="num">1,54</td><td class="mono small">nsis /S</td><td class="small muted">sem atalho</td></tr>
+              <tr><td><input type="checkbox" id="b6" data-tier="B" data-gb="26.4" checked></td><td><label for="b6">MEmu</label><span class="path">C:\Program Files\Microvirt · VMs em image\</span></td><td class="num">26,40</td><td class="mono small">fabricante</td><td class="small muted">VMs saem junto</td></tr>
+              <tr><td><input type="checkbox" id="b7" data-tier="B" data-gb="6.8" checked></td><td><label for="b7">VS BuildTools 2019</label><span class="path">C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools</span></td><td class="num">6,80</td><td class="mono small">vs-installer</td><td class="small muted">instância 2022 permanece</td></tr>
+              <tr><td><input type="checkbox" id="b8" data-tier="B" data-gb="4.6" checked></td><td><label for="b8">Windows SDK 10.0.19041</label><span class="path">C:\Program Files (x86)\Windows Kits\10</span></td><td class="num">4,60</td><td class="mono small">winsdksetup /uninstall</td><td class="small muted">versão mais nova presente</td></tr>
+              <tr class="blocked"><td><input type="checkbox" id="b9" data-tier="B" data-gb="2.64" disabled></td><td><label for="b9">CUDA Toolkit 11.8</label><span class="path">C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8</span></td><td class="num">2,64</td><td class="mono small">msi</td><td><span class="pill warn"><span class="dot"></span>bloqueado: CUDA_PATH + PATH</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tier C -->
+      <div id="panel-C" role="tabpanel" aria-labelledby="tab-C" hidden>
+        <div class="card-head" style="margin-bottom:8px">
+          <p class="small muted">Diretórios regeneráveis. Custo: re-download no próximo uso.</p>
+          <button type="button" class="btn" data-select-all="C">Marcar/desmarcar tier</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col"><span style="position:absolute;left:-9999px">Selecionar</span></th><th scope="col">Item</th><th scope="col" class="num">GB</th><th scope="col">Pré-condição</th><th scope="col">Custo</th></tr></thead>
+            <tbody>
+              <tr><td><input type="checkbox" id="c1" data-tier="C" data-gb="14.2" checked></td><td><label for="c1">Gradle caches</label><span class="path">%USERPROFILE%\.gradle\caches</span></td><td class="num">14,2</td><td class="mono small">gradle --stop</td><td class="small muted">próximo build mais lento</td></tr>
+              <tr><td><input type="checkbox" id="c2" data-tier="C" data-gb="6.8" checked></td><td><label for="c2">Maven repository</label><span class="path">%USERPROFILE%\.m2\repository</span></td><td class="num">6,8</td><td class="small muted">—</td><td class="small muted">re-download no próximo mvn</td></tr>
+              <tr><td><input type="checkbox" id="c3" data-tier="C" data-gb="9.4" checked></td><td><label for="c3">Android system-images antigos</label><span class="path">%LOCALAPPDATA%\Android\Sdk\system-images</span></td><td class="num">9,4</td><td class="mono small">sdkmanager --uninstall</td><td class="small muted">só APIs sem AVD</td></tr>
+              <tr><td><input type="checkbox" id="c4" data-tier="C" data-gb="5.1" checked></td><td><label for="c4">Android NDK (2 versões antigas)</label><span class="path">%LOCALAPPDATA%\Android\Sdk\ndk</span></td><td class="num">5,1</td><td class="mono small">sdkmanager --uninstall</td><td class="small muted">versão do Gradle fica</td></tr>
+              <tr><td><input type="checkbox" id="c5" data-tier="C" data-gb="3.7" checked></td><td><label for="c5">NVIDIA NGX models</label><span class="path">C:\ProgramData\NVIDIA\NGX\models</span></td><td class="num">3,7</td><td class="small muted">—</td><td class="small muted">re-baixado pela NVIDIA App</td></tr>
+              <tr><td><input type="checkbox" id="c6" data-tier="C" data-gb="4.9" checked></td><td><label for="c6">NVIDIA App — UpdateFramework</label><span class="path">C:\ProgramData\NVIDIA Corporation\NVIDIA app\UpdateFramework</span></td><td class="num">4,9</td><td class="small muted">—</td><td class="small muted">payloads de driver antigos</td></tr>
+              <tr><td><input type="checkbox" id="c7" data-tier="C" data-gb="5.5" checked></td><td><label for="c7">HuggingFace cache</label><span class="path">%USERPROFILE%\.cache\huggingface</span></td><td class="num">5,5</td><td class="small muted">—</td><td class="small muted">modelos re-baixados sob demanda</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tier D -->
+      <div id="panel-D" role="tabpanel" aria-labelledby="tab-D" hidden>
+        <div class="card-head" style="margin-bottom:8px">
+          <p class="small muted">Operações de sistema. Última etapa; podem levar 10+ minutos.</p>
+          <button type="button" class="btn" data-select-all="D">Marcar/desmarcar tier</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col"><span style="position:absolute;left:-9999px">Selecionar</span></th><th scope="col">Operação</th><th scope="col" class="num">GB</th><th scope="col">Comando</th><th scope="col">Observação</th></tr></thead>
+            <tbody>
+              <tr><td><input type="checkbox" id="d1" data-tier="D" data-gb="5.3" checked></td><td><label for="d1">Limpeza do component store</label><span class="path">C:\Windows\WinSxS</span></td><td class="num">5,3</td><td class="mono small">DISM /Online /Cleanup-Image /StartComponentCleanup</td><td><span class="pill info"><span class="dot"></span>requer admin</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small muted" style="margin-top:10px">Estimativa vinda do <span class="mono">/AnalyzeComponentStore</span>. <span class="mono">/ResetBase</span> não é oferecido: é irreversível para atualizações instaladas.</p>
+      </div>
+
+      <!-- Exclusões -->
+      <div id="panel-X" role="tabpanel" aria-labelledby="tab-X" hidden>
+        <p class="small muted" style="margin-bottom:8px">Nunca entram no plano, mesmo com “limpar tudo”.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">Caminho</th><th scope="col">Motivo</th></tr></thead>
+            <tbody>
+              <tr><td class="mono small">C:\Windows\Installer</td><td class="small">Cache do MSI; sem ele a desinstalação quebra</td></tr>
+              <tr><td class="mono small">C:\Windows\WinSxS</td><td class="small">Só via DISM (tier D)</td></tr>
+              <tr><td class="mono small">C:\ProgramData\Package Cache</td><td class="small">Instaladores usados para desinstalar</td></tr>
+              <tr><td class="mono small">C:\Program Files\WindowsApps</td><td class="small">Gerenciado só pela Store</td></tr>
+              <tr><td class="mono small">C:\pagefile.sys</td><td class="small">Ajuste só com medição de RAM/commit</td></tr>
+              <tr><td class="mono small">%LOCALAPPDATA%\Packages\*\LocalState</td><td class="small">Dado do app, não cache</td></tr>
+              <tr><td class="mono small">C:\Windows\System32\DriverStore</td><td class="small">Driver store</td></tr>
+              <tr><td class="mono small">OneDrive* · *Google Drive*</td><td class="small">Liberar pelo cliente de nuvem, nunca remover</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <aside style="display:flex;flex-direction:column;gap:16px">
+      <section class="card" aria-label="Seleção">
+        <h2>Seleção</h2>
+        <div class="kv"><span class="tier tA"><span class="sq"></span>A · Cache</span><span><span class="small muted" data-cnt="A"></span> · <span class="num" data-sum="A"></span></span></div>
+        <div class="kv"><span class="tier tB"><span class="sq"></span>B · Desinstalar</span><span><span class="small muted" data-cnt="B"></span> · <span class="num" data-sum="B"></span></span></div>
+        <div class="kv"><span class="tier tC"><span class="sq"></span>C · Regeneráveis</span><span><span class="small muted" data-cnt="C"></span> · <span class="num" data-sum="C"></span></span></div>
+        <div class="kv"><span class="tier tD"><span class="sq"></span>D · Sistema</span><span><span class="small muted" data-cnt="D"></span> · <span class="num" data-sum="D"></span></span></div>
+        <div class="divider"></div>
+        <div class="kv" style="font-weight:600"><span>Total estimado</span><span class="num" style="font-size:18px" data-sum="total"></span></div>
+        <span class="small muted" data-sum="count"></span>
+        <a class="btn btn-primary btn-lg" href="03-plano.html">Montar plano</a>
+      </section>
+
+      <section class="card" aria-label="Verificações">
+        <h2>Verificações automáticas</h2>
+        <ul class="checklist">
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="warn" aria-hidden="true"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>
+            <div><strong>CUDA 11.8 bloqueado.</strong> <span class="muted">CUDA_PATH aponta para ele e <span class="mono">v11.8\bin</span> está no PATH.</span></div></li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="ok" aria-hidden="true"><path d="M5 12l4 4 10-10"/></svg>
+            <div><strong>Android Studio 2024.3 mantido.</strong> <span class="muted">Atalho do Menu Iniciar → <span class="mono">Android Studio\bin\studio64.exe</span>.</span></div></li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="muted" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg>
+            <div><strong>Steam downloading não classificado.</strong> <span class="muted">82,44 GB → 0 GB entre varreduras: download concluído, não resíduo.</span></div></li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="muted" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg>
+            <div><strong>Jogos fora do plano.</strong> <span class="muted">Decisão do usuário na etapa 3.</span></div></li>
+        </ul>
+      </section>
+    </aside>
+  </div>
+
+</div>
+</main>
+</div>
+</body>
+</html>

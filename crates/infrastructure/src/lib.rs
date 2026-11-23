@@ -12,9 +12,9 @@ mod volume;
 mod walker;
 
 pub use allocated::allocated_size;
-pub use catalog::TomlCatalogRepository;
+pub use catalog::{catalog_for, TomlCatalogRepository};
 pub use env::SnapshotEnvironment;
-pub use exclusions::platform_exclusions;
+pub use exclusions::exclusions_for;
 pub use inspector::WalkerPathInspector;
 pub use plan_json::SkillPlanJsonCodec;
 pub use progress::SilentProgress;

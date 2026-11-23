@@ -1,7 +1,7 @@
 use std::fmt;
 
 use disk_cleanup_domain::{
-    Action, Availability, ByteSize, Candidate, ExclusionList, ToolchainGuard,
+    Action, Availability, ByteSize, Candidate, ExclusionList, LocalizedText, ToolchainGuard,
 };
 
 use crate::{
@@ -15,7 +15,7 @@ pub enum SkipReason {
     NotFound(String),
     Empty,
     UnresolvedVariable(String),
-    Excluded(String),
+    Excluded(LocalizedText),
     Unmeasurable(String),
 }
 
@@ -25,7 +25,7 @@ impl fmt::Display for SkipReason {
             SkipReason::NotFound(p) => write!(f, "caminho não existe: {p}"),
             SkipReason::Empty => write!(f, "vazio"),
             SkipReason::UnresolvedVariable(v) => write!(f, "variável de ambiente ausente: {v}"),
-            SkipReason::Excluded(r) => write!(f, "excluído: {r}"),
+            SkipReason::Excluded(r) => write!(f, "excluído: {}", r.pt),
             SkipReason::Unmeasurable(e) => write!(f, "não foi possível medir: {e}"),
         }
     }
@@ -77,12 +77,23 @@ impl<'a> ClassifyService<'a> {
     }
 
     /// `baseline`: exclusões obrigatórias da plataforma (definidas na composição).
-    pub fn run(&self, baseline: ExclusionList) -> Result<ClassificationReport, AppError> {
+    /// `extra`: pastas que o usuário protegeu nas Configurações — só somam.
+    pub fn run(
+        &self,
+        baseline: ExclusionList,
+        extra: &[String],
+    ) -> Result<ClassificationReport, AppError> {
         let catalog = self.catalog.load()?;
+        let settings = LocalizedText::new("excluída nas Configurações", "excluded in Settings");
+        let baseline = extra
+            .iter()
+            .map(|p| p.trim())
+            .filter(|p| !p.is_empty())
+            .fold(baseline, |list, p| list.with(p, settings.clone()));
         let exclusions = catalog.exclusions.iter().fold(baseline, |list, ex| {
             let pattern =
                 expand_template(&ex.pattern, self.env).unwrap_or_else(|_| ex.pattern.clone());
-            list.with(&pattern, &ex.reason)
+            list.with(&pattern, ex.reason.clone())
         });
         let guard = ToolchainGuard::new(self.env.vars(), self.env.path_entries());
 

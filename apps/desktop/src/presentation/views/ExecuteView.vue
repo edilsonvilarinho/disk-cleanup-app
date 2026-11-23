@@ -2,31 +2,36 @@
 import { computed, onMounted } from 'vue'
 import { useExecutionStore } from '../../application/stores/execution'
 import { usePlanStore } from '../../application/stores/plan'
-import { formatGb, formatSignedGb } from '../../domain/format'
-import type { ItemStatus, Tier } from '../../domain/models'
-import { TIER_LABEL } from '../../domain/selection'
+import type { ItemResultDto, ItemStatus, Tier } from '../../domain/models'
 import TierBadge from '../components/TierBadge.vue'
+import { useI18n } from '../i18n'
 
 const plan = usePlanStore()
 const exec = useExecutionStore()
+const { t, txt, err, gb, num, signedGb } = useI18n()
 const approval = computed(() => plan.approval)
 const current = computed(() => exec.nextTier)
 const steps = computed(() => (current.value ? (exec.previews[current.value] ?? []) : []))
 const estimate = computed(() => steps.value.reduce((sum, s) => sum + s.estimatedBytes, 0))
 const runningSteps = computed(() => (exec.running ? (exec.previews[exec.running] ?? []) : []))
 
-const TONE: Record<ItemStatus, string> = { ok: 'ok', parcial: 'warn', pulado: 'neutral', erro: 'err' }
+const TONE: Record<ItemStatus, string> = { ok: 'ok', partial: 'warn', skipped: 'neutral', failed: 'err' }
 
 function stageLabel(tier: Tier): string {
-  if (exec.runs[tier]) return 'Concluído'
-  if (exec.running === tier) return 'Executando'
-  return tier === current.value ? 'Próximo' : 'Aguardando'
+  if (exec.runs[tier]) return t('execute.stageDone')
+  if (exec.running === tier) return t('execute.stageRunning')
+  return tier === current.value ? t('execute.stageNext') : t('execute.stageWaiting')
 }
 
 function liveLabel(id: string): string {
   const live = exec.live[id]
-  if (live === undefined) return 'na fila'
-  return live === 'running' ? 'rodando' : live.status
+  if (live === undefined) return t('execute.liveQueued')
+  return live === 'running' ? t('execute.liveRunning') : t(`status.${live.status}`)
+}
+
+function causeText(item: ItemResultDto): string {
+  if (!item.cause) return ''
+  return t(`cause.${item.cause.code}`, { detail: item.cause.detail ?? '', exitCode: item.cause.exitCode ?? '?' })
 }
 
 async function previewNext() {
@@ -49,85 +54,85 @@ onMounted(async () => {
 <template>
   <header class="page-head">
     <div class="titles">
-      <span class="label-caps">Etapa 4 de 5 · execução</span>
-      <h1>Execução por tier</h1>
+      <span class="label-caps">{{ t('execute.eyebrow') }}</span>
+      <h1>{{ t('execute.title') }}</h1>
     </div>
   </header>
 
   <div v-if="!approval" class="card empty" data-test="execute-empty">
-    <h2>Nenhum plano aprovado</h2>
-    <p class="muted">Aprove o plano antes de executar. Só os tiers aprovados podem rodar, um de cada vez.</p>
-    <RouterLink class="btn btn-primary" to="/plano">Ir para o Plano</RouterLink>
+    <h2>{{ t('execute.emptyTitle') }}</h2>
+    <p class="muted">{{ t('execute.emptyBody') }}</p>
+    <RouterLink class="btn btn-primary" to="/plano">{{ t('execute.toPlan') }}</RouterLink>
   </div>
 
   <template v-else>
-    <div class="note warn-note" role="note">
-      <span>Remoção é irreversível. Cada tier roda separado e mede o espaço livre antes e depois de cada item; item travado não aborta o tier.</span>
-    </div>
+    <div class="note warn-note" role="note"><span>{{ t('execute.warning') }}</span></div>
     <div v-if="exec.error" class="note warn-note" role="alert" data-test="execute-error">
-      <span>{{ exec.error }}</span>
+      <span>{{ err(exec.error) }}</span>
     </div>
 
-    <section class="stepper" aria-label="Progresso por tier">
+    <section class="stepper" aria-label="Tiers">
       <div v-for="tier in exec.tiers" :key="tier" class="stage" :class="{ active: tier === current }" data-test="stage">
         <div class="row">
           <TierBadge :tier="tier" />
           <span class="pill" :class="exec.runs[tier] ? 'ok' : 'neutral'">{{ stageLabel(tier) }}</span>
         </div>
-        <span v-if="exec.runs[tier]" class="num" style="text-align: left; font-size: 20px">{{ formatSignedGb(exec.runs[tier]!.freedBytes) }}</span>
+        <span v-if="exec.runs[tier]" class="num" style="text-align: left; font-size: 20px">{{ signedGb(exec.runs[tier]!.freedBytes) }}</span>
       </div>
     </section>
 
     <section v-if="exec.running" class="card" role="status" aria-live="polite" data-test="running">
-      <h2>Executando tier {{ exec.running }} · {{ TIER_LABEL[exec.running] }}</h2>
-      <ul class="checklist small">
-        <li v-for="s in runningSteps" :key="s.id"><span class="mono">{{ liveLabel(s.id) }}</span><span>{{ s.label }}</span></li>
-      </ul>
+      <h2>{{ t('execute.running', { tier: exec.running, label: t(`tier.${exec.running}`) }) }}</h2>
+      <TransitionGroup tag="ul" name="list" class="checklist small">
+        <li v-for="s in runningSteps" :key="s.id"><span class="mono">{{ liveLabel(s.id) }}</span><span>{{ txt(s.label) }}</span></li>
+      </TransitionGroup>
     </section>
 
     <section v-else-if="current" class="card" :aria-label="`Tier ${current}`">
       <div class="card-head">
-        <h2>Tier {{ current }} · {{ TIER_LABEL[current] }} — dry-run</h2>
-        <span class="small muted">nada foi alterado ainda</span>
+        <h2>{{ t('execute.dryRun', { tier: current, label: t(`tier.${current}`) }) }}</h2>
+        <span class="small muted">{{ t('execute.nothingYet') }}</span>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th scope="col">Item</th><th scope="col">Tipo</th><th scope="col" class="num">GB previsto</th></tr></thead>
+          <thead><tr><th scope="col">{{ t('classify.item') }}</th><th scope="col">{{ t('plan.type') }}</th><th scope="col" class="num">{{ t('execute.planned') }}</th></tr></thead>
           <tbody>
             <tr v-for="s in steps" :key="s.id" data-test="step">
-              <td>{{ s.label }}<span class="path">{{ s.target }}</span></td>
+              <td>{{ txt(s.label) }}<span class="path">{{ s.target }}</span></td>
               <td class="mono small">{{ s.kind }}</td>
-              <td class="num">{{ formatGb(s.estimatedBytes).replace(' GB', '') }}</td>
+              <td class="num">{{ num(s.estimatedBytes) }}</td>
             </tr>
           </tbody>
         </table>
       </div>
-      <div v-if="exec.confirming === current" class="inset" data-test="confirm" style="flex-wrap: wrap">
-        <span>Executar o tier {{ current }} remove {{ steps.length }} itens (~{{ formatGb(estimate) }}). Esta ação não pode ser desfeita.</span>
+      <Transition name="fade" mode="out-in">
+      <div v-if="exec.confirming === current" key="confirm" class="inset" data-test="confirm" style="flex-wrap: wrap">
+        <span>{{ t('execute.confirm', { tier: current, n: steps.length, size: gb(estimate) }) }}</span>
         <div class="actions">
-          <button type="button" class="btn" data-test="cancel" @click="exec.cancel()">Cancelar</button>
-          <button type="button" class="btn btn-primary btn-danger" data-test="confirm-execute" @click="run(current)">Confirmar e executar</button>
+          <button type="button" class="btn" data-test="cancel" @click="exec.cancel()">{{ t('execute.cancel') }}</button>
+          <button type="button" class="btn btn-primary btn-danger" data-test="confirm-execute" @click="run(current)">{{ t('execute.confirmRun') }}</button>
         </div>
       </div>
-      <div v-else class="actions">
-        <button type="button" class="btn btn-primary btn-lg" data-test="execute" @click="exec.request(current)">Executar tier {{ current }}</button>
+      <div v-else key="actions" class="actions">
+        <button type="button" class="btn btn-primary btn-lg" data-test="execute" @click="exec.request(current)">{{ t('execute.run', { tier: current }) }}</button>
       </div>
+      </Transition>
     </section>
 
     <template v-for="tier in exec.tiers" :key="`run-${tier}`">
-      <section v-if="exec.runs[tier]" class="card" :aria-label="`Resultado do tier ${tier}`">
+      <section v-if="exec.runs[tier]" class="card" :aria-label="t('execute.result', { tier })">
         <div class="card-head">
-          <h2>Tier {{ tier }} · resultado</h2>
-          <span class="small muted">{{ formatGb(exec.runs[tier]!.freeBeforeBytes) }} → {{ formatGb(exec.runs[tier]!.freeAfterBytes) }} livres</span>
+          <h2>{{ t('execute.result', { tier }) }}</h2>
+          <span class="small muted">{{ t('execute.freeRange', { before: gb(exec.runs[tier]!.freeBeforeBytes), after: gb(exec.runs[tier]!.freeAfterBytes) }) }}</span>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th scope="col">Status</th><th scope="col">Item</th><th scope="col" class="num">Δ livre</th></tr></thead>
+            <thead><tr><th scope="col">{{ t('execute.status') }}</th><th scope="col">{{ t('classify.item') }}</th><th scope="col" class="num">{{ t('execute.delta') }}</th></tr></thead>
             <tbody>
               <tr v-for="item in exec.runs[tier]!.items" :key="item.id" data-test="result">
-                <td><span class="pill" :class="TONE[item.status]"><span class="dot" />{{ item.status }}</span></td>
-                <td>{{ item.label }}<span v-if="item.detail" class="path">{{ item.detail }}</span></td>
-                <td class="num">{{ formatSignedGb(item.freedBytes) }}</td>
+                <td><span class="pill" :class="TONE[item.status]"><span class="dot" />{{ t(`status.${item.status}`) }}</span></td>
+                <td>{{ txt(item.label) }}<span v-if="item.cause" class="path">{{ causeText(item) }}</span></td>
+                <td class="num">{{ signedGb(item.freedBytes) }}</td>
               </tr>
             </tbody>
           </table>
@@ -136,8 +141,8 @@ onMounted(async () => {
     </template>
 
     <div v-if="exec.finished" class="footer-actions">
-      <span data-test="total-freed">Liberado nesta execução: <strong class="num">{{ formatSignedGb(exec.totalFreed) }}</strong></span>
-      <RouterLink class="btn btn-primary btn-lg" to="/relatorio" data-test="to-report">Ver relatório</RouterLink>
+      <span data-test="total-freed">{{ t('execute.total') }} <strong class="num">{{ signedGb(exec.totalFreed) }}</strong></span>
+      <RouterLink class="btn btn-primary btn-lg" to="/relatorio" data-test="to-report">{{ t('execute.toReport') }}</RouterLink>
     </div>
   </template>
 </template>

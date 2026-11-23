@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import type { ItemResultDto, StepDto, Tier, TierRunDto } from '../../domain/models'
-import { messageOf } from '../gateway'
+import { errorInfo, type ErrorInfo } from '../../i18n/i18n'
 
 /** Execução tier a tier: dry-run, confirmação explícita, eventos ao vivo. */
 export const useExecutionStore = defineStore('execution', {
@@ -11,7 +11,7 @@ export const useExecutionStore = defineStore('execution', {
     live: {} as Record<string, ItemResultDto | 'running'>,
     confirming: null as Tier | null,
     running: null as Tier | null,
-    error: null as string | null,
+    error: null as ErrorInfo | null,
   }),
   getters: {
     nextTier: (state): Tier | null => state.tiers.find((t) => !state.runs[t]) ?? null,
@@ -34,7 +34,7 @@ export const useExecutionStore = defineStore('execution', {
       try {
         this.previews[tier] = await this.gateway.previewTier(tier)
       } catch (e) {
-        this.error = messageOf(e)
+        this.error = errorInfo(e)
       }
     },
     request(tier: Tier) {
@@ -54,7 +54,7 @@ export const useExecutionStore = defineStore('execution', {
           this.live[event.id] = event.kind === 'started' || !event.result ? 'running' : event.result
         })
       } catch (e) {
-        this.error = messageOf(e)
+        this.error = errorInfo(e)
       } finally {
         this.running = null
       }

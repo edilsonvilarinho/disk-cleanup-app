@@ -1,9 +1,20 @@
 // Contratos com o núcleo Rust (DTOs camelCase de src-tauri/src/dto.rs).
+// Textos vêm em `{pt, en}`; motivos vêm como código + detalhe, traduzidos na UI.
 
 export type Tier = 'A' | 'B' | 'C' | 'D'
 export type Risk = 'none' | 'low' | 'redownload' | 'long-running'
 export type Health = 'healthy' | 'warning' | 'critical'
 export type ActionKind = 'path' | 'command' | 'uninstall'
+
+export interface TextDto {
+  pt: string
+  en: string
+}
+
+export interface ErrorDto {
+  code: string
+  params: Record<string, string>
+}
 
 export interface SystemInfoDto {
   os: string
@@ -48,26 +59,35 @@ export interface ScanProgressDto {
   logicalBytes: number
 }
 
+export interface BlockDto {
+  code: 'env_var' | 'path_entry'
+  value: string
+}
+
 export interface CandidateDto {
   id: string
-  label: string
+  label: TextDto
   tier: Tier
   kind: ActionKind
   target: string
   sizeBytes: number
   risk: Risk
-  note: string
-  blockedReason: string | null
+  note: TextDto
+  blocked: BlockDto | null
 }
+
+export type SkipCode = 'not_found' | 'empty' | 'unresolved_variable' | 'excluded' | 'unmeasurable'
 
 export interface SkippedDto {
   id: string
-  reason: string
+  code: SkipCode
+  detail: string | null
+  reason: TextDto | null
 }
 
 export interface ExclusionDto {
   pattern: string
-  reason: string
+  reason: TextDto
 }
 
 export interface ClassificationDto {
@@ -98,24 +118,40 @@ export interface ApprovalDto {
 
 export interface StepDto {
   id: string
-  label: string
+  label: TextDto
   tier: Tier
   kind: ActionKind
   target: string
   estimatedBytes: number
 }
 
-export type ItemStatus = 'ok' | 'parcial' | 'pulado' | 'erro'
+export type ItemStatus = 'ok' | 'partial' | 'skipped' | 'failed'
+
+export type CauseCode =
+  | 'partial_os'
+  | 'partial_locked'
+  | 'missing'
+  | 'too_broad'
+  | 'protected'
+  | 'uninstall_unsupported'
+  | 'io'
+  | 'exit'
+
+export interface CauseDto {
+  code: CauseCode
+  detail: string | null
+  exitCode: number | null
+}
 
 export interface ItemResultDto {
   id: string
-  label: string
+  label: TextDto
   tier: Tier
   estimatedBytes: number
   /** Espaço livre ganho; negativo se o volume encheu durante o item. */
   freedBytes: number
   status: ItemStatus
-  detail: string | null
+  cause: CauseDto | null
 }
 
 export interface TierRunDto {

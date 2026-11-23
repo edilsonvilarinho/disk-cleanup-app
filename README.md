@@ -80,6 +80,21 @@ per tier, lists divergences and pending items, and copies as Markdown.
 <tr>
 <td width="50%" valign="middle">
 
+### Settings and languages
+
+English and Portuguese across the whole app — including the reasons and errors that come from the
+Rust core, which now speaks in codes the UI translates. **Automatic** follows the system language.
+Theme follows the system or stays light/dark, extra folders can be protected on top of the mandatory
+exclusions, and the default scan depth is remembered.
+
+</td>
+<td width="50%">
+  <img src="docs/assets/readme/settings.gif" alt="Switching the language to English, the theme to light and adding an extra excluded folder" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
 ### Light and dark
 
 A neutral, professional look in both themes. It follows the system preference and remembers your
@@ -96,8 +111,8 @@ choice.
 ### Tested by design
 
 Clean architecture in Rust (domain → application → infrastructure) and Vue, built test-first.
-Coverage gates fail the build below 95%: today the Rust core sits at 98% of lines and the UI at
-100%.
+Coverage gates fail the build below 95%: today the Rust core sits at 98.9% of lines (91 tests) and
+the UI at 100% of lines (90 tests).
 
 </td>
 <td width="50%">
@@ -111,12 +126,15 @@ Coverage gates fail the build below 95%: today the Rust core sits at 98% of line
 | Step | State |
 |---|---|
 | 1. Survey | done |
-| 2. Classification | done (Windows catalog, tiers A and C) |
+| 2. Classification | done — catalogs for Windows, Linux and macOS (tiers A and C) |
 | 3. Plan and approval | done — `plan.json` in the format of the `disk-cleanup` skill |
 | 4. Execution | done — paths and commands; uninstallers (tier B), DISM and an elevated helper are next |
 | 5. Report | done — copies as Markdown |
 
-The user interface is in Brazilian Portuguese for now.
+Each OS has its own bundled catalog (`catalog/windows.toml`, `linux.toml`, `macos.toml`) and its own
+mandatory exclusions (system folders, package databases, keychains, iCloud Drive, device backups).
+The Linux and macOS catalogs follow the platforms' documented paths and still need validation on real
+machines.
 
 ## Install
 

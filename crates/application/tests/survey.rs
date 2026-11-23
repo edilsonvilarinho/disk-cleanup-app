@@ -104,10 +104,7 @@ fn survey_rejects_invalid_depth_and_propagates_port_errors() {
     let err = SurveyService::new(&walker(), &volume(10, 1), &progress)
         .run(&request(3))
         .unwrap_err();
-    assert_eq!(
-        err,
-        AppError::InvalidRequest("profundidade deve ser 1 ou 2 (recebido 3)".into())
-    );
+    assert_eq!(err, AppError::InvalidDepth(3));
 
     let failing_volume = FakeVolume(Err(PortError::NotFound("Z:".into())));
     let err = SurveyService::new(&walker(), &failing_volume, &progress)

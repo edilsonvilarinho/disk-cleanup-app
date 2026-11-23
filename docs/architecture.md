@@ -57,6 +57,24 @@ ele é substituído por um fake.
 8. A sessão desktop executa cada tier uma única vez por aprovação; remontar o plano descarta aprovação
    e execuções.
 
+## Idioma, erros e plataformas
+
+- O núcleo **não formata frase**: textos de dado (catálogo, exclusões) são `LocalizedText {pt, en}`;
+  motivos são enums (`BlockReason`, `SkipCause`, `FailCause`, `SafetyViolation`); erros saem pelo
+  Tauri como `ErrorDto {code, params}`. A interface traduz (`src/i18n`), com `en` tipado por `pt`.
+- Idioma **Automático** = primeiro idioma do sistema (`navigator.languages`, que segue o SO).
+- Catálogo e exclusões obrigatórias são escolhidos em tempo de execução por `std::env::consts::OS`
+  (`catalog_for`, `exclusions_for`): os três sistemas são testados em qualquer máquina.
+
+## Vue — produção, performance, segurança e movimento
+
+- Flags do build declaradas (`__VUE_PROD_DEVTOOLS__` etc.) e `app.config.errorHandler`.
+- Telas fora da inicial carregam sob demanda; relatórios do núcleo são `markRaw` (imutáveis, só a
+  raiz é trocada); props de lista estáveis via `computed`.
+- Sem `v-html`; caminhos do usuário só como texto; CSP sem domínios externos.
+- `<Transition>` na troca de tela, `<TransitionGroup>` com `*-move` nas listas, barras e cartões
+  animados em CSS; tudo desligado com `prefers-reduced-motion`.
+
 ## Próximo passo
 
 Tier B (desinstaladores via registro: MSI/NSIS/Inno/VS), DISM, helper elevado (UAC/polkit), Temp com

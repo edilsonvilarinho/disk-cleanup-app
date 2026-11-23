@@ -1,7 +1,7 @@
 //! Catálogo: dados (não código) que descrevem onde procurar candidatos.
 //! Caminhos aceitam `%VAR%`, `${VAR}` e `~`.
 
-use disk_cleanup_domain::{Risk, Tier};
+use disk_cleanup_domain::{LocalizedText, Risk, Tier};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuleTarget {
@@ -24,10 +24,10 @@ impl RuleTarget {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogRule {
     pub id: String,
-    pub label: String,
+    pub label: LocalizedText,
     pub tier: Tier,
     pub risk: Risk,
-    pub note: String,
+    pub note: LocalizedText,
     pub target: RuleTarget,
     /// Variáveis de ambiente que, apontando para o alvo, o bloqueiam.
     pub watch_env: Vec<String>,
@@ -36,7 +36,7 @@ pub struct CatalogRule {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogExclusion {
     pub pattern: String,
-    pub reason: String,
+    pub reason: LocalizedText,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

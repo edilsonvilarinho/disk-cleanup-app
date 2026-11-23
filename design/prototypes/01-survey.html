@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disk Cleanup — 1 · Survey</title>
+<script>(function(){var t;try{t=localStorage.getItem('dc-theme')}catch(e){}if(!t)t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t)})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="assets/app.css">
+<script src="assets/app.js" defer></script>
+</head>
+<body data-page="survey" data-mode="ro">
+<div class="layout">
+<aside id="sidebar" class="sidebar"></aside>
+<main class="main">
+<div class="container">
+
+  <header class="page-head">
+    <div class="titles">
+      <span class="label-caps">Etapa 1 de 5 · somente leitura</span>
+      <h1>Survey do volume</h1>
+    </div>
+    <div class="actions">
+      <label for="vol" class="muted">Volume</label>
+      <select id="vol" class="select">
+        <option>C:\ — 953,0 GB · NTFS</option>
+        <option>D:\ — Dados</option>
+      </select>
+      <button type="button" class="btn">Exportar JSON</button>
+      <button type="button" class="btn btn-primary">Nova varredura</button>
+    </div>
+  </header>
+
+  <div class="note" role="note">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg>
+    <span>Dados de exemplo, baseados no caso documentado na skill (volume de 953 GB, 155 GB recuperados).</span>
+  </div>
+
+  <section class="kpis" aria-label="Resumo do volume">
+    <div class="kpi"><span class="small muted">Usado</span><span class="value">891,4 GB</span><span class="small muted">de 953,0 GB</span></div>
+    <div class="kpi"><span class="small muted">Livre</span><span class="value">61,6 GB</span><span class="pill err"><span class="dot"></span>Crítico · 6,5% livre</span></div>
+    <div class="kpi"><span class="small muted">Recuperável estimado</span><span class="value">155,0 GB</span><span class="small muted">27 candidatos em 4 tiers</span></div>
+    <div class="kpi"><span class="small muted">Varredura</span><span class="value text">Concluída · 2 níveis</span><span class="small muted mono">out/survey.json</span></div>
+  </section>
+
+  <section class="card" aria-label="Ocupação">
+    <div class="card-head"><h2>Ocupação do C:\</h2><span class="num">93,5%</span></div>
+    <div class="meter" role="img" aria-label="93,5% do volume ocupado"><span style="width:93.5%"></span></div>
+  </section>
+
+  <div class="grid-2">
+    <section class="card">
+      <div class="card-head"><h2>Por raiz do volume</h2><span class="small muted">GB lógico</span></div>
+      <div class="barlist">
+        <div class="bar-row"><span class="name">Users</span><div class="track"><span style="width:100%"></span></div><span class="num">412,6</span></div>
+        <div class="bar-row"><span class="name">Program Files</span><div class="track"><span style="width:38.4%"></span></div><span class="num">158,3</span></div>
+        <div class="bar-row"><span class="name">ProgramData</span><div class="track"><span style="width:23.4%"></span></div><span class="num">96,4</span></div>
+        <div class="bar-row"><span class="name">Program Files (x86)</span><div class="track"><span style="width:22.3%"></span></div><span class="num">92,1</span></div>
+        <div class="bar-row"><span class="name">Windows</span><div class="track"><span style="width:9.4%"></span></div><span class="num">38,9</span></div>
+        <div class="bar-row"><span class="name">pagefile.sys</span><div class="track"><span style="width:5.8%"></span></div><span class="num">24,0</span></div>
+        <div class="bar-row"><span class="name">hiberfil.sys</span><div class="track"><span style="width:3.1%"></span></div><span class="num">12,7</span></div>
+        <div class="bar-row muted-row"><span class="name muted">não atribuído*</span><div class="track"><span style="width:13.7%"></span></div><span class="num">56,4</span></div>
+      </div>
+      <p class="small muted">* Totais por raiz são conservadores: a varredura não desce em pastas de nuvem com placeholder (ver tabela de nuvem).</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Perfil do usuário</h2><span class="small muted mono">%USERPROFILE%</span></div>
+      <div class="barlist">
+        <div class="bar-row"><span class="name">AppData</span><div class="track"><span style="width:100%"></span></div><span class="num">186,4</span></div>
+        <div class="bar-row"><span class="name">workspace</span><div class="track"><span style="width:24%"></span></div><span class="num">44,7</span></div>
+        <div class="bar-row"><span class="name">Downloads</span><div class="track"><span style="width:20.7%"></span></div><span class="num">38,5</span></div>
+        <div class="bar-row"><span class="name">.gradle</span><div class="track"><span style="width:7.6%"></span></div><span class="num">14,2</span></div>
+        <div class="bar-row"><span class="name">.cache</span><div class="track"><span style="width:6.6%"></span></div><span class="num">12,3</span></div>
+        <div class="bar-row"><span class="name">Documents</span><div class="track"><span style="width:5.2%"></span></div><span class="num">9,6</span></div>
+        <div class="bar-row"><span class="name">.m2</span><div class="track"><span style="width:3.6%"></span></div><span class="num">6,8</span></div>
+      </div>
+      <p class="small muted">AppData concentra caches de npm, pip, NVIDIA, Chrome e LocalCache de apps UWP.</p>
+    </section>
+  </div>
+
+  <div class="grid-2">
+    <section class="card">
+      <h2>Pastas de nuvem: lógico × real</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Pasta</th><th scope="col" class="num">Lógico</th><th scope="col" class="num">Real</th><th scope="col" class="num">Placeholder</th></tr></thead>
+          <tbody>
+            <tr><td>OneDrive - Empresa</td><td class="num">60,0</td><td class="num" style="font-weight:600">9,1</td><td class="num muted">50,9</td></tr>
+            <tr><td>Google Drive</td><td class="num">161,0</td><td class="num" style="font-weight:600">0,8</td><td class="num muted">160,2</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted">Use a coluna Real. Espaço de nuvem se libera pelo cliente (“liberar espaço”), nunca por remoção.</p>
+    </section>
+
+    <section class="card">
+      <h2>Bloat de agentes</h2>
+      <div class="inset">
+        <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-weight:600">opencode.db</span><span class="small muted mono">tabela event: 7,94 GB · freelist 0</span></div>
+        <span class="num" style="font-size:15px">8,24 GB</span>
+      </div>
+      <div class="inset">
+        <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-weight:600">Transcripts do Claude Code</span><span class="small muted mono">~/.claude*/projects · 3 contas</span></div>
+        <span class="num" style="font-size:15px">3,0 GB</span>
+      </div>
+      <p class="small muted">Histórico de conversa: exclusão padrão. Entra no plano só a pedido explícito, e nunca a sessão ativa.</p>
+    </section>
+  </div>
+
+  <div class="footer-actions">
+    <span class="small muted">Varredura única do volume · resultados agregados no núcleo, nunca listagem bruta na UI.</span>
+    <a class="btn btn-primary btn-lg" href="02-classificacao.html">Classificar candidatos
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+  </div>
+
+</div>
+</main>
+</div>
+</body>
+</html>

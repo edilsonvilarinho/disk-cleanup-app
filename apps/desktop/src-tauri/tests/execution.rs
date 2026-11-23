@@ -5,10 +5,13 @@ use disk_cleanup_application::{
     PathInspector, PortError, RemovalOutcome, RuleTarget, VolumeInfo,
 };
 use disk_cleanup_desktop_lib::{
-    approve_plan, build_plan, classify, execute_tier, preview_tier, report, CallbackExecution,
-    ExecutionEventDto, Session,
+    approve_plan, build_plan, classify, execute_tier, preview_tier, report, safety_guard,
+    CallbackExecution, ExecutionEventDto, ItemResultDto, Session,
 };
-use disk_cleanup_domain::{ByteSize, ExclusionList, Risk, SafetyGuard, Tier, VolumeUsage};
+use disk_cleanup_domain::{
+    ByteSize, ExclusionList, FailCause, ItemResult, ItemStatus, LocalizedText, Risk, SafetyGuard,
+    SafetyViolation, SkipCause, Tier, VolumeUsage,
+};
 use disk_cleanup_infrastructure::{SkillPlanJsonCodec, SnapshotEnvironment};
 
 struct Volume(RefCell<u64>);
@@ -64,10 +67,10 @@ impl CatalogRepository for Catalogue {
     fn load(&self) -> Result<Catalog, PortError> {
         let rule = |id: &str, tier, target| CatalogRule {
             id: id.into(),
-            label: id.into(),
+            label: LocalizedText::same(id),
             tier,
             risk: Risk::None,
-            note: String::new(),
+            note: LocalizedText::default(),
             target,
             watch_env: vec!["CUDA_PATH".into()],
         };
@@ -88,7 +91,7 @@ impl CatalogRepository for Catalogue {
             ],
             exclusions: vec![CatalogExclusion {
                 pattern: r"C:\Windows\Installer".into(),
-                reason: "msi".into(),
+                reason: LocalizedText::new("msi", "msi cache"),
             }],
         })
     }
@@ -103,6 +106,7 @@ fn prepared() -> Session {
         &env,
         &Inspector,
         ExclusionList::default(),
+        &[],
     )
     .unwrap();
     build_plan(
@@ -117,25 +121,33 @@ fn prepared() -> Session {
 
 #[test]
 fn approval_requires_a_plan_tiers_and_acknowledgement() {
-    let empty = Session::default();
-    assert!(approve_plan(&empty, &["A".into()], true)
-        .unwrap_err()
-        .contains("plano"));
-
+    assert_eq!(
+        approve_plan(&Session::default(), &["A".into()], true)
+            .unwrap_err()
+            .code,
+        "plan_required"
+    );
     let session = prepared();
-    assert!(approve_plan(&session, &["Z".into()], true)
-        .unwrap_err()
-        .contains("tier"));
-    assert!(approve_plan(&session, &["A".into()], false)
-        .unwrap_err()
-        .contains("revisão"));
-    assert!(approve_plan(&session, &[], true)
-        .unwrap_err()
-        .contains("nenhum tier"));
-
+    let err = approve_plan(&session, &["Z".into()], true).unwrap_err();
+    assert_eq!(
+        (err.code.as_str(), err.params["value"].as_str()),
+        ("unknown_tier", "Z")
+    );
+    assert_eq!(
+        approve_plan(&session, &["A".into()], false)
+            .unwrap_err()
+            .code,
+        "approval_not_acknowledged"
+    );
+    assert_eq!(
+        approve_plan(&session, &[], true).unwrap_err().code,
+        "approval_no_tier"
+    );
     let dto = approve_plan(&session, &["A".into(), "C".into()], true).unwrap();
-    assert_eq!(dto.tiers, ["A", "C"]);
-    assert_eq!(dto.item_count, 3);
+    assert_eq!(
+        (dto.tiers.clone(), dto.item_count),
+        (vec!["A".to_string(), "C".to_string()], 3)
+    );
 }
 
 #[test]
@@ -147,15 +159,19 @@ fn preview_and_execute_only_after_approval_and_once_per_tier() {
     let events = RefCell::new(Vec::new());
     let progress = CallbackExecution::new(|e: ExecutionEventDto| events.borrow_mut().push(e));
 
-    assert!(preview_tier(&session, &runner, &volume, &guard, "A")
-        .unwrap_err()
-        .contains("aprovado"));
-    assert!(
+    assert_eq!(
+        preview_tier(&session, &runner, &volume, &guard, "A")
+            .unwrap_err()
+            .code,
+        "not_approved"
+    );
+    assert_eq!(
         execute_tier(&session, &runner, &volume, &guard, &progress, "A")
             .unwrap_err()
-            .contains("aprovado")
+            .code,
+        "not_approved"
     );
-    assert!(report(&session, &volume).unwrap_err().contains("execução"));
+    assert_eq!(report(&session, &volume).unwrap_err().code, "no_execution");
 
     approve_plan(&session, &["A".into(), "C".into()], true).unwrap();
     let steps = preview_tier(&session, &runner, &volume, &guard, "A").unwrap();
@@ -163,45 +179,64 @@ fn preview_and_execute_only_after_approval_and_once_per_tier() {
         steps.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
         ["npm", "dx"]
     );
-    assert_eq!(steps[0].kind, "path");
-    assert_eq!(steps[0].estimated_bytes, 400);
-    assert!(preview_tier(&session, &runner, &volume, &guard, "Q")
-        .unwrap_err()
-        .contains("tier"));
+    assert_eq!(
+        (
+            steps[0].kind,
+            steps[0].estimated_bytes,
+            steps[0].label.en.as_str()
+        ),
+        ("path", 400, "npm")
+    );
+    assert_eq!(
+        preview_tier(&session, &runner, &volume, &guard, "Q")
+            .unwrap_err()
+            .code,
+        "unknown_tier"
+    );
 
     let run = execute_tier(&session, &runner, &volume, &guard, &progress, "A").unwrap();
-    assert_eq!(run.tier, "A");
-    assert_eq!(run.freed_bytes, 400);
+    assert_eq!((run.tier.as_str(), run.freed_bytes), ("A", 400));
     assert_eq!(run.items[0].status, "ok");
-    assert_eq!(run.items[1].status, "parcial");
-    assert_eq!(run.items[1].detail.as_deref(), Some("em uso"));
+    assert!(run.items[0].cause.is_none());
+    assert_eq!(run.items[1].status, "partial");
+    let cause = run.items[1].cause.as_ref().unwrap();
+    assert_eq!(
+        (cause.code, cause.detail.as_deref()),
+        ("partial_os", Some("em uso"))
+    );
     assert_eq!(events.borrow().len(), 4);
     assert_eq!(events.borrow()[0].kind, "started");
     assert_eq!(events.borrow()[1].result.as_ref().unwrap().status, "ok");
 
-    assert!(
-        execute_tier(&session, &runner, &volume, &guard, &progress, "A")
-            .unwrap_err()
-            .contains("já executado")
+    let err = execute_tier(&session, &runner, &volume, &guard, &progress, "A").unwrap_err();
+    assert_eq!(
+        (err.code.as_str(), err.params["tier"].as_str()),
+        ("tier_already_run", "A")
     );
-    assert!(
+    assert_eq!(
         execute_tier(&session, &runner, &volume, &guard, &progress, "Q")
             .unwrap_err()
-            .contains("tier")
+            .code,
+        "unknown_tier"
     );
     execute_tier(&session, &runner, &volume, &guard, &progress, "C").unwrap();
 
     let r = report(&session, &volume).unwrap();
-    assert_eq!(r.initial.free_bytes, 1_000);
-    assert_eq!(r.last.free_bytes, 1_500);
-    assert_eq!(r.freed_bytes, 500);
-    assert_eq!(r.estimated_bytes, 1_200);
-    assert_eq!(r.runs.len(), 2);
-    assert_eq!(r.pending.len(), 1);
-    assert_eq!(r.pending[0].id, "dx");
-    assert_eq!(r.blocked.len(), 1);
-    assert_eq!(r.blocked[0].id, "cuda");
-    assert_eq!(r.exclusions[0].pattern, r"C:\Windows\Installer");
+    assert_eq!(
+        (
+            r.initial.free_bytes,
+            r.last.free_bytes,
+            r.freed_bytes,
+            r.estimated_bytes
+        ),
+        (1_000, 1_500, 500, 1_200)
+    );
+    assert_eq!(
+        (r.runs.len(), r.pending.len(), r.pending[0].id.as_str()),
+        (2, 1, "dx")
+    );
+    assert_eq!((r.blocked.len(), r.blocked[0].id.as_str()), (1, "cuda"));
+    assert_eq!(r.exclusions[0].reason.en, "msi cache");
     assert_eq!(format!("{progress:?}"), "CallbackExecution");
 }
 
@@ -215,16 +250,17 @@ fn rebuilding_the_plan_resets_the_approval_and_the_runs() {
     approve_plan(&session, &["A".into()], true).unwrap();
     execute_tier(&session, &runner, &volume, &guard, &progress, "A").unwrap();
     build_plan(&session, "C:", &["npm".into()], &SkillPlanJsonCodec).unwrap();
-    assert!(
+    assert_eq!(
         execute_tier(&session, &runner, &volume, &guard, &progress, "A")
             .unwrap_err()
-            .contains("aprovado")
+            .code,
+        "not_approved"
     );
-    assert!(report(&session, &volume).unwrap_err().contains("execução"));
+    assert_eq!(report(&session, &volume).unwrap_err().code, "no_execution");
 }
 
 #[test]
-fn volume_failure_is_reported_as_message() {
+fn volume_failure_is_reported_as_code() {
     struct Broken;
     impl VolumeInfo for Broken {
         fn usage(&self, _: &str) -> Result<VolumeUsage, PortError> {
@@ -244,12 +280,113 @@ fn volume_failure_is_reported_as_message() {
         "A",
     )
     .unwrap_err();
-    assert!(err.contains("não encontrado"));
+    assert_eq!(
+        (err.code.as_str(), err.params["detail"].as_str()),
+        ("not_found", "C:")
+    );
+}
+
+#[test]
+fn every_item_cause_has_a_code() {
+    let item = |status| ItemResult {
+        id: "x".into(),
+        label: LocalizedText::same("X"),
+        tier: Tier::A,
+        estimated: ByteSize::from_bytes(1),
+        free_before: ByteSize::from_bytes(10),
+        free_after: ByteSize::from_bytes(10),
+        status,
+    };
+    let cases = [
+        (
+            ItemStatus::Partial {
+                remaining: ByteSize::from_bytes(1),
+                detail: None,
+            },
+            "partial",
+            "partial_locked",
+            None,
+            None,
+        ),
+        (
+            ItemStatus::Skipped {
+                cause: SkipCause::Missing,
+            },
+            "skipped",
+            "missing",
+            None,
+            None,
+        ),
+        (
+            ItemStatus::Skipped {
+                cause: SkipCause::UninstallUnsupported,
+            },
+            "skipped",
+            "uninstall_unsupported",
+            None,
+            None,
+        ),
+        (
+            ItemStatus::Skipped {
+                cause: SkipCause::Unsafe(SafetyViolation::TooBroad {
+                    target: "/home".into(),
+                }),
+            },
+            "skipped",
+            "too_broad",
+            Some("/home"),
+            None,
+        ),
+        (
+            ItemStatus::Skipped {
+                cause: SkipCause::Unsafe(SafetyViolation::Protected {
+                    path: "/home/u".into(),
+                }),
+            },
+            "skipped",
+            "protected",
+            Some("/home/u"),
+            None,
+        ),
+        (
+            ItemStatus::Failed {
+                cause: FailCause::Io("negado".into()),
+            },
+            "failed",
+            "io",
+            Some("negado"),
+            None,
+        ),
+        (
+            ItemStatus::Failed {
+                cause: FailCause::Exit {
+                    code: Some(3),
+                    last_line: "fim".into(),
+                },
+            },
+            "failed",
+            "exit",
+            Some("fim"),
+            Some(3),
+        ),
+    ];
+    for (status, code, cause_code, detail, exit) in cases {
+        let dto = ItemResultDto::from(&item(status));
+        let cause = dto.cause.unwrap();
+        assert_eq!(
+            (
+                dto.status,
+                cause.code,
+                cause.detail.as_deref(),
+                cause.exit_code
+            ),
+            (code, cause_code, detail, exit)
+        );
+    }
 }
 
 #[test]
 fn safety_guard_protects_the_folders_named_by_the_environment() {
-    use disk_cleanup_desktop_lib::safety_guard;
     let env = SnapshotEnvironment::from_pairs(vec![
         ("USERPROFILE".into(), r"C:\Users\u".into()),
         ("LOCALAPPDATA".into(), r"C:\Users\u\AppData\Local".into()),

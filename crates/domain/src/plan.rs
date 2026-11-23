@@ -2,12 +2,14 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use thiserror::Error;
 
-use crate::{Action, ByteSize, Candidate, DomainError, ExclusionList, Tier};
+use crate::{
+    Action, BlockReason, ByteSize, Candidate, DomainError, ExclusionList, LocalizedText, Tier,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlanItem {
     pub id: String,
-    pub label: String,
+    pub label: LocalizedText,
     pub action: Action,
     pub estimated: ByteSize,
 }
@@ -20,13 +22,13 @@ pub enum PlanError {
     UnknownCandidate(String),
     #[error("candidato selecionado duas vezes: {0}")]
     Duplicate(String),
-    #[error("'{id}' está bloqueado: {reason}")]
-    Blocked { id: String, reason: String },
-    #[error("'{id}' toca caminho excluído {path}: {reason}")]
+    #[error("'{id}' está bloqueado: {reason:?}")]
+    Blocked { id: String, reason: BlockReason },
+    #[error("'{id}' toca caminho excluído {path}: {}", reason.pt)]
     Excluded {
         id: String,
         path: String,
-        reason: String,
+        reason: LocalizedText,
     },
 }
 

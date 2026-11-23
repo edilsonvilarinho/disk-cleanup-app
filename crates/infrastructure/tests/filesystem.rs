@@ -5,7 +5,7 @@ use disk_cleanup_application::{
 };
 use disk_cleanup_domain::{path_components, ByteSize};
 use disk_cleanup_infrastructure::{
-    allocated_size, platform_exclusions, JwalkFileWalker, SilentProgress, SnapshotEnvironment,
+    allocated_size, exclusions_for, JwalkFileWalker, SilentProgress, SnapshotEnvironment,
     SysinfoVolumeInfo, WalkerPathInspector,
 };
 
@@ -137,22 +137,29 @@ fn snapshot_environment_reads_vars_case_insensitively_and_splits_path() {
 }
 
 #[test]
-fn platform_exclusions_protect_system_paths_on_this_os() {
-    let env = SnapshotEnvironment::from_pairs(vec![
-        ("SystemDrive".into(), "C:".into()),
-        ("LOCALAPPDATA".into(), r"C:\Users\u\AppData\Local".into()),
+fn exclusions_follow_the_platform_chosen_at_runtime() {
+    let windows = SnapshotEnvironment::from_pairs(vec![
+        ("SystemDrive".into(), "D:".into()),
+        ("LOCALAPPDATA".into(), r"D:\Users\u\AppData\Local".into()),
     ]);
-    let list = platform_exclusions(&env);
-    if cfg!(windows) {
-        assert!(list.matching(r"C:\Windows\Installer\x").is_some());
-        assert!(
-            platform_exclusions(&SnapshotEnvironment::from_pairs(vec![]))
-                .matching(r"C:\Windows\WinSxS")
-                .is_some()
-        );
-    } else {
-        assert!(list.is_empty());
-    }
+    assert!(exclusions_for("windows", &windows)
+        .matching(r"D:\Windows\Installer\x")
+        .is_some());
+    let bare = SnapshotEnvironment::from_pairs(vec![]);
+    assert!(exclusions_for("windows", &bare)
+        .matching(r"C:\Windows\WinSxS")
+        .is_some());
+
+    let unix = SnapshotEnvironment::from_pairs(vec![("HOME".into(), "/home/u".into())]);
+    assert!(exclusions_for("linux", &unix)
+        .matching("/home/u/.ssh/id_rsa")
+        .is_some());
+    assert!(exclusions_for("linux", &bare).matching("/proc/1").is_some());
+    let mac = SnapshotEnvironment::from_pairs(vec![("HOME".into(), "/Users/u".into())]);
+    assert!(exclusions_for("macos", &mac)
+        .matching("/Users/u/Library/Keychains/x")
+        .is_some());
+    assert!(exclusions_for("freebsd", &unix).is_empty());
 }
 
 #[test]

@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
+import { markRaw } from 'vue'
 import type { CandidateDto, ClassificationDto, Tier } from '../../domain/models'
 import { countByTier, defaultSelection, selectionTotal, toggle, toggleTier, totalsByTier } from '../../domain/selection'
-import { messageOf } from '../gateway'
+import { errorInfo, type ErrorInfo } from '../../i18n/i18n'
 import type { AsyncStatus } from './survey'
 
 /** Aba ativa: um tier ou `X` (exclusões). */
@@ -13,7 +14,7 @@ export const useClassificationStore = defineStore('classification', {
     report: null as ClassificationDto | null,
     selected: [] as string[],
     activeTab: 'A' as ClassificationTab,
-    error: null as string | null,
+    error: null as ErrorInfo | null,
   }),
   getters: {
     candidates: (state): CandidateDto[] => state.report?.candidates ?? [],
@@ -32,20 +33,20 @@ export const useClassificationStore = defineStore('classification', {
     },
   },
   actions: {
-    async load() {
+    async load(extraExclusions: string[] = []) {
       this.status = 'running'
       this.error = null
       try {
-        this.report = await this.gateway.classify()
+        this.report = markRaw(await this.gateway.classify([...extraExclusions]))
         this.selected = defaultSelection(this.report.candidates)
         this.status = 'done'
       } catch (e) {
-        this.error = messageOf(e)
+        this.error = errorInfo(e)
         this.status = 'error'
       }
     },
-    async ensureLoaded() {
-      if (this.status === 'idle') await this.load()
+    async ensureLoaded(extraExclusions: string[] = []) {
+      if (this.status === 'idle') await this.load(extraExclusions)
     },
     toggle(id: string) {
       this.selected = toggle(this.selected, id)

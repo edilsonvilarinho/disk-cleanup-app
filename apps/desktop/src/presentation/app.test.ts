@@ -1,31 +1,48 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
+import { createApp, defineComponent } from 'vue'
 import { createMemoryHistory } from 'vue-router'
 import type { DiskCleanupGateway } from '../application/gateway'
 import { gatewayPlugin } from '../application/gatewayPlugin'
-import { ThemeController } from '../application/theme'
-import { approval, classification, report, survey } from '../test/fixtures'
+import { settingsPlugin, type Settings } from '../application/settings'
 import { usePlanStore } from '../application/stores/plan'
+import { useSettingsStore } from '../application/stores/settings'
+import { ThemeController } from '../application/theme'
 import { fakeGateway } from '../test/fakeGateway'
+import { approval, classification, report, runA, survey } from '../test/fixtures'
 import App from './App.vue'
-import { riskLabel, volumeLabel } from './labels'
+import { SYSTEM_LANGUAGES_KEY } from './i18n'
+import { volumeLabel } from './labels'
 import { createAppRouter } from './router'
 import { THEME_KEY, useTheme } from './theme'
-import { defineComponent } from 'vue'
 
-async function mountApp(path: string, gateway: DiskCleanupGateway = fakeGateway()) {
+interface MountOptions {
+  languages?: string[]
+  saved?: Partial<Settings>
+}
+
+async function mountApp(path: string, gateway: DiskCleanupGateway = fakeGateway(), options: MountOptions = {}) {
+  const saved: Settings[] = []
   const pinia = createPinia()
   pinia.use(gatewayPlugin(gateway))
+  pinia.use(settingsPlugin({ load: () => options.saved ?? null, save: (s) => saved.push(structuredClone(s)) }))
   const router = createAppRouter(createMemoryHistory())
-  const storage = { value: null as string | null, get: () => null, set: vi.fn() }
-  const theme = new ThemeController(storage, () => true, vi.fn())
-  theme.init()
+  const apply = vi.fn()
+  const theme = new ThemeController(() => true, apply)
+  // Mesma ordem do main.ts: preferências carregadas antes de montar.
+  createApp({}).use(pinia)
+  useSettingsStore(pinia).load()
   await router.push(path)
   await router.isReady()
-  const wrapper = mount(App, { global: { plugins: [pinia, router], provide: { [THEME_KEY]: theme } } })
+  const wrapper = mount(App, {
+    global: {
+      plugins: [pinia, router],
+      provide: { [THEME_KEY]: theme, [SYSTEM_LANGUAGES_KEY]: () => options.languages ?? ['pt-BR'] },
+    },
+  })
   await flushPromises()
-  return { wrapper, gateway, router, theme, pinia }
+  return { wrapper, gateway, router, theme, pinia, saved, apply }
 }
 
 describe('useTheme', () => {
@@ -36,11 +53,7 @@ describe('useTheme', () => {
 })
 
 describe('labels', () => {
-  it('traduz risco e normaliza o volume para o plan.json', () => {
-    expect(riskLabel('none')).toBe('nenhum')
-    expect(riskLabel('low')).toBe('baixo')
-    expect(riskLabel('redownload')).toBe('re-download')
-    expect(riskLabel('long-running')).toBe('operação longa')
+  it('normaliza o volume para o plan.json', () => {
     expect(volumeLabel('C:\\')).toBe('C:')
     expect(volumeLabel('/')).toBe('/')
     expect(volumeLabel('/mnt/data/')).toBe('/mnt/data')
@@ -58,6 +71,7 @@ describe('shell', () => {
     await toggle.trigger('click')
     expect(theme.current.value).toBe('light')
     expect(toggle.text()).toContain('Tema escuro')
+    expect(document.documentElement.getAttribute('lang')).toBe('pt-BR')
   })
 
   it('mostra erro de ambiente quando o núcleo não responde', async () => {
@@ -254,7 +268,8 @@ describe('Aprovação no Plano', () => {
     await approve.trigger('click')
     await flushPromises()
     expect(gateway.approvePlan).toHaveBeenCalledWith(['A'], true)
-    expect(router.currentRoute.value.path).toBe('/execucao')
+    // A Execução é carregada sob demanda: a navegação termina depois do import.
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/execucao'))
   })
 
   it('mostra a recusa do núcleo e fica no Plano', async () => {
@@ -365,5 +380,166 @@ describe('Relatório', () => {
     const { wrapper } = await mountApp('/relatorio', fakeGateway({ report: vi.fn(async () => empty) }))
     expect(wrapper.get('[data-test="report-pending"]').text()).toContain('Nenhuma pendência')
     expect(wrapper.get('[data-test="report-blocked"]').text()).toContain('Nenhuma divergência')
+  })
+})
+
+describe('Configurações', () => {
+  it('troca idioma, tema e profundidade e salva cada mudança', async () => {
+    const { wrapper, saved, theme } = await mountApp('/configuracoes')
+    expect(wrapper.get('h1').text()).toBe('Configurações')
+    expect(wrapper.get('[data-test="language"]').text()).toContain('Automático (sistema: Português)')
+    await wrapper.get('[data-test="language"]').setValue('en')
+    expect(wrapper.get('h1').text()).toBe('Settings')
+    expect(document.documentElement.getAttribute('lang')).toBe('en')
+    await wrapper.get('[data-test="theme-light"]').setValue(true)
+    expect(theme.current.value).toBe('light')
+    await wrapper.get('[data-test="default-depth"]').setValue('1')
+    expect(saved.at(-1)).toEqual({ language: 'en', theme: 'light', extraExclusions: [], defaultDepth: 1 })
+  })
+
+  it('adiciona e remove pastas extras, que vão para a classificação', async () => {
+    const { wrapper, gateway, router } = await mountApp('/configuracoes')
+    expect(wrapper.find('[data-test="no-exclusions"]').exists()).toBe(true)
+    await wrapper.get('[data-test="new-exclusion"]').setValue('C:\\Projetos')
+    await wrapper.get('form').trigger('submit')
+    await wrapper.get('[data-test="new-exclusion"]').setValue('c:\\projetos')
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.findAll('[data-test="exclusion"]')).toHaveLength(1)
+    expect((wrapper.get('[data-test="new-exclusion"]').element as HTMLInputElement).value).toBe('c:\\projetos')
+    await router.push('/classificacao')
+    await flushPromises()
+    expect(gateway.classify).toHaveBeenCalledWith(['C:\\Projetos'])
+    await router.push('/configuracoes')
+    await flushPromises()
+    await wrapper.get('[data-test="exclusion"] button').trigger('click')
+    expect(wrapper.find('[data-test="no-exclusions"]').exists()).toBe(true)
+  })
+
+  it('usa a profundidade padrão salva na varredura', async () => {
+    const { wrapper, gateway } = await mountApp('/', fakeGateway(), { saved: { defaultDepth: 1 } })
+    await wrapper.get('[data-test="start-survey"]').trigger('click')
+    await flushPromises()
+    expect(gateway.runSurvey).toHaveBeenCalledWith(expect.objectContaining({ depth: 1 }), expect.any(Function))
+  })
+})
+
+describe('Idioma', () => {
+  it('sistema em inglês abre em inglês, com números e textos do núcleo em inglês', async () => {
+    const { wrapper, router } = await mountApp('/', fakeGateway(), { languages: ['en-US'] })
+    expect(wrapper.get('h1').text()).toBe('Volume survey')
+    await wrapper.get('[data-test="start-survey"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="kpi-used"]').text()).toContain('891.4 GB')
+    expect(wrapper.get('[data-test="health"]').text()).toContain('Critical')
+    await router.push('/classificacao')
+    await flushPromises()
+    expect(wrapper.get('[data-test="row"]').text()).toContain('Label npm-cache')
+    expect(wrapper.get('[data-test="row"]').text()).toContain('official command')
+    await wrapper.get('[data-test="tab-C"]').trigger('click')
+    expect(wrapper.findAll('[data-test="row"]')[1]!.text()).toContain('blocked: variable CUDA_PATH points to this path')
+    expect(wrapper.get('[data-test="skipped"]').text()).toContain('excluded: excluded in Settings')
+    await wrapper.get('[data-test="tab-X"]').trigger('click')
+    expect(wrapper.get('[data-test="exclusions"]').text()).toContain('MSI cache')
+  })
+
+  it('escolha explícita vence o sistema', async () => {
+    const { wrapper } = await mountApp('/', fakeGateway(), { languages: ['en-US'], saved: { language: 'pt' } })
+    expect(wrapper.get('h1').text()).toBe('Survey do volume')
+  })
+
+  it('erro do núcleo chega como código e é traduzido', async () => {
+    const reportFails = vi.fn(async () => Promise.reject({ code: 'no_execution', params: {} }))
+    const pt = await mountApp('/relatorio', fakeGateway({ report: reportFails }))
+    expect(pt.wrapper.get('[data-test="report-error"]').text()).toContain('Nenhuma execução nesta sessão.')
+    const en = await mountApp('/relatorio', fakeGateway({ report: reportFails }), { languages: ['en'] })
+    expect(en.wrapper.get('[data-test="report-error"]').text()).toContain('No run in this session.')
+  })
+})
+
+describe('vueErrorHandler', () => {
+  it('registra erro com a origem', async () => {
+    const { vueErrorHandler } = await import('./errorHandler')
+    const log = vi.fn()
+    const error = new Error('falhou')
+    vueErrorHandler(log)(error, null, 'render function')
+    expect(log).toHaveBeenCalledWith('[disk-cleanup]', 'render function', error)
+    expect(() => vueErrorHandler()(error, null, 'x')).not.toThrow()
+  })
+})
+
+describe('ramos de apresentação', () => {
+  it('sem idiomas injetados usa o navigator; lista vazia cai em navigator.language', async () => {
+    const { useI18n } = await import('./i18n')
+    const pinia = createPinia()
+    pinia.use(gatewayPlugin(fakeGateway()))
+    pinia.use(settingsPlugin({ load: () => null, save: () => {} }))
+    const Probe = defineComponent({ setup: () => ({ i18n: useI18n() }), render: () => null })
+    vi.stubGlobal('navigator', { languages: [], language: 'pt-BR' })
+    expect(mount(Probe, { global: { plugins: [pinia] } }).vm.i18n.locale.value).toBe('pt')
+    vi.stubGlobal('navigator', { languages: ['en-US'], language: 'en-US' })
+    expect(mount(Probe, { global: { plugins: [pinia] } }).vm.i18n.locale.value).toBe('en')
+    vi.unstubAllGlobals()
+  })
+
+  it('Configurações com sistema em inglês mostram o nome do idioma do sistema', async () => {
+    const { wrapper } = await mountApp('/configuracoes', fakeGateway(), { languages: ['en-US'] })
+    expect(wrapper.get('[data-test="language"]').text()).toContain('Automatic (system: English)')
+  })
+
+  it('causas sem detalhe ou sem código de saída, item na fila e reabertura da Execução', async () => {
+    const run = {
+      ...runA,
+      items: [
+        { ...runA.items[0]!, status: 'failed' as const, cause: { code: 'exit' as const, detail: null, exitCode: null } },
+        { ...runA.items[1]!, status: 'ok' as const, cause: null },
+      ],
+    }
+    let finish: (value: typeof run) => void = () => {}
+    const executeTier = vi.fn((_tier, onEvent) => {
+      onEvent({ kind: 'started', id: 'npm-cache', result: null })
+      return new Promise<typeof run>((resolve) => (finish = resolve))
+    })
+    const ctx = await mountApp('/', fakeGateway({ executeTier }))
+    usePlanStore(ctx.pinia).approval = approval
+    await ctx.router.push('/execucao')
+    await flushPromises()
+    await ctx.wrapper.get('[data-test="execute"]').trigger('click')
+    await ctx.wrapper.get('[data-test="confirm-execute"]').trigger('click')
+    await flushPromises()
+    const running = ctx.wrapper.get('[data-test="running"]').text()
+    expect(running).toContain('rodando')
+    expect(running).toContain('na fila')
+    finish(run)
+    await flushPromises()
+    expect(ctx.wrapper.findAll('[data-test="result"]')[0]!.text()).toContain('saída ?:')
+    await ctx.router.push('/')
+    await flushPromises()
+    await ctx.router.push('/execucao')
+    await vi.waitFor(() => expect(ctx.wrapper.findAll('[data-test="stage"]')).toHaveLength(2))
+    expect(ctx.wrapper.findAll('[data-test="result"]')).toHaveLength(2)
+  })
+
+  it('relatório com pendência sem causa e divergência sem motivo; cópia que falha sem Error', async () => {
+    const odd = {
+      ...report,
+      pending: [{ ...report.pending[0]!, cause: null }],
+      blocked: [{ ...report.blocked[0]!, blocked: null }],
+    }
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn(async () => Promise.reject('negado')) }, languages: ['pt-BR'], language: 'pt-BR' })
+    const { wrapper } = await mountApp('/relatorio', fakeGateway({ report: vi.fn(async () => odd) }))
+    expect(wrapper.get('[data-test="report-pending"]').text()).toContain('parcial:')
+    expect(wrapper.get('[data-test="report-blocked"]').text()).toContain('mantido:')
+    await wrapper.get('[data-test="copy-report"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="copy-report-status"]').text()).toBe('Falha ao copiar: negado')
+    vi.unstubAllGlobals()
+  })
+
+  it('markdown com causa sem detalhe nem código', async () => {
+    const { reportMarkdown } = await import('../domain/report')
+    const { translate } = await import('../i18n/i18n')
+    const { pt } = await import('../i18n/messages')
+    const pending = [{ ...report.pending[0]!, cause: { code: 'exit' as const, detail: null, exitCode: null } }]
+    expect(reportMarkdown({ ...report, pending }, (k, p) => translate(pt, k, p), 'pt')).toContain('(parcial): saída ?: ')
   })
 })

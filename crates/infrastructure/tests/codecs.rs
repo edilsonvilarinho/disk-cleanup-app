@@ -2,14 +2,15 @@ use std::io::Write;
 
 use disk_cleanup_application::{CatalogRepository, PlanCodec, PortError, RuleTarget};
 use disk_cleanup_domain::{
-    Action, Availability, ByteSize, Candidate, ExclusionList, Plan, Risk, Tier,
+    Action, Availability, ByteSize, Candidate, ExclusionList, LocalizedText, Plan, Risk, Tier,
 };
-use disk_cleanup_infrastructure::{SkillPlanJsonCodec, TomlCatalogRepository};
+use disk_cleanup_infrastructure::{catalog_for, SkillPlanJsonCodec, TomlCatalogRepository};
 
 const CATALOG: &str = r#"
 [[exclusion]]
 pattern = 'D:\Backups'
 reason = "backups"
+reason_en = "user backups"
 
 [[rule]]
 id = "npm-cache"
@@ -17,6 +18,7 @@ label = "npm cache"
 tier = "A"
 risk = "none"
 note = "comando oficial"
+note_en = "official command"
 kind = "command"
 command = "npm cache clean --force"
 measure = '%LOCALAPPDATA%\npm-cache'
@@ -52,10 +54,18 @@ path = 'C:\nsight'
 fn toml_catalog_parses_rules_exclusions_and_defaults() {
     let catalog = TomlCatalogRepository::from_text(CATALOG).load().unwrap();
     assert_eq!(catalog.rules.len(), 4);
-    assert_eq!(catalog.exclusions[0].reason, "backups");
+    assert_eq!(
+        catalog.exclusions[0].reason,
+        LocalizedText::new("backups", "user backups")
+    );
     let npm = &catalog.rules[0];
     assert_eq!(npm.tier, Tier::A);
     assert_eq!(npm.risk, Risk::None);
+    assert_eq!(npm.label, LocalizedText::same("npm cache"));
+    assert_eq!(
+        npm.note,
+        LocalizedText::new("comando oficial", "official command")
+    );
     assert_eq!(
         npm.target,
         RuleTarget::Command {
@@ -66,7 +76,7 @@ fn toml_catalog_parses_rules_exclusions_and_defaults() {
     let cuda = &catalog.rules[1];
     assert_eq!((cuda.tier, cuda.risk), (Tier::C, Risk::Redownload));
     assert_eq!(cuda.watch_env, ["CUDA_PATH"]);
-    assert_eq!(cuda.note, "");
+    assert_eq!(cuda.note, LocalizedText::default());
     assert_eq!(catalog.rules[2].risk, Risk::LongRunning);
     assert_eq!(catalog.rules[3].risk, Risk::Low);
 }
@@ -114,22 +124,57 @@ fn toml_catalog_loads_from_file_and_reports_missing_file() {
 }
 
 #[test]
-fn bundled_windows_catalog_is_valid() {
-    let catalog = TomlCatalogRepository::bundled_windows().load().unwrap();
-    assert!(catalog.rules.len() >= 15);
-    assert!(catalog.rules.iter().any(|r| r.tier == Tier::A));
-    assert!(catalog.rules.iter().any(|r| r.tier == Tier::C));
+fn bundled_catalogs_exist_for_the_three_platforms_and_are_bilingual() {
+    for (os, minimum) in [("windows", 15), ("linux", 12), ("macos", 12)] {
+        let catalog = catalog_for(os).unwrap().load().unwrap();
+        assert!(
+            catalog.rules.len() >= minimum,
+            "{os}: {} regras",
+            catalog.rules.len()
+        );
+        assert!(
+            catalog.rules.iter().any(|r| r.tier == Tier::A),
+            "{os} sem tier A"
+        );
+        assert!(
+            catalog.rules.iter().any(|r| r.tier == Tier::C),
+            "{os} sem tier C"
+        );
+        for rule in &catalog.rules {
+            assert!(
+                !rule.label.en.is_empty(),
+                "{os}/{}: label sem inglês",
+                rule.id
+            );
+            assert_eq!(
+                rule.note.pt.is_empty(),
+                rule.note.en.is_empty(),
+                "{os}/{}: nota só num idioma",
+                rule.id
+            );
+        }
+        for ex in &catalog.exclusions {
+            assert!(
+                !ex.reason.en.is_empty() && ex.reason.en != ex.reason.pt,
+                "{os}: exclusão sem tradução"
+            );
+        }
+    }
+    assert!(matches!(
+        catalog_for("freebsd"),
+        Err(PortError::Unsupported(_))
+    ));
 }
 
 fn candidate(id: &str, tier: Tier, action: Action) -> Candidate {
     Candidate {
         id: id.into(),
-        label: format!("L {id}"),
+        label: LocalizedText::same(&format!("L {id}")),
         tier,
         action,
         size: ByteSize::from_bytes(1024),
         risk: Risk::None,
-        note: String::new(),
+        note: LocalizedText::default(),
         availability: Availability::Selectable,
     }
 }

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disk Cleanup — 5 · Relatório</title>
+<script>(function(){var t;try{t=localStorage.getItem('dc-theme')}catch(e){}if(!t)t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t)})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="assets/app.css">
+<script src="assets/app.js" defer></script>
+</head>
+<body data-page="report" data-mode="done">
+<div class="layout">
+<aside id="sidebar" class="sidebar"></aside>
+<main class="main">
+<div class="container">
+
+  <header class="page-head">
+    <div class="titles">
+      <span class="label-caps">Etapa 5 de 5 · concluído</span>
+      <h1>Relatório da limpeza</h1>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn">Exportar Markdown</button>
+      <button type="button" class="btn">Exportar JSON</button>
+      <a class="btn btn-primary" href="01-survey.html">Nova análise</a>
+    </div>
+  </header>
+
+  <section class="kpis" aria-label="Resultado">
+    <div class="kpi"><span class="small muted">Liberado</span><span class="value">+155,0 GB</span><span class="pill ok"><span class="dot"></span>dentro do estimado</span></div>
+    <div class="kpi"><span class="small muted">Livre</span><span class="value">216,6 GB</span><span class="small muted">antes 61,6 GB</span></div>
+    <div class="kpi"><span class="small muted">Ocupação</span><span class="value">77,3%</span><span class="small muted">antes 93,5% · −16,2 p.p.</span></div>
+    <div class="kpi"><span class="small muted">Pendências</span><span class="value">2</span><span class="small muted">1 resíduo · 1 ação manual</span></div>
+  </section>
+
+  <div class="grid-2">
+    <section class="card" aria-label="Antes e depois">
+      <h2>1 · Resultado</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col"></th><th scope="col" class="num">Inicial</th><th scope="col" class="num">Final</th><th scope="col" class="num">Δ</th></tr></thead>
+          <tbody>
+            <tr><td>Livre</td><td class="num">61,6 GB</td><td class="num">216,6 GB</td><td class="num ok">+155,0 GB</td></tr>
+            <tr><td>Usado</td><td class="num">891,4 GB</td><td class="num">736,4 GB</td><td class="num">−155,0 GB</td></tr>
+            <tr><td>Ocupação</td><td class="num">93,5%</td><td class="num">77,3%</td><td class="num">−16,2 p.p.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="kv small"><span class="muted">Antes</span><span class="num">93,5%</span></div>
+        <div class="meter" role="img" aria-label="Ocupação antes: 93,5%"><span style="width:93.5%"></span></div>
+        <div class="kv small" style="margin-top:6px"><span class="muted">Depois</span><span class="num">77,3%</span></div>
+        <div class="meter" role="img" aria-label="Ocupação depois: 77,3%"><span style="width:77.3%"></span></div>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Liberado por tier">
+      <div class="card-head"><h2>2 · Liberado por tier</h2><span class="small muted">medido × previsto</span></div>
+      <div class="barlist">
+        <div class="bar-row" style="grid-template-columns:150px minmax(0,1fr) 110px"><span class="tier tA"><span class="sq"></span>A · Cache</span><div class="track"><span style="width:60.7%;background:var(--tA)"></span></div><span class="num">37,6 <span class="muted">/ 38,2</span></span></div>
+        <div class="bar-row" style="grid-template-columns:150px minmax(0,1fr) 110px"><span class="tier tB"><span class="sq"></span>B · Desinstalar</span><div class="track"><span style="width:100%;background:var(--tB)"></span></div><span class="num">61,9 <span class="muted">/ 61,9</span></span></div>
+        <div class="bar-row" style="grid-template-columns:150px minmax(0,1fr) 110px"><span class="tier tC"><span class="sq"></span>C · Regeneráveis</span><div class="track"><span style="width:80.1%;background:var(--tC)"></span></div><span class="num">49,6 <span class="muted">/ 49,6</span></span></div>
+        <div class="bar-row" style="grid-template-columns:150px minmax(0,1fr) 110px"><span class="tier tD"><span class="sq"></span>D · Sistema</span><div class="track"><span style="width:9.5%;background:var(--tD)"></span></div><span class="num">5,9 <span class="muted">/ 5,3</span></span></div>
+      </div>
+      <p class="small muted">A ficou 0,6 GB abaixo (DXCache travado). D passou 0,6 GB acima da estimativa do AnalyzeComponentStore.</p>
+    </section>
+  </div>
+
+  <section class="card" aria-label="Decisões divergentes">
+    <div class="card-head"><h2>3 · Decisões que divergiram do plano</h2><span class="small muted">item → decisão → motivo</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Item</th><th scope="col">Decisão</th><th scope="col">Motivo</th></tr></thead>
+        <tbody>
+          <tr><td>CUDA Toolkit 11.8 <span class="path">2,64 GB</span></td><td><span class="pill neutral">mantido</span></td><td class="small">CUDA_PATH aponta para ele; remover quebra build de extensões CUDA.</td></tr>
+          <tr><td>Android Studio 2025.3 <span class="path">3,01 GB</span></td><td><span class="pill ok"><span class="dot"></span>removido</span></td><td class="small">Build Canary; o atalho do Menu Iniciar aponta para a 2024.3, que foi mantida.</td></tr>
+          <tr><td>Steam <span class="mono small">downloading</span> <span class="path">82,44 GB na 1ª varredura</span></td><td><span class="pill neutral">não classificado</span></td><td class="small">0 GB na 2ª varredura: download em andamento concluído, não era resíduo.</td></tr>
+          <tr><td>Jogos instalados</td><td><span class="pill neutral">mantidos</span></td><td class="small">Decisão do usuário na etapa 3.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="grid-2">
+    <section class="card" aria-label="Pendências">
+      <h2>4 · Pendências</h2>
+      <div class="inset">
+        <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-weight:600">NVIDIA DXCache · 0,6 GB</span><span class="small muted">arquivos abertos pelo driver; aceitável</span></div>
+        <span class="pill warn"><span class="dot"></span>resíduo</span>
+      </div>
+      <div class="inset" style="flex-direction:column;align-items:stretch">
+        <div class="kv"><span style="font-weight:600">opencode.db · 8,24 GB</span><span class="pill info"><span class="dot"></span>ação manual</span></div>
+        <span class="small muted">Sessão culpada é a atual. Rodar depois de fechar o agente:</span>
+<pre class="code" style="padding:10px">opencode session delete &lt;sessionID&gt;
+python -c "import sqlite3; c=sqlite3.connect(r'…\opencode.db'); c.execute('VACUUM')"</pre>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Não tocado">
+      <h2>5 · Não tocado (deliberado)</h2>
+      <ul class="checklist small">
+        <li><span class="mono" style="min-width:0;word-break:break-all">C:\Windows\Installer</span><span class="muted">— cache do MSI</span></li>
+        <li><span class="mono">C:\pagefile.sys</span><span class="muted">— sem medição de commit</span></li>
+        <li><span class="mono">C:\Windows\WinSxS</span><span class="muted">— só via DISM (feito no tier D)</span></li>
+        <li><span class="mono" style="word-break:break-all">ProgramData\Package Cache</span><span class="muted">— instaladores</span></li>
+        <li><span class="mono">WindowsApps</span><span class="muted">— gerenciado pela Store</span></li>
+        <li><span>Dados do usuário, nuvem, jogos, transcripts de agentes</span></li>
+      </ul>
+    </section>
+  </div>
+
+  <section class="card" aria-label="Integridade">
+    <div class="card-head"><h2>6 · Verificação de integridade</h2><span class="small muted">executada após o último tier</span></div>
+    <div class="grid-2" style="gap:12px">
+      <ul class="checklist">
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ok" aria-hidden="true"><path d="M5 12l4 4 10-10"/></svg><span>Android Studio 2024.3 presente e atalho válido</span></li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ok" aria-hidden="true"><path d="M5 12l4 4 10-10"/></svg><span>CUDA 11.8 presente; CUDA_PATH resolve</span></li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ok" aria-hidden="true"><path d="M5 12l4 4 10-10"/></svg><span>8/8 entradas de desinstalação removidas, sem órfãs</span></li>
+      </ul>
+      <ul class="checklist">
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ok" aria-hidden="true"><path d="M5 12l4 4 10-10"/></svg><span class="mono small">node · python · java · git · adb</span><span class="small muted">respondem a --version</span></li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ok" aria-hidden="true"><path d="M5 12l4 4 10-10"/></svg><span>Nenhum reinício solicitado</span></li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="warn" aria-hidden="true"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg><span>DXCache com 0,6 GB residual (ver pendências)</span></li>
+      </ul>
+    </div>
+  </section>
+
+</div>
+</main>
+</div>
+</body>
+</html>

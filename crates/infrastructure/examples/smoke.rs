@@ -4,8 +4,8 @@ use std::time::Instant;
 
 use disk_cleanup_application::{ClassifyService, Environment, SurveyRequest, SurveyService};
 use disk_cleanup_infrastructure::{
-    platform_exclusions, JwalkFileWalker, SilentProgress, SnapshotEnvironment, SysinfoVolumeInfo,
-    TomlCatalogRepository, WalkerPathInspector,
+    catalog_for, exclusions_for, JwalkFileWalker, SilentProgress, SnapshotEnvironment,
+    SysinfoVolumeInfo, WalkerPathInspector,
 };
 
 fn main() {
@@ -47,11 +47,11 @@ fn main() {
 
     let started = Instant::now();
     let classes = ClassifyService::new(
-        &TomlCatalogRepository::bundled_windows(),
+        &catalog_for(std::env::consts::OS).expect("catálogo"),
         &env,
         &WalkerPathInspector::new(JwalkFileWalker),
     )
-    .run(platform_exclusions(&env))
+    .run(exclusions_for(std::env::consts::OS, &env), &[])
     .expect("classify");
     println!(
         "classify: {:.1}s, {} candidatos, {} regras sem candidato, selecionável {:.1} GB",
@@ -64,7 +64,7 @@ fn main() {
         println!(
             "  [{}] {:<34} {:>7.2} GB {}",
             c.tier,
-            c.label,
+            c.label.pt,
             c.size.gib(),
             if c.availability.is_selectable() {
                 ""

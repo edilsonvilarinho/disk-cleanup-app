@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disk Cleanup — 3 · Plano e aprovação</title>
+<script>(function(){var t;try{t=localStorage.getItem('dc-theme')}catch(e){}if(!t)t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t)})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="assets/app.css">
+<script src="assets/app.js" defer></script>
+</head>
+<body data-page="plan" data-mode="ro">
+<div class="layout">
+<aside id="sidebar" class="sidebar"></aside>
+<main class="main">
+<div class="container">
+
+  <header class="page-head">
+    <div class="titles">
+      <span class="label-caps">Etapa 3 de 5 · aprovação obrigatória</span>
+      <h1>Plano de limpeza</h1>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn">Exportar plan.json</button>
+      <a class="btn" href="02-classificacao.html">Voltar à seleção</a>
+    </div>
+  </header>
+
+  <section class="kpis" aria-label="Resumo do plano">
+    <div class="kpi"><span class="small muted">Itens no plano</span><span class="value">26</span><span class="small muted">10 A · 8 B · 7 C · 1 D</span></div>
+    <div class="kpi"><span class="small muted">Liberação estimada</span><span class="value">155,0 GB</span><span class="small muted">soma dos tamanhos medidos</span></div>
+    <div class="kpi"><span class="small muted">Livre após (estimado)</span><span class="value">216,6 GB</span><span class="small muted">ocupação 93,5% → 77,3%</span></div>
+    <div class="kpi"><span class="small muted">Exige administrador</span><span class="value">10</span><span class="small muted">8 desinstaladores · WU · DISM</span></div>
+  </section>
+
+  <div class="grid-aside">
+    <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+
+      <section class="card" aria-label="Decisões">
+        <div class="card-head"><h2>Decisões antes de executar</h2><span class="small muted">o plano não roda com decisão em aberto</span></div>
+
+        <div class="decision">
+          <fieldset data-decision>
+            <legend>Android Studio: qual instalação sobrevive?</legend>
+            <label class="option"><input type="radio" name="as" checked>
+              <span><strong>2024.3</strong> em <span class="mono small">Android Studio\</span> · recomendado<br><span class="evidence">Menu Iniciar → C:\Program Files\Android\Android Studio\bin\studio64.exe</span></span></label>
+            <label class="option"><input type="radio" name="as">
+              <span><strong>2025.3 Canary</strong> em <span class="mono small">android-studio2\</span><br><span class="evidence">binário studio64Panda3Canary1.exe · sem atalho</span></span></label>
+          </fieldset>
+        </div>
+
+        <div class="decision">
+          <fieldset data-decision>
+            <legend>CUDA Toolkit 11.8 (2,64 GB)</legend>
+            <label class="option"><input type="radio" name="cuda" checked>
+              <span><strong>Manter</strong> · recomendado<br><span class="evidence">CUDA_PATH = …\CUDA\v11.8 · …\v11.8\bin no PATH</span></span></label>
+            <label class="option"><input type="radio" name="cuda">
+              <span><strong>Remover mesmo assim</strong><br><span class="evidence">quebra build de extensões CUDA que dependem do PATH</span></span></label>
+          </fieldset>
+        </div>
+
+        <div class="decision">
+          <fieldset data-decision>
+            <legend>Jogos instalados (Steam)</legend>
+            <label class="option"><input type="radio" name="games">
+              <span><strong>Manter todos</strong><br><span class="evidence">nenhum jogo entra no plano</span></span></label>
+            <label class="option"><input type="radio" name="games">
+              <span><strong>Revisar em outra rodada</strong><br><span class="evidence">gera lista separada, sem execução agora</span></span></label>
+          </fieldset>
+        </div>
+      </section>
+
+      <section class="card" aria-label="Itens do plano">
+        <div class="card-head"><h2>Itens por tier</h2><span class="small muted">ordem de execução: A → B → C → D</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">Item</th><th scope="col">Tipo</th><th scope="col">Ação</th><th scope="col">Risco</th><th scope="col" class="num">GB</th></tr></thead>
+            <tbody>
+              <tr class="group"><td colspan="4"><span class="tier tA"><span class="sq"></span>A · Cache regenerável</span></td><td class="num">38,2</td></tr>
+              <tr><td>npm cache</td><td class="mono small">command</td><td class="mono small">npm cache clean --force</td><td class="small muted">nenhum</td><td class="num">6,4</td></tr>
+              <tr><td>pip cache</td><td class="mono small">command</td><td class="mono small">pip cache purge</td><td class="small muted">nenhum</td><td class="num">3,1</td></tr>
+              <tr><td>NVIDIA DXCache</td><td class="mono small">path</td><td class="mono small">remove</td><td class="small warn">resíduo possível</td><td class="num">4,8</td></tr>
+              <tr><td>Temp (&gt; 3 dias) · Chrome model · VSIX · Teams LocalCache · WU Download · Crash dumps · Lixeira</td><td class="mono small">path ×7</td><td class="mono small">remove</td><td class="small muted">nenhum</td><td class="num">23,9</td></tr>
+              <tr class="group"><td colspan="4"><span class="tier tB"><span class="sq"></span>B · Desinstalar</span></td><td class="num">61,9</td></tr>
+              <tr><td>NVIDIA ChatRTX 0.5 <span class="path">+ AlsoRemove ProgramData\NVIDIA Corporation\ChatRTX</span></td><td class="mono small">uninstall</td><td class="mono small">nvidia-core</td><td class="small muted">baixo</td><td class="num">15,35</td></tr>
+              <tr><td>NVIDIA Nsight Compute · Nsight Systems</td><td class="mono small">uninstall ×2</td><td class="mono small">msiexec /x {GUID} /qn</td><td class="small muted">baixo</td><td class="num">4,20</td></tr>
+              <tr><td>Android Studio 2025.3 Canary · cópia antiga</td><td class="mono small">uninstall ×2</td><td class="mono small">uninstall.exe /S</td><td class="small muted">baixo</td><td class="num">4,55</td></tr>
+              <tr><td>MEmu</td><td class="mono small">uninstall</td><td class="mono small">fabricante</td><td class="small muted">baixo</td><td class="num">26,40</td></tr>
+              <tr><td>VS BuildTools 2019 · Windows SDK 10.0.19041</td><td class="mono small">uninstall ×2</td><td class="mono small">setup.exe / winsdksetup</td><td class="small muted">baixo</td><td class="num">11,40</td></tr>
+              <tr class="group"><td colspan="4"><span class="tier tC"><span class="sq"></span>C · Diretórios regeneráveis</span></td><td class="num">49,6</td></tr>
+              <tr><td>Gradle caches <span class="path">pré: gradle --stop</span></td><td class="mono small">path</td><td class="mono small">remove</td><td class="small muted">re-download</td><td class="num">14,2</td></tr>
+              <tr><td>Android system-images · NDK antigos</td><td class="mono small">command ×2</td><td class="mono small">sdkmanager --uninstall</td><td class="small muted">re-download</td><td class="num">14,5</td></tr>
+              <tr><td>.m2 · NGX models · UpdateFramework · HuggingFace</td><td class="mono small">path ×4</td><td class="mono small">remove</td><td class="small muted">re-download</td><td class="num">20,9</td></tr>
+              <tr class="group"><td colspan="4"><span class="tier tD"><span class="sq"></span>D · Sistema</span></td><td class="num">5,3</td></tr>
+              <tr><td>Component store</td><td class="mono small">command</td><td class="mono small">DISM … /StartComponentCleanup</td><td class="small muted">baixo · longo</td><td class="num">5,3</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" aria-label="Plano em JSON">
+        <div class="card-head"><h2>plan.json</h2><span class="small muted mono">out/plan.json · mesmo formato da skill</span></div>
+<pre class="code">{
+  "volume": "C:",
+  "tiers": {
+    "A": [
+      { "id": "npm-cache", "kind": "command", "label": "npm cache",
+        "command": "npm cache clean --force" },
+      { "id": "dxcache", "kind": "path", "label": "NVIDIA DXCache",
+        "path": "%LOCALAPPDATA%\\NVIDIA\\DXCache", "action": "remove" }
+    ],
+    "B": [
+      { "id": "chatrtx", "kind": "uninstall", "label": "NVIDIA ChatRTX",
+        "displayName": "NVIDIA ChatRTX 0.5",
+        "alsoRemove": ["C:\\ProgramData\\NVIDIA Corporation\\ChatRTX"] }
+    ],
+    "D": [
+      { "id": "dism", "kind": "command", "label": "Limpeza do WinSxS",
+        "command": "DISM /Online /Cleanup-Image /StartComponentCleanup" }
+    ]
+  }
+}</pre>
+      </section>
+    </div>
+
+    <aside style="display:flex;flex-direction:column;gap:16px">
+      <section class="card" aria-label="Aprovação">
+        <h2>Aprovação</h2>
+        <p class="small muted">Cada tier roda separado, com dry-run antes e medição de espaço livre antes/depois.</p>
+        <fieldset style="border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:8px">
+          <legend class="label-caps" style="margin-bottom:6px">Tiers aprovados</legend>
+          <label class="kv" style="cursor:pointer"><span class="tier tA"><span class="sq"></span>A · Cache</span><input type="checkbox" name="approve-tier" checked></label>
+          <label class="kv" style="cursor:pointer"><span class="tier tB"><span class="sq"></span>B · Desinstalar</span><input type="checkbox" name="approve-tier" checked></label>
+          <label class="kv" style="cursor:pointer"><span class="tier tC"><span class="sq"></span>C · Regeneráveis</span><input type="checkbox" name="approve-tier" checked></label>
+          <label class="kv" style="cursor:pointer"><span class="tier tD"><span class="sq"></span>D · Sistema</span><input type="checkbox" name="approve-tier" checked></label>
+        </fieldset>
+        <div class="divider"></div>
+        <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="ack" style="margin-top:2px">
+          <span class="small">Revisei itens, riscos e decisões. Remover cache também é irreversível.</span></label>
+        <a class="btn btn-primary btn-lg" id="approve" href="04-execucao.html" aria-disabled="true">Aprovar e iniciar dry-run</a>
+        <span class="small muted" id="approve-status" aria-live="polite"></span>
+      </section>
+
+      <section class="card" aria-label="Regras de execução">
+        <h2>Regras de execução</h2>
+        <ul class="checklist small">
+          <li><span class="dot" style="margin-top:6px;color:var(--muted)"></span><span>Um tier por vez; delta medido em cada um.</span></li>
+          <li><span class="dot" style="margin-top:6px;color:var(--muted)"></span><span>Item travado não aborta o lote; fica como pendência.</span></li>
+          <li><span class="dot" style="margin-top:6px;color:var(--muted)"></span><span>Tier B só via desinstalador; resíduo em ProgramData medido depois.</span></li>
+          <li><span class="dot" style="margin-top:6px;color:var(--muted)"></span><span>Nenhum reinício sem perguntar.</span></li>
+          <li><span class="dot" style="margin-top:6px;color:var(--muted)"></span><span>Privilégio de admin só no helper, nunca na interface.</span></li>
+        </ul>
+      </section>
+    </aside>
+  </div>
+
+</div>
+</main>
+</div>
+</body>
+</html>

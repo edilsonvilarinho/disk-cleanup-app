@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disk Cleanup — 4 · Execução</title>
+<script>(function(){var t;try{t=localStorage.getItem('dc-theme')}catch(e){}if(!t)t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t)})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="assets/app.css">
+<script src="assets/app.js" defer></script>
+</head>
+<body data-page="execute" data-mode="exec">
+<div class="layout">
+<aside id="sidebar" class="sidebar"></aside>
+<main class="main">
+<div class="container">
+
+  <header class="page-head">
+    <div class="titles">
+      <span class="label-caps">Etapa 4 de 5 · executando</span>
+      <h1>Execução por tier</h1>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn">Pausar após item atual</button>
+      <button type="button" class="btn btn-danger">Cancelar tier</button>
+    </div>
+  </header>
+
+  <div class="note warn-note" role="status">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/></svg>
+    <span>Helper elevado ativo (UAC) em processo separado, só para desinstaladores e DISM. A interface continua sem privilégio.</span>
+  </div>
+
+  <section class="stepper" aria-label="Progresso por tier">
+    <div class="stage">
+      <div class="row"><span class="tier tA"><span class="sq"></span>A · Cache</span><span class="pill ok"><span class="dot"></span>Concluído</span></div>
+      <span class="num" style="text-align:left;font-size:20px">+37,6 GB</span>
+      <span class="small muted">previsto 38,2 · 1 item parcial</span>
+    </div>
+    <div class="stage active">
+      <div class="row"><span class="tier tB"><span class="sq"></span>B · Desinstalar</span><span class="pill info"><svg class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9"/></svg>4 de 8</span></div>
+      <span class="num" style="text-align:left;font-size:20px">+19,6 GB</span>
+      <div class="meter" role="img" aria-label="3 de 8 itens concluídos"><span style="width:37.5%"></span></div>
+    </div>
+    <div class="stage">
+      <div class="row"><span class="tier tC"><span class="sq"></span>C · Regeneráveis</span><span class="pill neutral">Aguardando</span></div>
+      <span class="num muted" style="text-align:left;font-size:20px">49,6 GB</span>
+      <span class="small muted">previsto</span>
+    </div>
+    <div class="stage">
+      <div class="row"><span class="tier tD"><span class="sq"></span>D · Sistema</span><span class="pill neutral">Aguardando</span></div>
+      <span class="num muted" style="text-align:left;font-size:20px">5,3 GB</span>
+      <span class="small muted">previsto · operação longa</span>
+    </div>
+  </section>
+
+  <section class="kpis" aria-label="Espaço livre">
+    <div class="kpi"><span class="small muted">Livre no início</span><span class="value">61,6 GB</span><span class="small muted">antes do tier A</span></div>
+    <div class="kpi"><span class="small muted">Livre agora</span><span class="value">118,8 GB</span><span class="small muted">medido via API do volume</span></div>
+    <div class="kpi"><span class="small muted">Liberado até agora</span><span class="value">+57,2 GB</span><span class="small muted">A 37,6 · B 19,6</span></div>
+  </section>
+
+  <div class="grid-2">
+    <section class="card" aria-label="Itens do tier B">
+      <div class="card-head"><h2>Tier B · itens</h2><span class="small muted">delta medido por item</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Status</th><th scope="col">Item</th><th scope="col" class="num">Δ GB</th></tr></thead>
+          <tbody>
+            <tr><td><span class="pill ok"><span class="dot"></span>ok</span></td><td>NVIDIA ChatRTX 0.5<span class="path">exit 0 · resíduo ProgramData 11,15 GB removido</span></td><td class="num">+15,35</td></tr>
+            <tr><td><span class="pill ok"><span class="dot"></span>ok</span></td><td>NVIDIA Nsight Compute<span class="path">msiexec exit 0 · registro limpo</span></td><td class="num">+2,30</td></tr>
+            <tr><td><span class="pill ok"><span class="dot"></span>ok</span></td><td>NVIDIA Nsight Systems<span class="path">msiexec exit 0 · registro limpo</span></td><td class="num">+1,90</td></tr>
+            <tr><td><span class="pill info"><svg class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9"/></svg>rodando</span></td><td>Android Studio 2025.3 Canary<span class="path">uninstall.exe /S · aguardando o processo encerrar</span></td><td class="num muted">—</td></tr>
+            <tr class="blocked"><td><span class="pill neutral">fila</span></td><td>Android Studio (cópia antiga)</td><td class="num">—</td></tr>
+            <tr class="blocked"><td><span class="pill neutral">fila</span></td><td>MEmu</td><td class="num">—</td></tr>
+            <tr class="blocked"><td><span class="pill neutral">fila</span></td><td>VS BuildTools 2019</td><td class="num">—</td></tr>
+            <tr class="blocked"><td><span class="pill neutral">fila</span></td><td>Windows SDK 10.0.19041</td><td class="num">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Log">
+      <div class="card-head"><h2>Log</h2><span class="small muted mono">out/logs/cleanup-B-20261023-142210.log</span></div>
+<pre class="code log" role="log" aria-live="polite"><span class="t">14:22:10</span> Tier B | itens: 8 | execute=true
+<span class="t">14:22:10</span> Espaço livre antes: 99,2 GB
+<span class="t">14:22:11</span> [uninstall] NVIDIA ChatRTX 0.5 · tipo nvidia-core
+<span class="t">14:22:11</span>   exe: RunDll32.EXE  args: "…\NVI2.DLL",UninstallPackage …
+<span class="t">14:24:03</span>   exit 0 · registro removido
+<span class="t">14:24:03</span>   AlsoRemove ProgramData\NVIDIA Corporation\ChatRTX (11,15 GB) → removido
+<span class="t">14:24:05</span> ok        NVIDIA ChatRTX 0.5          +15,35 GB
+<span class="t">14:24:06</span> [uninstall] NVIDIA Nsight Compute · tipo msi
+<span class="t">14:24:06</span>   exe: msiexec.exe  args: /x {GUID} /qn /norestart
+<span class="t">14:25:12</span> ok        NVIDIA Nsight Compute        +2,30 GB
+<span class="t">14:25:13</span> [uninstall] NVIDIA Nsight Systems · tipo msi
+<span class="t">14:26:01</span> ok        NVIDIA Nsight Systems        +1,90 GB
+<span class="t">14:26:02</span> [uninstall] Android Studio 2025.3 Canary · tipo nsis
+<span class="t">14:26:02</span>   exe: …\android-studio2\uninstall.exe  args: /S
+<span class="t">14:26:02</span>   aguardando o processo encerrar (timeout 20 min)</pre>
+    </section>
+  </div>
+
+  <div class="grid-2">
+    <section class="card" aria-label="Pendências do tier A">
+      <h2>Pendências do tier A</h2>
+      <div class="inset">
+        <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-weight:600">NVIDIA DXCache · parcial</span><span class="small muted">restaram 0,6 GB: arquivos abertos pelo driver</span></div>
+        <button type="button" class="btn">Tentar de novo</button>
+      </div>
+      <p class="small muted">Item travado não aborta o lote. Nova tentativa só depois de fechar o processo que segura os arquivos.</p>
+    </section>
+
+    <section class="card" aria-label="Reinício">
+      <h2>Reinício</h2>
+      <div class="inset">
+        <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-weight:600">Nenhum reinício automático</span><span class="small muted">Se um desinstalador pedir reboot, a decisão volta para você no fim do tier.</span></div>
+        <span class="pill neutral">0 pedidos</span>
+      </div>
+    </section>
+  </div>
+
+  <div class="footer-actions">
+    <span class="small muted">O próximo tier só começa com o anterior medido e revisado.</span>
+    <a class="btn btn-primary btn-lg" href="05-relatorio.html">Ver relatório (exemplo final)</a>
+  </div>
+
+</div>
+</main>
+</div>
+</body>
+</html>

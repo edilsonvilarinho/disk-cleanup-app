@@ -10,21 +10,33 @@ import './styles/app.css'
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 import { gatewayPlugin } from './application/gatewayPlugin'
+import { settingsPlugin } from './application/settings'
+import { useSettingsStore } from './application/stores/settings'
 import { ThemeController } from './application/theme'
-import { applyThemeToDocument, localStorageThemeStorage, systemPrefersDark } from './infrastructure/browserTheme'
+import {
+  applyThemeToDocument,
+  localStorageSettingsStorage,
+  systemPrefersDark,
+  watchSystemTheme,
+} from './infrastructure/browserTheme'
 import { DemoGateway } from './infrastructure/demoGateway'
 import { TauriGateway } from './infrastructure/tauriGateway'
 import App from './presentation/App.vue'
+import { vueErrorHandler } from './presentation/errorHandler'
 import { createAppRouter } from './presentation/router'
 import { THEME_KEY } from './presentation/theme'
 
 // Fora do Tauri (navegador, `pnpm dev`) usa dados de demonstração.
 const gateway = '__TAURI_INTERNALS__' in window ? new TauriGateway() : new DemoGateway()
 
-const theme = new ThemeController(localStorageThemeStorage, systemPrefersDark, applyThemeToDocument)
-theme.init()
-
 const pinia = createPinia()
 pinia.use(gatewayPlugin(gateway))
+pinia.use(settingsPlugin(localStorageSettingsStorage))
 
-createApp(App).use(pinia).use(createAppRouter()).provide(THEME_KEY, theme).mount('#app')
+const theme = new ThemeController(systemPrefersDark, applyThemeToDocument)
+watchSystemTheme(() => theme.refresh())
+
+const app = createApp(App).use(pinia).use(createAppRouter()).provide(THEME_KEY, theme)
+app.config.errorHandler = vueErrorHandler()
+useSettingsStore(pinia).load()
+app.mount('#app')

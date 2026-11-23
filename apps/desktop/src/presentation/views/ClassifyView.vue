@@ -1,44 +1,51 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useClassificationStore, type ClassificationTab } from '../../application/stores/classification'
-import { formatGb } from '../../domain/format'
-import { TIER_LABEL, TIERS } from '../../domain/selection'
-import { riskLabel } from '../labels'
+import { useSettingsStore } from '../../application/stores/settings'
+import type { SkippedDto } from '../../domain/models'
+import { TIERS } from '../../domain/selection'
 import TierBadge from '../components/TierBadge.vue'
+import { useI18n } from '../i18n'
 
 const store = useClassificationStore()
-onMounted(() => store.ensureLoaded())
+const settings = useSettingsStore()
+const { t, txt, err, gb, num } = useI18n()
 
-const tabs: { id: ClassificationTab; label: string }[] = [
-  ...TIERS.map((t) => ({ id: t as ClassificationTab, label: `${t} · ${TIER_LABEL[t]}` })),
-  { id: 'X', label: 'Exclusões' },
-]
+onMounted(() => store.ensureLoaded(settings.extraExclusions))
+const reload = () => store.load(settings.extraExclusions)
+
+const tabs = computed<{ id: ClassificationTab; label: string }[]>(() => [
+  ...TIERS.map((tier) => ({ id: tier as ClassificationTab, label: `${tier} · ${t(`tier.${tier}`)}` })),
+  { id: 'X', label: t('classify.exclusions') },
+])
+
+function skipText(s: SkippedDto): string {
+  return t(`skip.${s.code}`, { detail: s.detail ?? '', reason: s.reason ? txt(s.reason) : '' })
+}
 </script>
 
 <template>
   <header class="page-head">
     <div class="titles">
-      <span class="label-caps">Etapa 2 de 5 · somente leitura</span>
-      <h1>Classificação dos candidatos</h1>
+      <span class="label-caps">{{ t('classify.eyebrow') }}</span>
+      <h1>{{ t('classify.title') }}</h1>
     </div>
     <div class="actions">
-      <button type="button" class="btn" data-test="reclassify" :disabled="store.status === 'running'" @click="store.load()">Reclassificar</button>
+      <button type="button" class="btn" data-test="reclassify" :disabled="store.status === 'running'" @click="reload">{{ t('classify.reclassify') }}</button>
     </div>
   </header>
 
-  <div class="note" role="note">
-    <span>Candidatos a verificar, não lista de execução. O caminho existir no disco não prova que ele está sem uso.</span>
-  </div>
+  <div class="note" role="note"><span>{{ t('classify.note') }}</span></div>
 
-  <div v-if="store.status === 'running'" class="note" role="status" data-test="classify-loading">Medindo os caminhos do catálogo…</div>
-  <div v-if="store.status === 'error'" class="note warn-note" role="alert" data-test="classify-error">
-    <span>Falha na classificação: {{ store.error }}</span>
-    <button type="button" class="btn" data-test="retry" @click="store.load()">Tentar de novo</button>
+  <div v-if="store.status === 'running'" class="note" role="status" data-test="classify-loading">{{ t('classify.loading') }}</div>
+  <div v-if="store.error" class="note warn-note" role="alert" data-test="classify-error">
+    <span>{{ t('classify.failed', { error: err(store.error) }) }}</span>
+    <button type="button" class="btn" data-test="retry" @click="reload">{{ t('common.retry') }}</button>
   </div>
 
   <div v-if="store.report" class="grid-aside">
-    <section class="card" aria-label="Candidatos por tier">
-      <div class="tabs" role="tablist" aria-label="Tiers">
+    <section class="card" :aria-label="t('classify.tiers')">
+      <div class="tabs" role="tablist" :aria-label="t('classify.tiers')">
         <button
           v-for="tab in tabs"
           :key="tab.id"
@@ -57,11 +64,11 @@ const tabs: { id: ClassificationTab; label: string }[] = [
       <template v-if="store.activeTab === 'X'">
         <div class="table-wrap" data-test="exclusions">
           <table>
-            <thead><tr><th scope="col">Caminho</th><th scope="col">Motivo</th></tr></thead>
+            <thead><tr><th scope="col">{{ t('classify.path') }}</th><th scope="col">{{ t('classify.reason') }}</th></tr></thead>
             <tbody>
               <tr v-for="ex in store.report.exclusions" :key="ex.pattern">
                 <td class="mono small">{{ ex.pattern }}</td>
-                <td class="small">{{ ex.reason }}</td>
+                <td class="small">{{ txt(ex.reason) }}</td>
               </tr>
             </tbody>
           </table>
@@ -69,41 +76,41 @@ const tabs: { id: ClassificationTab; label: string }[] = [
       </template>
       <template v-else>
         <div class="card-head">
-          <p class="small muted">Itens bloqueados não podem entrar no plano.</p>
-          <button type="button" class="btn" data-test="toggle-tier" @click="store.toggleTier(store.activeTab)">Marcar/desmarcar tier</button>
+          <p class="small muted">{{ t('classify.blockedHint') }}</p>
+          <button type="button" class="btn" data-test="toggle-tier" @click="store.toggleTier(store.activeTab)">{{ t('classify.toggleTier') }}</button>
         </div>
-        <p v-if="store.visible.length === 0" class="muted" data-test="tier-empty">Nenhum candidato neste tier.</p>
+        <p v-if="store.visible.length === 0" class="muted" data-test="tier-empty">{{ t('classify.emptyTier') }}</p>
         <div v-else class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th scope="col"><span class="sr-only">Selecionar</span></th>
-                <th scope="col">Item</th>
+                <th scope="col"><span class="sr-only">{{ t('classify.select') }}</span></th>
+                <th scope="col">{{ t('classify.item') }}</th>
                 <th scope="col" class="num">GB</th>
-                <th scope="col">Risco</th>
-                <th scope="col">Observação</th>
+                <th scope="col">{{ t('classify.risk') }}</th>
+                <th scope="col">{{ t('classify.note2') }}</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="c in store.visible" :key="c.id" :class="{ blocked: c.blockedReason }" data-test="row">
+              <tr v-for="c in store.visible" :key="c.id" :class="{ blocked: c.blocked }" data-test="row">
                 <td>
                   <input
                     :id="`c-${c.id}`"
                     type="checkbox"
-                    :checked="!c.blockedReason && store.selected.includes(c.id)"
-                    :disabled="!!c.blockedReason"
+                    :checked="!c.blocked && store.selected.includes(c.id)"
+                    :disabled="!!c.blocked"
                     @change="store.toggle(c.id)"
                   />
                 </td>
                 <td>
-                  <label :for="`c-${c.id}`">{{ c.label }}</label>
+                  <label :for="`c-${c.id}`">{{ txt(c.label) }}</label>
                   <span class="path">{{ c.target }}</span>
                 </td>
-                <td class="num">{{ formatGb(c.sizeBytes).replace(' GB', '') }}</td>
-                <td class="small">{{ riskLabel(c.risk) }}</td>
+                <td class="num">{{ num(c.sizeBytes) }}</td>
+                <td class="small">{{ t(`risk.${c.risk}`) }}</td>
                 <td>
-                  <span v-if="c.blockedReason" class="pill warn"><span class="dot" />bloqueado: {{ c.blockedReason }}</span>
-                  <span v-else class="small muted">{{ c.note }}</span>
+                  <span v-if="c.blocked" class="pill warn"><span class="dot" />{{ t('classify.blocked', { reason: t(`block.${c.blocked.code}`, { value: c.blocked.value }) }) }}</span>
+                  <span v-else class="small muted">{{ txt(c.note) }}</span>
                 </td>
               </tr>
             </tbody>
@@ -112,26 +119,26 @@ const tabs: { id: ClassificationTab; label: string }[] = [
       </template>
 
       <details v-if="store.report.skipped.length" data-test="skipped">
-        <summary>Regras sem candidato ({{ store.report.skipped.length }})</summary>
+        <summary>{{ t('classify.skipped', { n: store.report.skipped.length }) }}</summary>
         <ul class="checklist small">
-          <li v-for="s in store.report.skipped" :key="s.id"><span class="mono">{{ s.id }}</span><span class="muted">{{ s.reason }}</span></li>
+          <li v-for="s in store.report.skipped" :key="s.id"><span class="mono">{{ s.id }}</span><span class="muted">{{ skipText(s) }}</span></li>
         </ul>
       </details>
     </section>
 
     <aside style="display: flex; flex-direction: column; gap: 16px">
-      <section class="card" aria-label="Seleção">
-        <h2>Seleção</h2>
-        <div v-for="t in store.totals" :key="t.tier" class="kv">
-          <TierBadge :tier="t.tier" />
-          <span class="small"><span class="muted">{{ t.count }} {{ t.count === 1 ? 'item' : 'itens' }}</span> · <span class="num">{{ formatGb(t.bytes) }}</span></span>
+      <section class="card" :aria-label="t('classify.selection')">
+        <h2>{{ t('classify.selection') }}</h2>
+        <div v-for="total in store.totals" :key="total.tier" class="kv">
+          <TierBadge :tier="total.tier" />
+          <span class="small"><span class="muted">{{ t(total.count === 1 ? 'common.item' : 'common.items', { n: total.count }) }}</span> · <span class="num">{{ gb(total.bytes) }}</span></span>
         </div>
         <div class="divider" />
         <div class="kv" style="font-weight: 600" data-test="total">
-          <span>Total estimado</span><span class="num" style="font-size: 18px">{{ formatGb(store.total.bytes) }}</span>
+          <span>{{ t('classify.total') }}</span><span class="num" style="font-size: 18px">{{ gb(store.total.bytes) }}</span>
         </div>
-        <span class="small muted">{{ store.total.count }} itens selecionados</span>
-        <RouterLink class="btn btn-primary btn-lg" to="/plano" data-test="to-plan">Montar plano</RouterLink>
+        <span class="small muted">{{ t('classify.selected', { n: store.total.count }) }}</span>
+        <RouterLink class="btn btn-primary btn-lg" to="/plano" data-test="to-plan">{{ t('classify.toPlan') }}</RouterLink>
       </section>
     </aside>
   </div>

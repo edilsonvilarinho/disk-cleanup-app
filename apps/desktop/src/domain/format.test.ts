@@ -17,6 +17,14 @@ describe('format', () => {
     expect(formatDuration(120_000)).toBe('2 min 0 s')
   })
 
+  it('respeita o idioma: ponto decimal e separador de milhar do inglês', () => {
+    expect(formatGb(891.4 * GIB, 1, 'en-US')).toBe('891.4 GB')
+    expect(formatPercent(93.456, 1, 'en-US')).toBe('93.5%')
+    expect(formatCount(1284316, 'en-US')).toBe('1,284,316')
+    expect(formatDuration(12_345, 'en-US')).toBe('12.3 s')
+    expect(formatSignedGb(-GIB, 1, 'en-US')).toBe('-1.0 GB')
+  })
+
   it('formata variação de espaço com sinal', () => {
     expect(formatSignedGb(24.8 * GIB)).toBe('+24,8 GB')
     expect(formatSignedGb(-GIB)).toBe('-1,0 GB')

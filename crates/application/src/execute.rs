@@ -1,18 +1,17 @@
 use std::fmt;
 
 use disk_cleanup_domain::{
-    Action, ApprovedPlan, ByteSize, ItemResult, ItemStatus, PlanItem, SafetyGuard, Tier, TierRun,
+    Action, ApprovedPlan, ByteSize, FailCause, ItemResult, ItemStatus, LocalizedText, PlanItem,
+    SafetyGuard, SkipCause, Tier, TierRun,
 };
 
 use crate::{ActionRunner, AppError, ExecutionProgress, PortError, VolumeInfo};
-
-const PARTIAL_WITHOUT_DETAIL: &str = "arquivos em uso ou sem permissão";
 
 /// O que um item vai fazer (dry-run): nenhuma ação é executada.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlannedStep {
     pub id: String,
-    pub label: String,
+    pub label: LocalizedText,
     pub tier: Tier,
     pub kind: &'static str,
     pub target: String,
@@ -99,9 +98,7 @@ impl<'a> ExecuteService<'a> {
     fn items(approved: &ApprovedPlan, tier: Tier) -> Result<&[PlanItem], AppError> {
         let items = approved.plan().items(tier);
         if items.is_empty() {
-            return Err(AppError::InvalidRequest(format!(
-                "tier {tier} não está no plano aprovado"
-            )));
+            return Err(AppError::TierNotApproved(tier));
         }
         Ok(items)
     }
@@ -111,14 +108,16 @@ impl<'a> ExecuteService<'a> {
             Action::RemovePath { path } => self.remove(path),
             Action::Command { command } => self.command(command),
             Action::Uninstall { .. } => ItemStatus::Skipped {
-                reason: "desinstalação ainda não suportada pelo app".into(),
+                cause: SkipCause::UninstallUnsupported,
             },
         }
     }
 
     fn remove(&self, path: &str) -> ItemStatus {
-        if let Err(reason) = self.guard.check(path) {
-            return ItemStatus::Skipped { reason };
+        if let Err(violation) = self.guard.check(path) {
+            return ItemStatus::Skipped {
+                cause: SkipCause::Unsafe(violation),
+            };
         }
         match self.runner.remove_path(path) {
             Ok(outcome) if outcome.remaining == ByteSize::ZERO && outcome.errors.is_empty() => {
@@ -126,17 +125,13 @@ impl<'a> ExecuteService<'a> {
             }
             Ok(outcome) => ItemStatus::Partial {
                 remaining: outcome.remaining,
-                detail: outcome
-                    .errors
-                    .into_iter()
-                    .next()
-                    .unwrap_or_else(|| PARTIAL_WITHOUT_DETAIL.into()),
+                detail: outcome.errors.into_iter().next(),
             },
             Err(PortError::NotFound(_)) => ItemStatus::Skipped {
-                reason: "caminho não existe mais".into(),
+                cause: SkipCause::Missing,
             },
             Err(e) => ItemStatus::Failed {
-                error: e.to_string(),
+                cause: FailCause::Io(port_message(e)),
             },
         }
     }
@@ -145,7 +140,6 @@ impl<'a> ExecuteService<'a> {
         match self.runner.run_command(command) {
             Ok(outcome) if outcome.success => ItemStatus::Done,
             Ok(outcome) => {
-                let code = outcome.code.map_or("?".to_string(), |c| c.to_string());
                 let last = outcome
                     .output
                     .lines()
@@ -153,13 +147,26 @@ impl<'a> ExecuteService<'a> {
                     .find(|l| !l.trim().is_empty())
                     .unwrap_or("");
                 ItemStatus::Failed {
-                    error: format!("saída {code}: {}", last.trim()),
+                    cause: FailCause::Exit {
+                        code: outcome.code,
+                        last_line: last.trim().to_string(),
+                    },
                 }
             }
             Err(e) => ItemStatus::Failed {
-                error: e.to_string(),
+                cause: FailCause::Io(port_message(e)),
             },
         }
+    }
+}
+
+/// Mensagem crua do sistema, sem o prefixo em português do `Display`.
+fn port_message(error: PortError) -> String {
+    match error {
+        PortError::Io(m)
+        | PortError::NotFound(m)
+        | PortError::InvalidData(m)
+        | PortError::Unsupported(m) => m,
     }
 }
 

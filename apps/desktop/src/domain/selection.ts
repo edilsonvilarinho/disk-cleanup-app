@@ -3,13 +3,6 @@ import type { CandidateDto, Tier } from './models'
 
 export const TIERS: readonly Tier[] = ['A', 'B', 'C', 'D']
 
-export const TIER_LABEL: Record<Tier, string> = {
-  A: 'Cache',
-  B: 'Desinstalar',
-  C: 'Regeneráveis',
-  D: 'Sistema',
-}
-
 export interface TierTotal {
   tier: Tier
   count: number
@@ -17,7 +10,7 @@ export interface TierTotal {
 }
 
 export function isSelectable(candidate: CandidateDto): boolean {
-  return candidate.blockedReason === null
+  return candidate.blocked === null
 }
 
 export function defaultSelection(candidates: readonly CandidateDto[]): string[] {

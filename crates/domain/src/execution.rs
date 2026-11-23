@@ -1,4 +1,4 @@
-use crate::{ByteSize, Tier};
+use crate::{ByteSize, LocalizedText, SafetyViolation, Tier};
 
 /// Variação assinada de espaço livre: positivo = espaço liberado.
 pub fn signed_delta(before: ByteSize, after: ByteSize) -> i64 {
@@ -6,21 +6,43 @@ pub fn signed_delta(before: ByteSize, after: ByteSize) -> i64 {
     i64::try_from(a - b).unwrap_or(if a > b { i64::MAX } else { i64::MIN })
 }
 
+/// Por que um item não foi executado.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SkipCause {
+    /// O caminho já não existe.
+    Missing,
+    /// Recusado pela guarda de segurança.
+    Unsafe(SafetyViolation),
+    /// Desinstalação ainda não é executada pelo app.
+    UninstallUnsupported,
+}
+
+/// Por que um item falhou.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FailCause {
+    /// Comando saiu com erro; última linha da saída.
+    Exit {
+        code: Option<i32>,
+        last_line: String,
+    },
+    /// Erro de E/S, com a mensagem do sistema operacional.
+    Io(String),
+}
+
 /// Resultado de um item. Item travado não aborta o tier: vira `Partial`/`Failed`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ItemStatus {
     Done,
-    /// Parte ficou (arquivo em uso por processo ativo, permissão).
+    /// Parte ficou. `detail` é a mensagem do sistema, quando houver.
     Partial {
         remaining: ByteSize,
-        detail: String,
+        detail: Option<String>,
     },
-    /// Não executado de propósito (guarda de segurança, caminho já ausente).
     Skipped {
-        reason: String,
+        cause: SkipCause,
     },
     Failed {
-        error: String,
+        cause: FailCause,
     },
 }
 
@@ -29,21 +51,13 @@ impl ItemStatus {
         matches!(self, ItemStatus::Partial { .. } | ItemStatus::Failed { .. })
     }
 
-    pub fn label(&self) -> &'static str {
+    /// Código estável para a interface traduzir.
+    pub fn code(&self) -> &'static str {
         match self {
             ItemStatus::Done => "ok",
-            ItemStatus::Partial { .. } => "parcial",
-            ItemStatus::Skipped { .. } => "pulado",
-            ItemStatus::Failed { .. } => "erro",
-        }
-    }
-
-    pub fn detail(&self) -> Option<&str> {
-        match self {
-            ItemStatus::Done => None,
-            ItemStatus::Partial { detail, .. } => Some(detail),
-            ItemStatus::Skipped { reason } => Some(reason),
-            ItemStatus::Failed { error } => Some(error),
+            ItemStatus::Partial { .. } => "partial",
+            ItemStatus::Skipped { .. } => "skipped",
+            ItemStatus::Failed { .. } => "failed",
         }
     }
 }
@@ -52,7 +66,7 @@ impl ItemStatus {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ItemResult {
     pub id: String,
-    pub label: String,
+    pub label: LocalizedText,
     pub tier: Tier,
     pub estimated: ByteSize,
     pub free_before: ByteSize,

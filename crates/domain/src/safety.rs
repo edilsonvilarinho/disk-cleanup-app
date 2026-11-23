@@ -1,5 +1,14 @@
 use crate::{path_components, path_is_within};
 
+/// Motivo de a guarda recusar um alvo de remoção.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SafetyViolation {
+    /// Menos segmentos que o mínimo (raiz, `C:\Users`, `/home`).
+    TooBroad { target: String },
+    /// Igual a uma pasta protegida (perfil, AppData, Program Files…).
+    Protected { path: String },
+}
+
 /// Mínimo de segmentos de um alvo removível: `C:\Users\u\x` (4) passa,
 /// `C:\Users\u` (3) precisa estar fora da lista de protegidos, `C:\Users` (2) nunca.
 const MIN_SEGMENTS: usize = 3;
@@ -19,18 +28,18 @@ impl SafetyGuard {
         }
     }
 
-    pub fn check(&self, target: &str) -> Result<(), String> {
+    pub fn check(&self, target: &str) -> Result<(), SafetyViolation> {
         if path_components(target).len() < MIN_SEGMENTS {
-            return Err(format!("alvo amplo demais para remoção: {target:?}"));
+            return Err(SafetyViolation::TooBroad {
+                target: target.to_string(),
+            });
         }
         if let Some(p) = self
             .protected
             .iter()
             .find(|p| path_is_within(target, p) && path_is_within(p, target))
         {
-            return Err(format!(
-                "alvo protegido (pasta do sistema ou do usuário): {p}"
-            ));
+            return Err(SafetyViolation::Protected { path: p.clone() });
         }
         Ok(())
     }

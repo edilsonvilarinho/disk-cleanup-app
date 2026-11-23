@@ -38,8 +38,8 @@ export class TauriGateway implements DiskCleanupGateway {
     }
   }
 
-  classify(): Promise<ClassificationDto> {
-    return this.call<ClassificationDto>('classify')
+  classify(extraExclusions: string[]): Promise<ClassificationDto> {
+    return this.call<ClassificationDto>('classify', { extraExclusions })
   }
 
   buildPlan(volume: string, selected: string[]): Promise<PlanDto> {
