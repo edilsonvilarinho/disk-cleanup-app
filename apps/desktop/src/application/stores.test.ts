@@ -6,6 +6,7 @@ import { classification, plan, survey, systemInfo } from '../test/fixtures'
 import { fakeGateway } from '../test/fakeGateway'
 import type { DiskCleanupGateway } from './gateway'
 import { gatewayPlugin } from './gatewayPlugin'
+import { historyPlugin, memoryHistoryStorage } from './history'
 import { useClassificationStore } from './stores/classification'
 import { usePlanStore } from './stores/plan'
 import { useSurveyStore } from './stores/survey'
@@ -15,6 +16,7 @@ function setup(gateway: DiskCleanupGateway = fakeGateway()) {
   // Plugins do Pinia só valem depois de instalado num app.
   const pinia = createPinia()
   pinia.use(gatewayPlugin(gateway))
+  pinia.use(historyPlugin(memoryHistoryStorage()))
   createApp({}).use(pinia)
   setActivePinia(pinia)
   return gateway

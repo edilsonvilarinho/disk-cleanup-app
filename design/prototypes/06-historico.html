@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disk Cleanup — Histórico</title>
+<script>(function(){var t;try{t=localStorage.getItem('dc-theme')}catch(e){}if(!t)t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t)})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="assets/app.css">
+<script src="assets/app.js" defer></script>
+</head>
+<body data-page="history" data-mode="ro">
+<div class="layout">
+<aside id="sidebar" class="sidebar"></aside>
+<main class="main">
+<div class="container">
+
+  <header class="page-head">
+    <div class="titles">
+      <span class="label-caps">Análise · somente leitura</span>
+      <h1>Histórico de varreduras</h1>
+    </div>
+    <div class="actions">
+      <span class="small muted">Salvo neste computador · últimas 100 varreduras</span>
+      <button type="button" class="btn" id="clear">Limpar histórico</button>
+    </div>
+  </header>
+
+  <div class="inset" id="clear-confirm" hidden style="flex-wrap:wrap">
+    <span>Apagar as <strong id="clear-n"></strong> varreduras salvas? Isso não toca no disco, só no histórico.</span>
+    <div class="actions">
+      <button type="button" class="btn" id="clear-cancel">Cancelar</button>
+      <button type="button" class="btn btn-primary btn-danger" id="clear-ok">Apagar histórico</button>
+    </div>
+  </div>
+
+  <div class="note" role="note">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg>
+    <span>Toda varredura concluída entra aqui automaticamente. Dados de exemplo.</span>
+  </div>
+
+  <section class="kpis" aria-label="Resumo do histórico">
+    <div class="kpi"><span class="small muted">Varreduras</span><span class="value" id="k-n"></span><span class="small muted" id="k-n-hint"></span></div>
+    <div class="kpi"><span class="small muted">Usado na última</span><span class="value" id="k-used"></span><span class="small muted" id="k-used-hint"></span></div>
+    <div class="kpi"><span class="small muted">Desde a anterior</span><span class="value" id="k-prev"></span><span class="small muted" id="k-prev-hint"></span></div>
+    <div class="kpi"><span class="small muted">No período</span><span class="value" id="k-period"></span><span class="small muted" id="k-period-hint"></span></div>
+  </section>
+
+  <section class="card" aria-labelledby="chart-title">
+    <div class="card-head">
+      <h2 id="chart-title">Espaço usado em C:\</h2>
+      <span class="small muted">GB · uma marca por varredura</span>
+    </div>
+    <div class="chart" id="chart"></div>
+  </section>
+
+  <section class="card" aria-labelledby="cmp-title">
+    <div class="card-head">
+      <h2 id="cmp-title">O que mudou</h2>
+      <div class="compare-pick">
+        <label class="small muted" for="base">De</label>
+        <select id="base" class="select"></select>
+        <label class="small muted" for="target">para</label>
+        <select id="target" class="select"></select>
+      </div>
+    </div>
+    <div class="inset" id="cmp-summary" style="flex-wrap:wrap;gap:20px;justify-content:flex-start"></div>
+    <div class="note warn-note" id="cmp-profile" role="note" hidden>
+      <span>Perfis de usuário diferentes nas duas varreduras: a comparação do perfil foi omitida.</span>
+    </div>
+    <div class="legend">
+      <span><span class="key" style="background:var(--grow)"></span>Cresceu</span>
+      <span><span class="key" style="background:var(--shrink)"></span>Reduziu</span>
+      <span>Ordenado pela maior variação · 10 primeiras</span>
+    </div>
+    <div class="grid-2">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <h3 class="label-caps">Por raiz do volume</h3>
+        <div class="diff" id="diff-roots"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <h3 class="label-caps">Perfil do usuário</h3>
+        <div class="diff" id="diff-profile"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="list-title">
+    <h2 id="list-title">Varreduras</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th scope="col">Data</th><th scope="col">Profundidade</th>
+          <th scope="col" class="num">Usado</th><th scope="col" class="num">Livre</th>
+          <th scope="col" class="num">Δ usado</th><th scope="col" class="num">Arquivos</th>
+          <th scope="col" class="num">Duração</th><th scope="col"><span class="sr-only">Ações</span></th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+</main>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var GB = 1;
+  var TOTAL = 953.0;
+
+  /* Dados de exemplo: queda grande em 05/11 = limpeza executada. */
+  var base = { roots: { 'Program Files (x86)': 318.2, 'Users': 236.0, 'Windows': 48.7, 'Program Files': 33.1, 'ProgramData': 8.6, 'pagefile.sys': 6.0, 'oracle': 0.3, 'Python314': 0.2 },
+               profile: { 'AppData': 96.0, 'OneDrive - Informata GC': 60.1, 'workspace': 31.2, 'OneDrive - Informata': 20.1, '.codex': 6.1, 'Downloads': 2.4, '.vscode': 2.8, '.cache': 2.0, '.gradle': 14.2 } };
+  var raw = [
+    ['2026-10-02T09:14', 2, 891.4, 1912004, 92, { 'Users': 150.0, 'Program Files (x86)': -0.4 }, { 'AppData': 72.0, '.gradle': 12.8, 'workspace': 6.0 }],
+    ['2026-10-16T18:40', 2, 897.9, 1931552, 95, { 'Users': 156.2 }, { 'AppData': 76.4, '.gradle': 13.4, 'workspace': 7.9 }],
+    ['2026-10-30T11:02', 2, 905.3, 1950220, 101, { 'Users': 163.4 }, { 'AppData': 81.9, '.gradle': 14.0, 'workspace': 9.0 }],
+    ['2026-11-05T08:30', 1, 612.8, 1810330, 64, { 'Users': -1.2, 'Program Files (x86)': 7.7 }, { 'AppData': -1.9, '.gradle': -14.2, 'workspace': 0.4 }],
+    ['2026-11-12T17:21', 2, 609.9, 1824004, 74, { 'Users': -4.0 }, { 'AppData': -2.1, '.gradle': -14.2, 'workspace': 1.1 }],
+    ['2026-11-20T10:05', 2, 612.7, 1839170, 75, { 'Users': -1.3 }, { 'AppData': 0.6, '.gradle': -14.2, 'workspace': 2.6, 'Downloads': -0.3 }],
+    ['2026-11-23T14:48', 2, 615.1, 1857374, 76, {}, { '.gradle': -14.2 }]
+  ];
+  function merge(obj, delta) {
+    var out = {}; Object.keys(obj).forEach(function (k) { out[k] = obj[k]; });
+    Object.keys(delta || {}).forEach(function (k) { out[k] = Math.max(0, (out[k] || 0) + delta[k]); if (out[k] === 0) delete out[k]; });
+    return out;
+  }
+  var scans = raw.map(function (r, i) {
+    return { id: 's' + i, at: new Date(r[0]), depth: r[1], used: r[2], free: TOTAL - r[2], files: r[3], secs: r[4],
+             roots: merge(base.roots, r[5]), profile: r[6] ? merge(base.profile, r[6]) : null };
+  });
+
+  var nf = function (n, d) { return n.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }); };
+  var gb = function (n) { return nf(n, 1) + ' GB'; };
+  var signed = function (n) { return (n > 0 ? '+' : n < 0 ? '−' : '') + nf(Math.abs(n), 1) + ' GB'; };
+  var day = function (d) { return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }); };
+  var full = function (d) { return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
+  var dur = function (s) { return s >= 60 ? Math.floor(s / 60) + ' min ' + (s % 60) + ' s' : s + ' s'; };
+  var el = function (tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  var $ = function (id) { return document.getElementById(id); };
+
+  var baseIdx, targetIdx;
+
+  /* ---------- KPIs ---------- */
+  function kpis() {
+    var n = scans.length, last = scans[n - 1], prev = scans[n - 2], first = scans[0];
+    $('k-n').textContent = n;
+    $('k-n-hint').textContent = n ? 'desde ' + day(first.at) : '';
+    $('k-used').textContent = gb(last.used);
+    $('k-used-hint').textContent = 'de ' + gb(TOTAL) + ' · ' + day(last.at);
+    $('k-prev').textContent = prev ? signed(last.used - prev.used) : '—';
+    $('k-prev-hint').textContent = prev ? day(prev.at) + ' → ' + day(last.at) : 'só uma varredura';
+    $('k-period').textContent = n > 1 ? signed(last.used - first.used) : '—';
+    $('k-period-hint').textContent = n > 1 ? day(first.at) + ' → ' + day(last.at) : '';
+  }
+
+  /* ---------- Gráfico de linha (SVG, uma série, eixo 0..capacidade) ---------- */
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  function s(tag, attrs) { var e = document.createElementNS(SVGNS, tag); Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); }); return e; }
+  function chart() {
+    var host = $('chart'); host.textContent = '';
+    var W = Math.max(320, host.clientWidth), H = 260, m = { t: 16, r: 64, b: 28, l: 44 };
+    var iw = W - m.l - m.r, ih = H - m.t - m.b;
+    var t0 = scans[0].at.getTime(), t1 = scans[scans.length - 1].at.getTime();
+    var x = function (d) { return m.l + (t1 === t0 ? iw / 2 : (d.getTime() - t0) / (t1 - t0) * iw); };
+    var y = function (v) { return m.t + ih - v / TOTAL * ih; };
+    var svg = s('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Espaço usado por varredura, de ' + day(scans[0].at) + ' a ' + day(scans[scans.length - 1].at) });
+
+    var grid = s('g', { 'class': 'grid' }), axis = s('g', { 'class': 'axis' });
+    [0, 200, 400, 600, 800].forEach(function (v) {
+      grid.appendChild(s('line', { x1: m.l, x2: m.l + iw, y1: y(v), y2: y(v) }));
+      var tx = s('text', { x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end' }); tx.textContent = nf(v, 0); axis.appendChild(tx);
+    });
+    scans.forEach(function (p, i) {
+      if (i > 0 && i < scans.length - 1 && x(p.at) - x(scans[i - 1].at) < 44) return;
+      var tx = s('text', { x: x(p.at), y: H - 8, 'text-anchor': 'middle' }); tx.textContent = day(p.at); axis.appendChild(tx);
+    });
+    svg.appendChild(grid);
+
+    var ref = s('g', { 'class': 'ref' });
+    ref.appendChild(s('line', { x1: m.l, x2: m.l + iw, y1: y(TOTAL), y2: y(TOTAL) }));
+    var rt = s('text', { x: m.l + iw + 6, y: y(TOTAL) + 4 }); rt.textContent = 'capacidade'; ref.appendChild(rt);
+    svg.appendChild(ref);
+
+    var pts = scans.map(function (p) { return x(p.at) + ',' + y(p.used); });
+    svg.appendChild(s('path', { 'class': 'area', d: 'M' + x(scans[0].at) + ',' + y(0) + ' L' + pts.join(' L') + ' L' + x(scans[scans.length - 1].at) + ',' + y(0) + ' Z' }));
+    svg.appendChild(s('path', { 'class': 'line', d: 'M' + pts.join(' L') }));
+    svg.appendChild(axis);
+
+    var cross = s('line', { 'class': 'cross', y1: m.t, y2: m.t + ih, visibility: 'hidden' });
+    svg.appendChild(cross);
+    scans.forEach(function (p, i) {
+      svg.appendChild(s('circle', { 'class': 'dot' + (i === baseIdx || i === targetIdx ? ' sel' : ''), cx: x(p.at), cy: y(p.used), r: 4 }));
+    });
+    var last = scans[scans.length - 1];
+    var lab = s('text', { 'class': 'end-label', x: x(last.at) + 8, y: y(last.used) + 4 }); lab.textContent = nf(last.used, 1); svg.appendChild(lab);
+
+    var hit = s('rect', { 'class': 'hit', x: m.l - 10, y: m.t, width: iw + 20, height: ih, tabindex: 0 });
+    svg.appendChild(hit);
+    host.appendChild(svg);
+
+    var tip = el('div', 'tooltip'); tip.hidden = true; host.appendChild(tip);
+    function show(i) {
+      var p = scans[i], prev = scans[i - 1], scale = host.clientWidth / W;
+      cross.setAttribute('x1', x(p.at)); cross.setAttribute('x2', x(p.at)); cross.setAttribute('visibility', 'visible');
+      tip.textContent = '';
+      tip.appendChild(el('span', 'v', gb(p.used)));
+      tip.appendChild(el('span', 'muted', full(p.at)));
+      if (prev) tip.appendChild(el('span', 'muted', signed(p.used - prev.used) + ' vs anterior'));
+      tip.hidden = false;
+      var left = x(p.at) * scale + 12;
+      if (left + tip.offsetWidth > host.clientWidth) left = x(p.at) * scale - tip.offsetWidth - 12;
+      tip.style.left = left + 'px'; tip.style.top = (y(p.used) * scale - tip.offsetHeight - 10) + 'px';
+    }
+    function nearest(px) {
+      var best = 0, dist = Infinity;
+      scans.forEach(function (p, i) { var d = Math.abs(x(p.at) - px); if (d < dist) { dist = d; best = i; } });
+      return best;
+    }
+    var focusIdx = scans.length - 1;
+    hit.addEventListener('pointermove', function (e) { var r = svg.getBoundingClientRect(); focusIdx = nearest((e.clientX - r.left) * W / r.width); show(focusIdx); });
+    hit.addEventListener('pointerleave', function () { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); });
+    hit.addEventListener('focus', function () { show(focusIdx); });
+    hit.addEventListener('blur', function () { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); });
+    hit.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight') focusIdx = Math.min(scans.length - 1, focusIdx + 1);
+      else if (e.key === 'ArrowLeft') focusIdx = Math.max(0, focusIdx - 1);
+      else return;
+      e.preventDefault(); show(focusIdx);
+    });
+  }
+
+  /* ---------- Comparação ---------- */
+  function diffList(host, a, b) {
+    host.textContent = '';
+    if (!a || !b) { host.appendChild(el('p', 'small muted', 'Sem perfil de usuário em uma das varreduras.')); return; }
+    var keys = {}; Object.keys(a).concat(Object.keys(b)).forEach(function (k) { keys[k] = 1; });
+    var rows = Object.keys(keys).map(function (k) { return { k: k, d: (b[k] || 0) - (a[k] || 0), isNew: !(k in a), gone: !(k in b) }; })
+      .filter(function (r) { return Math.abs(r.d) >= 0.05; })
+      .sort(function (p, q) { return Math.abs(q.d) - Math.abs(p.d); }).slice(0, 10);
+    if (!rows.length) { host.appendChild(el('p', 'small muted', 'Nenhuma variação acima de 0,1 GB.')); return; }
+    var max = Math.max.apply(null, rows.map(function (r) { return Math.abs(r.d); }));
+    rows.forEach(function (r) {
+      var row = el('div', 'diff-row');
+      var name = el('span', 'name', r.k); name.title = r.k;
+      if (r.isNew) name.appendChild(el('span', 'tag', 'nova'));
+      if (r.gone) name.appendChild(el('span', 'tag', 'sumiu'));
+      var track = el('div', 'diff-track'), bar = el('span', r.d > 0 ? 'grow' : 'shrink');
+      bar.style.width = Math.max(1, Math.abs(r.d) / max * 50) + '%';
+      track.appendChild(bar);
+      track.title = r.k + ': ' + signed(r.d);
+      row.appendChild(name); row.appendChild(track); row.appendChild(el('span', 'num', signed(r.d)));
+      host.appendChild(row);
+    });
+  }
+  function compare() {
+    var a = scans[baseIdx], b = scans[targetIdx], sum = $('cmp-summary');
+    sum.textContent = '';
+    [['Usado', signed(b.used - a.used)], ['Livre', signed(b.free - a.free)], ['Arquivos', (b.files - a.files >= 0 ? '+' : '−') + Math.abs(b.files - a.files).toLocaleString('pt-BR')],
+     ['Intervalo', Math.round((b.at - a.at) / 864e5) + ' dias']].forEach(function (p) {
+      var box = el('div'); box.style.display = 'flex'; box.style.flexDirection = 'column';
+      box.appendChild(el('span', 'small muted', p[0])); box.appendChild(el('span', 'num', p[1])); box.lastChild.style.textAlign = 'left'; box.lastChild.style.fontSize = '16px';
+      sum.appendChild(box);
+    });
+    $('cmp-profile').hidden = true; /* exemplo: mesmo perfil nas duas */
+    diffList($('diff-roots'), a.roots, b.roots);
+    diffList($('diff-profile'), a.profile, b.profile);
+  }
+  function pickers() {
+    ['base', 'target'].forEach(function (id) {
+      var sel = $(id); sel.textContent = '';
+      scans.forEach(function (p, i) { var o = el('option', null, full(p.at)); o.value = i; sel.appendChild(o); });
+    });
+    $('base').value = baseIdx; $('target').value = targetIdx;
+  }
+
+  /* ---------- Tabela ---------- */
+  function table() {
+    var body = $('rows'); body.textContent = '';
+    scans.slice().reverse().forEach(function (p) {
+      var i = scans.indexOf(p), prev = scans[i - 1], tr = el('tr');
+      var date = el('td', 'date', full(p.at));
+      if (i === baseIdx) date.appendChild(el('span', 'tag', 'de'));
+      if (i === targetIdx) date.appendChild(el('span', 'tag', 'para'));
+      tr.appendChild(date);
+      tr.appendChild(el('td', 'small', p.depth + (p.depth === 1 ? ' nível' : ' níveis')));
+      tr.appendChild(el('td', 'num', nf(p.used, 1)));
+      tr.appendChild(el('td', 'num', nf(p.free, 1)));
+      tr.appendChild(el('td', 'num', prev ? signed(p.used - prev.used).replace(' GB', '') : '—'));
+      tr.appendChild(el('td', 'num', p.files.toLocaleString('pt-BR')));
+      tr.appendChild(el('td', 'num muted', dur(p.secs)));
+      var td = el('td'), del = el('button', 'btn', 'Excluir'); del.type = 'button';
+      del.setAttribute('aria-label', 'Excluir varredura de ' + full(p.at));
+      del.addEventListener('click', function () { remove(i); });
+      td.appendChild(del); tr.appendChild(td);
+      body.appendChild(tr);
+    });
+  }
+
+  function remove(i) {
+    scans.splice(i, 1);
+    if (!scans.length) { location.reload(); return; }
+    baseIdx = Math.max(0, scans.length - 2); targetIdx = scans.length - 1;
+    render();
+  }
+
+  function render() { kpis(); pickers(); compare(); table(); chart(); }
+
+  baseIdx = scans.length - 2; targetIdx = scans.length - 1;
+  document.addEventListener('DOMContentLoaded', function () {
+    render();
+    $('base').addEventListener('change', function () { baseIdx = +this.value; compare(); table(); chart(); });
+    $('target').addEventListener('change', function () { targetIdx = +this.value; compare(); table(); chart(); });
+    $('clear').addEventListener('click', function () { $('clear-n').textContent = scans.length; $('clear-confirm').hidden = false; });
+    $('clear-cancel').addEventListener('click', function () { $('clear-confirm').hidden = true; });
+    $('clear-ok').addEventListener('click', function () { $('clear-confirm').hidden = true; });
+    window.addEventListener('resize', chart);
+    document.addEventListener('dc-theme', chart);
+  });
+})();
+</script>
+</body>
+</html>

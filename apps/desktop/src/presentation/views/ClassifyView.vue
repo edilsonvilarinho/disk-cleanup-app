@@ -138,7 +138,8 @@ function skipText(s: SkippedDto): string {
           <span>{{ t('classify.total') }}</span><span class="num" style="font-size: 18px">{{ gb(store.total.bytes) }}</span>
         </div>
         <span class="small muted">{{ t('classify.selected', { n: store.total.count }) }}</span>
-        <RouterLink class="btn btn-primary btn-lg" to="/plano" data-test="to-plan">{{ t('classify.toPlan') }}</RouterLink>
+        <RouterLink v-if="store.total.count > 0" class="btn btn-primary btn-lg" to="/plano" data-test="to-plan">{{ t('classify.toPlan') }}</RouterLink>
+        <button v-else type="button" class="btn btn-primary btn-lg" disabled data-test="to-plan">{{ t('classify.toPlan') }}</button>
       </section>
     </aside>
   </div>

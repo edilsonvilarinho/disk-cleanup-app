@@ -4,6 +4,7 @@
 mod bootstrap;
 mod dto;
 mod error;
+mod export;
 mod service;
 mod update;
 
@@ -14,6 +15,9 @@ pub use dto::{
     SurveyDto, SurveyRequestDto, SystemInfoDto, TextDto, TierRunDto, UsageEntryDto, VolumeDto,
 };
 pub use error::ErrorDto;
+pub use export::{
+    suggested_png_name, validate_png, with_png_extension, MAX_PNG_BYTES, PNG_SIGNATURE,
+};
 pub use service::{
     approve_plan, build_plan, classify, execute_tier, preview_tier, report, run_survey,
     safety_guard, system_info, CallbackExecution, CallbackProgress, Session,

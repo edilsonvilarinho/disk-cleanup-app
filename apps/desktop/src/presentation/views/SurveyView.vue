@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useHistoryStore } from '../../application/stores/history'
 import { useSettingsStore } from '../../application/stores/settings'
 import { useSurveyStore } from '../../application/stores/survey'
 import { useSystemStore } from '../../application/stores/system'
@@ -11,12 +12,15 @@ import { useI18n } from '../i18n'
 const system = useSystemStore()
 const survey = useSurveyStore()
 const settings = useSettingsStore()
-const { t, err, gb, num, pct, count, duration } = useI18n()
+const history = useHistoryStore()
+const { t, err, gb, num, pct, count, duration, signedGb, date } = useI18n()
 const depth = ref<1 | 2>(settings.defaultDepth)
 
 const TONE: Record<Health, string> = { healthy: 'ok', warning: 'warn', critical: 'err' }
 
 const report = computed(() => survey.report)
+/** Varredura anterior a esta no histórico (para o KPI "Usado"). */
+const previous = computed(() => (survey.historyId ? history.previousOf(survey.historyId) : null))
 const bars = (list: UsageEntryDto[]) => list.slice(0, 10).map((e) => ({ name: e.name, bytes: e.logicalBytes }))
 // Computadas: o filho recebe a mesma referência enquanto o relatório não muda.
 const rootBars = computed(() => bars(report.value?.roots ?? []))
@@ -66,7 +70,13 @@ function start() {
 
   <template v-if="report">
     <section class="kpis" aria-label="KPIs">
-      <KpiCard :label="t('survey.used')" :value="gb(report.volume.usedBytes)" :hint="t('survey.of', { total: gb(report.volume.totalBytes) })" data-test="kpi-used" />
+      <KpiCard :label="t('survey.used')" :value="gb(report.volume.usedBytes)" data-test="kpi-used">
+        <span class="small muted">
+          {{ t('survey.of', { total: gb(report.volume.totalBytes) }) }}<template v-if="previous"> ·
+            <RouterLink class="link" to="/historico" data-test="since-last">{{ t('survey.sinceLast', { delta: signedGb(report.volume.usedBytes - previous.usedBytes), date: date(previous.at, false) }) }}</RouterLink>
+          </template>
+        </span>
+      </KpiCard>
       <KpiCard :label="t('survey.free')" :value="gb(report.volume.freeBytes)">
         <span class="pill" :class="TONE[report.volume.health]" data-test="health">
           <span class="dot" />{{ t('survey.freeShare', { health: t(`health.${report.volume.health}`), percent: pct(report.volume.freePercent) }) }}

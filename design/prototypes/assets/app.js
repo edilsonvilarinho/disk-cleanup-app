@@ -1,4 +1,4 @@
-/* Disk Cleanup — protótipos. Comportamento compartilhado entre as 5 telas.
+/* Disk Cleanup — protótipos. Comportamento compartilhado entre as telas.
    Funciona via file:// (sem fetch, sem módulos). */
 (function () {
   'use strict';
@@ -43,30 +43,57 @@
     done: { text: 'Concluído', cls: 'ok', helper: 'Encerrado' }
   };
 
+  var ICON_LOCK = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+  var ICON_CHECK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>';
+  var ICON_HISTORY = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>';
+  var ICON_GEAR = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>';
+
+  /* Fluxo em abas (tela 1–5): a etapa atual e as anteriores estão liberadas,
+     a seguinte também (pré-requisito cumprido no protótipo), o resto trancado. */
+  function renderFlow() {
+    var host = document.getElementById('flow');
+    if (!host) return;
+    var page = document.body.getAttribute('data-page');
+    var idx = -1;
+    STEPS.forEach(function (s, i) { if (s.id === page) idx = i; });
+    var open = idx < 0 ? 1 : idx + 1; /* fora do fluxo: varredura feita, Classificação liberada */
+    host.className = 'flow';
+    host.setAttribute('aria-label', 'Etapas');
+    host.innerHTML = STEPS.map(function (s, i) {
+      var sep = i > 0 ? '<span class="flow-sep' + (i <= open ? ' on' : '') + '" aria-hidden="true"></span>' : '';
+      if (i > open) {
+        return sep + '<span class="flow-step locked" role="link" aria-disabled="true" title="Conclua “' + STEPS[i - 1].label + '” para liberar">' +
+          '<span class="step-num">' + ICON_LOCK + '</span>' + s.label + '</span>';
+      }
+      var cur = i === idx ? ' aria-current="page"' : '';
+      var done = i < idx || (idx < 0 && i === 0);
+      return sep + '<a href="' + s.href + '" class="flow-step' + (done ? ' done' : '') + '"' + cur + '>' +
+        '<span class="step-num">' + (done ? ICON_CHECK : s.n) + '</span>' + s.label + '</a>';
+    }).join('');
+  }
+
   function renderSidebar() {
     var host = document.getElementById('sidebar');
     if (!host) return;
     var page = document.body.getAttribute('data-page');
     var mode = MODES[document.body.getAttribute('data-mode')] || MODES.ro;
-    var idx = 0;
-    STEPS.forEach(function (s, i) { if (s.id === page) idx = i; });
-
-    var links = STEPS.map(function (s, i) {
-      var cur = s.id === page ? ' aria-current="page"' : '';
-      var done = i < idx ? ' class="done"' : '';
-      return '<a href="' + s.href + '"' + cur + done + '><span class="step-num">' + s.n + '</span>' + s.label + '</a>';
-    }).join('');
+    var cur = function (id) { return page === id ? ' aria-current="page"' : ''; };
 
     host.innerHTML =
       '<div class="brand">' +
         '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 14h18"/><circle cx="17" cy="17" r="0.8"/></svg>' +
         '<div style="display:flex;flex-direction:column"><span class="brand-name">Disk Cleanup</span><span class="small muted">v0.1 · protótipo</span></div>' +
       '</div>' +
-      '<nav class="nav" aria-label="Etapas">' + links + '</nav>' +
+      '<nav class="nav" aria-label="Seções">' +
+        '<a href="01-survey.html"' + (page && page !== 'history' && page !== 'settings' ? ' aria-current="page"' : '') + '>' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 14h18"/></svg>Limpeza</a>' +
+        '<a href="06-historico.html"' + cur('history') + '>' + ICON_HISTORY + 'Histórico</a>' +
+        '<a href="#"' + cur('settings') + '>' + ICON_GEAR + 'Configurações</a>' +
+      '</nav>' +
       '<div class="env">' +
         '<span class="label-caps">Ambiente</span>' +
         '<div class="env-row"><span class="muted">Sistema</span><span>Windows 11 · NTFS</span></div>' +
-        '<div class="env-row"><span class="muted">Volume</span><span class="mono">C:\\</span></div>' +
+        '<div class="env-row"><span class="muted">Volume</span><span class="mono">C:\</span></div>' +
         '<div class="env-row"><span class="muted">Modo</span><span class="' + mode.cls + '" style="font-weight:600">' + mode.text + '</span></div>' +
         '<div class="env-row"><span class="muted">Helper admin</span><span>' + mode.helper + '</span></div>' +
       '</div>' +
@@ -77,6 +104,7 @@
       var next = currentTheme() === 'dark' ? 'light' : 'dark';
       saveTheme(next);
       applyTheme(next);
+      document.dispatchEvent(new CustomEvent('dc-theme'));
     });
     updateThemeButton();
   }
@@ -176,6 +204,7 @@
   document.addEventListener('DOMContentLoaded', function () {
     applyTheme(currentTheme());
     renderSidebar();
+    renderFlow();
     initTabs();
     initSelection();
     initApproval();

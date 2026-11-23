@@ -5,7 +5,9 @@
 use std::sync::Mutex;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, State, Url};
+use tauri::ipc::{InvokeBody, Request};
+use tauri::{AppHandle, Emitter, Manager, State, Url, Webview};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 use disk_cleanup_infrastructure::{
@@ -18,6 +20,7 @@ use crate::dto::{
     SystemInfoDto, TierRunDto,
 };
 use crate::error::ErrorDto;
+use crate::export;
 use crate::service::{self, CallbackExecution, CallbackProgress, Session};
 use crate::update::{manifest_url, releases_api_url, DownloadProgress, UpdateInfoDto};
 
@@ -25,6 +28,8 @@ const PROGRESS_EVENT: &str = "survey-progress";
 const EXECUTION_EVENT: &str = "execution-progress";
 const UPDATE_EVENT: &str = "update-progress";
 const OS: &str = std::env::consts::OS;
+/// Nome sugerido do PNG, no cabeçalho do invoke (o corpo leva só os bytes).
+const FILE_NAME_HEADER: &str = "x-file-name";
 
 /// Atualização encontrada por `check_update` e, depois, os bytes baixados.
 #[derive(Default)]
@@ -141,6 +146,49 @@ fn report(session: State<'_, Session>) -> Result<ReportDto, ErrorDto> {
     service::report(&session, &SysinfoVolumeInfo)
 }
 
+/// Diálogo de impressão nativo (Windows: `window.print`; Linux: GTK; macOS:
+/// `NSPrintOperation`). "Salvar como PDF" é uma das saídas do próprio diálogo.
+#[tauri::command]
+fn print_page(webview: Webview) -> Result<(), ErrorDto> {
+    webview
+        .print()
+        .map_err(|e| ErrorDto::new("export_print").with("detail", e))
+}
+
+/// Grava o PNG onde o usuário escolher no "Salvar como". `Ok(None)` = cancelou.
+/// A WebView não informa caminho: só bytes (validados como PNG) e nome sugerido.
+#[tauri::command]
+async fn save_png(app: AppHandle, request: Request<'_>) -> Result<Option<String>, ErrorDto> {
+    let InvokeBody::Raw(bytes) = request.body() else {
+        return Err(ErrorDto::new("export_not_png"));
+    };
+    export::validate_png(bytes)?;
+    let name = export::suggested_png_name(
+        request
+            .headers()
+            .get(FILE_NAME_HEADER)
+            .and_then(|v| v.to_str().ok()),
+    );
+    let bytes = bytes.clone();
+    let write_error = |e: &dyn std::fmt::Display| ErrorDto::new("export_write").with("detail", e);
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(chosen) = app
+            .dialog()
+            .file()
+            .set_file_name(&name)
+            .add_filter("PNG", &["png"])
+            .blocking_save_file()
+        else {
+            return Ok(None);
+        };
+        let path = export::with_png_extension(&chosen.into_path().map_err(|e| write_error(&e))?);
+        std::fs::write(&path, &bytes).map_err(|e| write_error(&e))?;
+        Ok(Some(path.display().to_string()))
+    })
+    .await
+    .map_err(join_error)?
+}
+
 fn update_error(e: impl ToString) -> ErrorDto {
     ErrorDto::new("update").with("detail", e.to_string())
 }
@@ -247,6 +295,7 @@ fn install_update(app: AppHandle, state: State<'_, PendingUpdate>) -> Result<(),
 pub fn run(context: tauri::Context<tauri::Wry>) {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .manage(Session::default())
         .manage(PendingUpdate::default())
         .invoke_handler(tauri::generate_handler![
@@ -258,6 +307,8 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
             preview_tier,
             execute_tier,
             report,
+            print_page,
+            save_png,
             app_version,
             check_update,
             download_update,
