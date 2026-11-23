@@ -89,3 +89,58 @@ export interface PlanDto {
   tiers: PlanTierDto[]
   json: string
 }
+
+export interface ApprovalDto {
+  tiers: Tier[]
+  itemCount: number
+  estimatedBytes: number
+}
+
+export interface StepDto {
+  id: string
+  label: string
+  tier: Tier
+  kind: ActionKind
+  target: string
+  estimatedBytes: number
+}
+
+export type ItemStatus = 'ok' | 'parcial' | 'pulado' | 'erro'
+
+export interface ItemResultDto {
+  id: string
+  label: string
+  tier: Tier
+  estimatedBytes: number
+  /** Espaço livre ganho; negativo se o volume encheu durante o item. */
+  freedBytes: number
+  status: ItemStatus
+  detail: string | null
+}
+
+export interface TierRunDto {
+  tier: Tier
+  freeBeforeBytes: number
+  freeAfterBytes: number
+  freedBytes: number
+  estimatedBytes: number
+  items: ItemResultDto[]
+}
+
+export interface ExecutionEventDto {
+  kind: 'started' | 'finished'
+  id: string
+  result: ItemResultDto | null
+}
+
+export interface ReportDto {
+  initial: VolumeDto
+  last: VolumeDto
+  freedBytes: number
+  estimatedBytes: number
+  itemCount: number
+  runs: TierRunDto[]
+  pending: ItemResultDto[]
+  blocked: CandidateDto[]
+  exclusions: ExclusionDto[]
+}

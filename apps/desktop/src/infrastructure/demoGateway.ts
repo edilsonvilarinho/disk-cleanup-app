@@ -3,7 +3,13 @@
 import type { DiskCleanupGateway, SurveyRequest } from '../application/gateway'
 import { GIB } from '../domain/format'
 import type {
+  ApprovalDto,
   CandidateDto,
+  ExecutionEventDto,
+  ItemResultDto,
+  ReportDto,
+  StepDto,
+  TierRunDto,
   ClassificationDto,
   PlanDto,
   ScanProgressDto,
@@ -63,7 +69,26 @@ const CANDIDATES: CandidateDto[] = [
   }),
 ]
 
+const TOTAL = gb(953)
+const INITIAL_FREE = gb(61.6)
+
+function volume(free: number) {
+  return {
+    totalBytes: TOTAL,
+    freeBytes: free,
+    usedBytes: TOTAL - free,
+    usedPercent: ((TOTAL - free) / TOTAL) * 100,
+    freePercent: (free / TOTAL) * 100,
+    health: free / TOTAL < 0.1 ? ('critical' as const) : free / TOTAL < 0.2 ? ('warning' as const) : ('healthy' as const),
+  }
+}
+
 export class DemoGateway implements DiskCleanupGateway {
+  private planned: CandidateDto[] = []
+  private approved: Tier[] = []
+  private runs: TierRunDto[] = []
+  private free = INITIAL_FREE
+
   constructor(private readonly delayMs = 400) {}
 
   private wait() {
@@ -130,6 +155,10 @@ export class DemoGateway implements DiskCleanupGateway {
   async buildPlan(volume: string, selected: string[]): Promise<PlanDto> {
     const items = CANDIDATES.filter((c) => selected.includes(c.id))
     if (items.length === 0) throw new Error('nenhum item selecionado')
+    this.planned = items
+    this.approved = []
+    this.runs = []
+    this.free = INITIAL_FREE
     const tiers = TIERS.map((tier) => {
       const inTier = items.filter((c) => c.tier === tier)
       return { tier, itemCount: inTier.length, estimatedBytes: inTier.reduce((s, c) => s + c.sizeBytes, 0) }
@@ -150,5 +179,83 @@ export class DemoGateway implements DiskCleanupGateway {
       2,
     )
     return { itemCount: items.length, estimatedBytes: items.reduce((s, c) => s + c.sizeBytes, 0), tiers, json }
+  }
+
+  async approvePlan(tiers: Tier[], acknowledged: boolean): Promise<ApprovalDto> {
+    if (!acknowledged) throw new Error('revisão do plano não confirmada')
+    if (this.planned.length === 0) throw new Error('monte o plano antes de aprovar')
+    if (tiers.length === 0) throw new Error('nenhum tier aprovado')
+    this.approved = [...tiers]
+    this.runs = []
+    const items = this.planned.filter((c) => tiers.includes(c.tier))
+    return { tiers, itemCount: items.length, estimatedBytes: items.reduce((s, c) => s + c.sizeBytes, 0) }
+  }
+
+  private itemsOf(tier: Tier): CandidateDto[] {
+    if (!this.approved.includes(tier)) throw new Error('nenhum plano aprovado para este tier')
+    return this.planned.filter((c) => c.tier === tier)
+  }
+
+  async previewTier(tier: Tier): Promise<StepDto[]> {
+    return this.itemsOf(tier).map((c) => ({
+      id: c.id,
+      label: c.label,
+      tier,
+      kind: c.kind,
+      target: c.target,
+      estimatedBytes: c.sizeBytes,
+    }))
+  }
+
+  async executeTier(tier: Tier, onEvent: (event: ExecutionEventDto) => void): Promise<TierRunDto> {
+    const items = this.itemsOf(tier)
+    if (this.runs.some((r) => r.tier === tier)) throw new Error(`tier ${tier} já executado nesta aprovação`)
+    const before = this.free
+    const results: ItemResultDto[] = []
+    for (const c of items) {
+      onEvent({ kind: 'started', id: c.id, result: null })
+      await this.wait()
+      // DXCache: o driver segura parte dos arquivos, como no caso real da skill.
+      const partial = c.id === 'nvidia-dxcache'
+      const freed = partial ? Math.round(c.sizeBytes * 0.88) : c.sizeBytes
+      this.free += freed
+      const result: ItemResultDto = {
+        id: c.id,
+        label: c.label,
+        tier,
+        estimatedBytes: c.sizeBytes,
+        freedBytes: freed,
+        status: partial ? 'parcial' : 'ok',
+        detail: partial ? 'arquivos abertos pelo driver' : null,
+      }
+      results.push(result)
+      onEvent({ kind: 'finished', id: c.id, result })
+    }
+    const run: TierRunDto = {
+      tier,
+      freeBeforeBytes: before,
+      freeAfterBytes: this.free,
+      freedBytes: this.free - before,
+      estimatedBytes: items.reduce((s, c) => s + c.sizeBytes, 0),
+      items: results,
+    }
+    this.runs.push(run)
+    return run
+  }
+
+  async report(): Promise<ReportDto> {
+    if (this.runs.length === 0) throw new Error('nenhuma execução nesta sessão')
+    const classification = await this.classify()
+    return {
+      initial: volume(INITIAL_FREE),
+      last: volume(this.free),
+      freedBytes: this.free - INITIAL_FREE,
+      estimatedBytes: this.runs.reduce((s, r) => s + r.estimatedBytes, 0),
+      itemCount: this.runs.reduce((s, r) => s + r.items.length, 0),
+      runs: this.runs,
+      pending: this.runs.flatMap((r) => r.items.filter((i) => i.status === 'parcial' || i.status === 'erro')),
+      blocked: classification.candidates.filter((c) => c.blockedReason !== null),
+      exclusions: classification.exclusions,
+    }
   }
 }

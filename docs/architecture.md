@@ -17,9 +17,9 @@ apps/desktop/src (Vue)  ──IPC──▶  apps/desktop/src-tauri (comandos, DT
 
 | Crate | Responsabilidade | Depende de |
 |---|---|---|
-| `domain` | `ByteSize`, `VolumeUsage`, `Tier`, `ExclusionList`, `ToolchainGuard`, `SizeAggregator`, `Candidate`, `Plan`, `approve` | nada (só `thiserror`) |
-| `application` | Portas (`FileWalker`, `VolumeInfo`, `Environment`, `PathInspector`, `CatalogRepository`, `PlanCodec`, `ScanProgress`) e casos de uso (`SurveyService`, `ClassifyService`, `export_plan`) | `domain` |
-| `infrastructure` | `JwalkFileWalker`, `allocated_size` (Win32/POSIX), `SysinfoVolumeInfo`, `SnapshotEnvironment`, `TomlCatalogRepository`, `SkillPlanJsonCodec`, `platform_exclusions` | `application`, `domain` |
+| `domain` | `ByteSize`, `VolumeUsage`, `Tier`, `ExclusionList`, `ToolchainGuard`, `SafetyGuard`, `SizeAggregator`, `Candidate`, `Plan`, `approve`, `ItemResult`, `TierRun`, `CleanupReport` | nada (só `thiserror`) |
+| `application` | Portas (`FileWalker`, `VolumeInfo`, `Environment`, `PathInspector`, `CatalogRepository`, `PlanCodec`, `ScanProgress`, `ActionRunner`, `ExecutionProgress`) e casos de uso (`SurveyService`, `ClassifyService`, `export_plan`, `ExecuteService`) | `domain` |
+| `infrastructure` | `JwalkFileWalker`, `allocated_size` (Win32/POSIX), `SysinfoVolumeInfo`, `SnapshotEnvironment`, `TomlCatalogRepository`, `SkillPlanJsonCodec`, `platform_exclusions`, `FsActionRunner` (remoção best-effort sem seguir link/junção, comandos pelo shell da plataforma) | `application`, `domain` |
 | `src-tauri` | `service` (lógica dos comandos, testada) + `dto` (mapeamento camelCase) + `bootstrap` (raiz de composição) | todos |
 
 ## Frontend (Vue 3 + TypeScript)
@@ -49,8 +49,15 @@ ele é substituído por um fake.
 2. A linha de base de exclusões do Windows não pode ser removida pelo catálogo, só ampliada.
 3. `approve` é o único caminho para `ApprovedPlan`: exige decisões respondidas, tier aprovado e ciência explícita.
 4. `ToolchainGuard` bloqueia alvo apontado por variável monitorada ou que contém entrada do `PATH`.
+5. `ExecuteService` só aceita `ApprovedPlan`; cada item é medido (espaço livre antes/depois) e falha de
+   item vira status (`parcial`/`erro`/`pulado`), nunca aborta o tier.
+6. `SafetyGuard` recusa, imediatamente antes de remover, alvo com menos de 3 segmentos ou igual a uma
+   pasta protegida (perfil, AppData, ProgramData, Program Files, SystemRoot, TEMP).
+7. `FsActionRunner` nunca segue link simbólico nem junção/reparse point (teste com `mklink /J`).
+8. A sessão desktop executa cada tier uma única vez por aprovação; remontar o plano descarta aprovação
+   e execuções.
 
-## Fora desta fase
+## Próximo passo
 
-Execução (remoção, comandos, desinstaladores, helper elevado), relatório,
-tier B (registro de desinstalação), DISM, catálogos macOS/Linux.
+Tier B (desinstaladores via registro: MSI/NSIS/Inno/VS), DISM, helper elevado (UAC/polkit), Temp com
+filtro de idade, catálogos macOS/Linux e atualização automática (ver `docs/release.md`).

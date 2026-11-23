@@ -5,7 +5,8 @@ import { createMemoryHistory } from 'vue-router'
 import type { DiskCleanupGateway } from '../application/gateway'
 import { gatewayPlugin } from '../application/gatewayPlugin'
 import { ThemeController } from '../application/theme'
-import { classification, survey } from '../test/fixtures'
+import { approval, classification, report, survey } from '../test/fixtures'
+import { usePlanStore } from '../application/stores/plan'
 import { fakeGateway } from '../test/fakeGateway'
 import App from './App.vue'
 import { riskLabel, volumeLabel } from './labels'
@@ -24,7 +25,7 @@ async function mountApp(path: string, gateway: DiskCleanupGateway = fakeGateway(
   await router.isReady()
   const wrapper = mount(App, { global: { plugins: [pinia, router], provide: { [THEME_KEY]: theme } } })
   await flushPromises()
-  return { wrapper, gateway, router, theme }
+  return { wrapper, gateway, router, theme, pinia }
 }
 
 describe('useTheme', () => {
@@ -234,12 +235,135 @@ describe('Plano', () => {
   })
 })
 
-describe('Etapas futuras', () => {
-  it('Execução e Relatório informam que dependem da próxima fase', async () => {
-    const { wrapper, router } = await mountApp('/execucao')
-    expect(wrapper.get('[data-test="pending"]').text()).toContain('Execução')
-    await router.push('/relatorio')
+describe('Aprovação no Plano', () => {
+  async function planScreen(gateway = fakeGateway()) {
+    const ctx = await mountApp('/classificacao', gateway)
+    await ctx.router.push('/plano')
     await flushPromises()
-    expect(wrapper.get('[data-test="pending"]').text()).toContain('Relatório')
+    return ctx
+  }
+
+  it('só aprova com ciência e leva para a Execução', async () => {
+    const { wrapper, gateway, router } = await planScreen()
+    const approve = wrapper.get('[data-test="approve"]')
+    expect(approve.attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="approve-tier-A"]').element).toHaveProperty('checked', true)
+    await wrapper.get('[data-test="ack"]').setValue(true)
+    expect(approve.attributes('disabled')).toBeUndefined()
+    await wrapper.get('[data-test="approve-tier-C"]').setValue(false)
+    await approve.trigger('click')
+    await flushPromises()
+    expect(gateway.approvePlan).toHaveBeenCalledWith(['A'], true)
+    expect(router.currentRoute.value.path).toBe('/execucao')
+  })
+
+  it('mostra a recusa do núcleo e fica no Plano', async () => {
+    const { wrapper, router } = await planScreen(
+      fakeGateway({ approvePlan: vi.fn(async () => Promise.reject(new Error('tier C não existe no plano'))) }),
+    )
+    await wrapper.get('[data-test="ack"]').setValue(true)
+    await wrapper.get('[data-test="approve"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="approve-error"]').text()).toContain('tier C não existe')
+    expect(router.currentRoute.value.path).toBe('/plano')
+  })
+})
+
+describe('Execução', () => {
+  async function executeScreen(gateway = fakeGateway()) {
+    const ctx = await mountApp('/', gateway)
+    usePlanStore(ctx.pinia).approval = approval
+    await ctx.router.push('/execucao')
+    await flushPromises()
+    return ctx
+  }
+
+  it('sem aprovação, manda aprovar o plano', async () => {
+    const { wrapper } = await mountApp('/execucao')
+    expect(wrapper.get('[data-test="execute-empty"]').text()).toContain('Aprove o plano')
+  })
+
+  it('mostra o dry-run, exige confirmação e executa tier a tier até o relatório', async () => {
+    const { wrapper, gateway } = await executeScreen()
+    expect(gateway.previewTier).toHaveBeenCalledWith('A')
+    expect(wrapper.findAll('[data-test="stage"]')).toHaveLength(2)
+    expect(wrapper.findAll('[data-test="step"]')).toHaveLength(2)
+    expect(wrapper.get('[data-test="step"]').text()).toContain('npm cache clean --force')
+
+    await wrapper.get('[data-test="execute"]').trigger('click')
+    expect(wrapper.get('[data-test="confirm"]').text()).toContain('2 itens')
+    await wrapper.get('[data-test="cancel"]').trigger('click')
+    expect(wrapper.find('[data-test="confirm"]').exists()).toBe(false)
+    expect(gateway.executeTier).not.toHaveBeenCalled()
+
+    await wrapper.get('[data-test="execute"]').trigger('click')
+    await wrapper.get('[data-test="confirm-execute"]').trigger('click')
+    await flushPromises()
+    expect(gateway.executeTier).toHaveBeenCalledWith('A', expect.any(Function))
+    const results = wrapper.findAll('[data-test="result"]')
+    expect(results).toHaveLength(2)
+    expect(results[1]!.text()).toContain('parcial')
+    expect(results[1]!.text()).toContain('dx.bin: em uso')
+    expect(gateway.previewTier).toHaveBeenLastCalledWith('C')
+    expect(wrapper.find('[data-test="to-report"]').exists()).toBe(false)
+
+    await wrapper.get('[data-test="execute"]').trigger('click')
+    await wrapper.get('[data-test="confirm-execute"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="total-freed"]').text()).toContain('24,8 GB')
+    expect(wrapper.get('[data-test="to-report"]').attributes('href')).toContain('relatorio')
+  })
+
+  it('mostra o tier em andamento e erros', async () => {
+    const executeTier = vi.fn(() => new Promise<never>(() => {}))
+    const { wrapper } = await executeScreen(fakeGateway({ executeTier }))
+    await wrapper.get('[data-test="execute"]').trigger('click')
+    await wrapper.get('[data-test="confirm-execute"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="running"]').text()).toContain('Executando')
+
+    const failing = await executeScreen(
+      fakeGateway({ previewTier: vi.fn(async () => Promise.reject(new Error('nenhum plano aprovado'))) }),
+    )
+    expect(failing.wrapper.get('[data-test="execute-error"]').text()).toContain('nenhum plano aprovado')
+  })
+})
+
+describe('Relatório', () => {
+  it('mostra antes/depois, tiers, pendências, divergências e copia o Markdown', async () => {
+    const writeText = vi.fn(async () => {})
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const { wrapper, gateway } = await mountApp('/relatorio')
+    expect(gateway.report).toHaveBeenCalled()
+    expect(wrapper.get('[data-test="report-freed"]').text()).toContain('+24,8 GB')
+    expect(wrapper.get('[data-test="report-tiers"]').text()).toContain('Regeneráveis')
+    expect(wrapper.get('[data-test="report-pending"]').text()).toContain('dx.bin: em uso')
+    expect(wrapper.get('[data-test="report-blocked"]').text()).toContain('CUDA_PATH')
+    expect(wrapper.get('[data-test="report-untouched"]').text()).toContain('Installer')
+    await wrapper.get('[data-test="copy-report"]').trigger('click')
+    await flushPromises()
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('# Relatório de limpeza'))
+    expect(wrapper.get('[data-test="copy-report-status"]').text()).toBe('Copiado')
+
+    writeText.mockRejectedValueOnce(new Error('negado'))
+    await wrapper.get('[data-test="copy-report"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="copy-report-status"]').text()).toContain('negado')
+    vi.unstubAllGlobals()
+  })
+
+  it('sem execução, explica e aponta para a Execução', async () => {
+    const { wrapper } = await mountApp(
+      '/relatorio',
+      fakeGateway({ report: vi.fn(async () => Promise.reject(new Error('nenhuma execução nesta sessão'))) }),
+    )
+    expect(wrapper.get('[data-test="report-error"]').text()).toContain('nenhuma execução')
+  })
+
+  it('seções vazias dizem que não há nada', async () => {
+    const empty = { ...report, pending: [], blocked: [] }
+    const { wrapper } = await mountApp('/relatorio', fakeGateway({ report: vi.fn(async () => empty) }))
+    expect(wrapper.get('[data-test="report-pending"]').text()).toContain('Nenhuma pendência')
+    expect(wrapper.get('[data-test="report-blocked"]').text()).toContain('Nenhuma divergência')
   })
 })

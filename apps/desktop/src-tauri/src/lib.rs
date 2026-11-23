@@ -7,7 +7,11 @@ mod service;
 
 pub use bootstrap::run;
 pub use dto::{
-    CandidateDto, ClassificationDto, ExclusionDto, PlanDto, PlanTierDto, SkippedDto, SurveyDto,
-    SurveyRequestDto, SystemInfoDto, UsageEntryDto, VolumeDto,
+    ApprovalDto, CandidateDto, ClassificationDto, ExclusionDto, ExecutionEventDto, ItemResultDto,
+    PlanDto, PlanTierDto, ReportDto, SkippedDto, StepDto, SurveyDto, SurveyRequestDto,
+    SystemInfoDto, TierRunDto, UsageEntryDto, VolumeDto,
 };
-pub use service::{build_plan, classify, run_survey, system_info, CallbackProgress, Session};
+pub use service::{
+    approve_plan, build_plan, classify, execute_tier, preview_tier, report, run_survey,
+    safety_guard, system_info, CallbackExecution, CallbackProgress, Session,
+};

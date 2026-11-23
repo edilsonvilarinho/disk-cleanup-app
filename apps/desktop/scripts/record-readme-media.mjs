@@ -89,15 +89,48 @@ async function tour(page) {
   await pause(page, 2000)
 }
 
+async function executeReport(page) {
+  await page.goto(`${BASE}/#/classificacao`)
+  await page.waitForSelector('[data-test="row"]')
+  await page.click('[data-test="to-plan"]')
+  await page.waitForSelector('[data-test="approve"]')
+  await pause(page, 900)
+  await page.click('[data-test="ack"]')
+  await pause(page, 600)
+  await page.click('[data-test="approve"]')
+  await page.waitForSelector('[data-test="execute"]')
+  await pause(page, 1300)
+  await page.click('[data-test="execute"]')
+  await pause(page, 1100)
+  await page.click('[data-test="confirm-execute"]')
+  await page.waitForSelector('[data-test="result"]')
+  await pause(page, 1400)
+  await page.click('[data-test="execute"]')
+  await page.click('[data-test="confirm-execute"]')
+  await page.waitForSelector('[data-test="to-report"]')
+  await pause(page, 1200)
+  await page.click('[data-test="to-report"]')
+  await page.waitForSelector('[data-test="report-freed"]')
+  await pause(page, 2200)
+}
+
 async function terminal(page) {
   await page.goto(pathToFileURL(resolve('scripts/terminal.html')).href)
   await page.waitForSelector('body[data-done="1"]', { timeout: 30_000 })
   await pause(page, 1500)
 }
 
-await record('tour', tour, { width: 960 })
-await record('survey', survey, { width: 720 })
-await record('classify-plan', classify, { width: 720 })
-await record('theme', theme, { theme: 'light', width: 720 })
-await record('terminal', terminal, { width: 720 })
+// `node record-readme-media.mjs <url> <saída> [nome...]` grava só os nomes pedidos.
+const ALL = {
+  tour: [tour, { width: 960 }],
+  survey: [survey, { width: 720 }],
+  'classify-plan': [classify, { width: 720 }],
+  'execute-report': [executeReport, { width: 720 }],
+  theme: [theme, { theme: 'light', width: 720 }],
+  terminal: [terminal, { width: 720 }],
+}
+const wanted = process.argv.slice(4)
+for (const [name, [scenario, options]] of Object.entries(ALL)) {
+  if (wanted.length === 0 || wanted.includes(name)) await record(name, scenario, options)
+}
 await browser.close()

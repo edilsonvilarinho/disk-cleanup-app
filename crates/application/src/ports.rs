@@ -70,3 +70,32 @@ pub trait PlanCodec {
     fn encode(&self, plan: &Plan) -> Result<String, PortError>;
     fn decode(&self, text: &str) -> Result<Plan, PortError>;
 }
+
+/// Resultado de uma remoção best-effort: o que saiu, o que ficou e por quê.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemovalOutcome {
+    pub removed: ByteSize,
+    pub remaining: ByteSize,
+    /// Primeiros erros (arquivo em uso, permissão).
+    pub errors: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommandOutcome {
+    pub success: bool,
+    pub code: Option<i32>,
+    pub output: String,
+}
+
+/// Executa as ações de um plano aprovado. `remove_path` devolve
+/// `PortError::NotFound` se o caminho não existe.
+pub trait ActionRunner {
+    fn remove_path(&self, path: &str) -> Result<RemovalOutcome, PortError>;
+    fn run_command(&self, command: &str) -> Result<CommandOutcome, PortError>;
+}
+
+/// Eventos por item, para a UI acompanhar a execução.
+pub trait ExecutionProgress {
+    fn item_started(&self, id: &str);
+    fn item_finished(&self, result: &disk_cleanup_domain::ItemResult);
+}

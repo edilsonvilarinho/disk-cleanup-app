@@ -18,7 +18,7 @@
 
 <p align="center">
   Mede o volume inteiro numa varredura paralela, separa o espaço real dos placeholders de nuvem,
-  classifica o que é seguro limpar e monta um plano revisável. Nada é apagado sem medição e sem
+  classifica o que é seguro limpar, monta um plano revisável e o executa tier a tier. Nada é apagado sem medição e sem
   aprovação explícita.
 </p>
 
@@ -64,6 +64,22 @@ por variável monitorada (ex.: `CUDA_PATH`) fica **bloqueada**. O plano exporta 
 <tr>
 <td width="50%" valign="middle">
 
+### Execução e relatório
+
+Aprove o plano tier a tier, leia o dry-run, confirme e acompanhe cada item rodando, com o espaço livre
+medido antes e depois dele. Arquivo travado nunca aborta o tier — vira pendência. A remoção nunca
+segue link simbólico nem junção, e pastas amplas ou protegidas (raiz do volume, perfil,
+`Program Files`…) são recusadas mesmo que o catálogo peça. O relatório compara medido × previsto por
+tier, lista divergências e pendências e é copiado em Markdown.
+
+</td>
+<td width="50%">
+  <img src="docs/assets/readme/execute-report.gif" alt="Aprovando o plano, confirmando cada tier, acompanhando a execução e lendo o relatório" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
 ### Claro e escuro
 
 Visual neutro e profissional nos dois temas. Segue a preferência do sistema e lembra a sua escolha.
@@ -95,8 +111,9 @@ cobertura falham o build abaixo de 95%: hoje o núcleo Rust está em 98% das lin
 |---|---|
 | 1. Survey | pronto |
 | 2. Classificação | pronto (catálogo do Windows, tiers A e C) |
-| 3. Plano | pronto — `plan.json` no formato da skill `disk-cleanup` |
-| 4. Execução · 5. Relatório | próxima fase |
+| 3. Plano e aprovação | pronto — `plan.json` no formato da skill `disk-cleanup` |
+| 4. Execução | pronto — caminhos e comandos; desinstaladores (tier B), DISM e helper elevado são o próximo passo |
+| 5. Relatório | pronto — copiado em Markdown |
 
 ## Instalação
 

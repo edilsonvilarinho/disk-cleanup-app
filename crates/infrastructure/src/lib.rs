@@ -7,6 +7,7 @@ mod exclusions;
 mod inspector;
 mod plan_json;
 mod progress;
+mod runner;
 mod volume;
 mod walker;
 
@@ -17,5 +18,6 @@ pub use exclusions::platform_exclusions;
 pub use inspector::WalkerPathInspector;
 pub use plan_json::SkillPlanJsonCodec;
 pub use progress::SilentProgress;
+pub use runner::FsActionRunner;
 pub use volume::SysinfoVolumeInfo;
 pub use walker::JwalkFileWalker;
