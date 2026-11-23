@@ -25,6 +25,7 @@
     <div class="actions">
       <button type="button" class="btn">Exportar plan.json</button>
       <a class="btn" href="02-classificacao.html">Voltar à seleção</a>
+      <a class="btn btn-primary" id="approve" href="04-execucao.html" aria-disabled="true">Aprovar e iniciar dry-run</a>
     </div>
   </header>
 
@@ -139,7 +140,6 @@
         <div class="divider"></div>
         <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="ack" style="margin-top:2px">
           <span class="small">Revisei itens, riscos e decisões. Remover cache também é irreversível.</span></label>
-        <a class="btn btn-primary btn-lg" id="approve" href="04-execucao.html" aria-disabled="true">Aprovar e iniciar dry-run</a>
         <span class="small muted" id="approve-status" aria-live="polite"></span>
       </section>
 

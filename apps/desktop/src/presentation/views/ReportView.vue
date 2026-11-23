@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { messageOf } from '../../application/gateway'
+import { resetCleanupFlow } from '../../application/session'
 import { useExportStore } from '../../application/stores/export'
 import { useReportStore } from '../../application/stores/report'
 import { useSystemStore } from '../../application/stores/system'
@@ -15,6 +17,7 @@ const store = useReportStore()
 const exporter = useExportStore()
 const system = useSystemStore()
 const update = useUpdateStore()
+const router = useRouter()
 const { t, txt, err, gb, pct, signedGb, locale } = useI18n()
 const copyStatus = ref('')
 onMounted(() => store.load())
@@ -22,6 +25,11 @@ onMounted(() => store.load())
 function causeText(item: ItemResultDto): string {
   if (!item.cause) return ''
   return t(`cause.${item.cause.code}`, { detail: item.cause.detail ?? '', exitCode: item.cause.exitCode ?? '?' })
+}
+
+async function newAnalysis() {
+  resetCleanupFlow()
+  await router.push('/')
 }
 
 function saveImage() {
@@ -60,6 +68,7 @@ async function copy() {
       <button type="button" class="btn" data-test="export-image" :disabled="exporter.busy" @click="saveImage">
         {{ exporter.busy ? t('report.exporting') : t('report.exportImage') }}
       </button>
+      <button type="button" class="btn btn-primary" data-test="new-analysis" :title="t('report.newAnalysisHint')" @click="newAnalysis">{{ t('report.newAnalysis') }}</button>
     </div>
   </header>
 
@@ -121,5 +130,6 @@ async function copy() {
         <li v-for="e in store.report.exclusions" :key="e.pattern"><span class="mono">{{ e.pattern }}</span><span class="muted">{{ txt(e.reason) }}</span></li>
       </ul>
     </section>
+
   </template>
 </template>

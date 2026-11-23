@@ -317,10 +317,15 @@ describe('Aprovação no Plano', () => {
     const { wrapper, gateway, router } = await planScreen()
     const approve = wrapper.get('[data-test="approve"]')
     expect(approve.attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="approve-missing"]').text()).toContain('Confirme a revisão')
     expect(wrapper.get('[data-test="approve-tier-A"]').element).toHaveProperty('checked', true)
     await wrapper.get('[data-test="ack"]').setValue(true)
     expect(approve.attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[data-test="approve-missing"]').exists()).toBe(false)
+    await wrapper.get('[data-test="approve-tier-A"]').setValue(false)
     await wrapper.get('[data-test="approve-tier-C"]').setValue(false)
+    expect(wrapper.get('[data-test="approve-missing"]').text()).toContain('ao menos um tier')
+    await wrapper.get('[data-test="approve-tier-A"]').setValue(true)
     await approve.trigger('click')
     await flushPromises()
     expect(gateway.approvePlan).toHaveBeenCalledWith(['A'], true)
@@ -590,6 +595,30 @@ describe('Exportação do relatório', () => {
     release(new Uint8Array([137]))
     await flushPromises()
     expect(wrapper.get('[data-test="export-pdf"]').attributes('disabled')).toBeUndefined()
+  })
+})
+
+describe('Nova análise', () => {
+  it('do Relatório volta ao Survey vazio, tranca as abas e mantém o histórico', async () => {
+    const { wrapper, router, pinia } = await mountApp('/')
+    await wrapper.get('[data-test="start-survey"]').trigger('click')
+    await flushPromises()
+    usePlanStore(pinia).approval = approval
+    await router.push('/relatorio')
+    await flushPromises()
+    expect(wrapper.get('[data-test="step-classify"]').element.tagName).toBe('A')
+
+    await wrapper.get('[data-test="new-analysis"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/')
+    expect(wrapper.find('[data-test="kpi-used"]').exists()).toBe(false)
+    for (const step of ['classify', 'plan', 'execute', 'report']) {
+      expect(wrapper.get(`[data-test="step-${step}"]`).attributes('aria-disabled')).toBe('true')
+    }
+    expect(usePlanStore(pinia).approval).toBeNull()
+    await router.push('/historico')
+    await flushPromises()
+    expect(wrapper.get('[data-test="kpi-count"]').text()).toContain('1')
   })
 })
 

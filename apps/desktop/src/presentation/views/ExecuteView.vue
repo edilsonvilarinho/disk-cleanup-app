@@ -57,6 +57,10 @@ onMounted(async () => {
       <span class="label-caps">{{ t('execute.eyebrow') }}</span>
       <h1>{{ t('execute.title') }}</h1>
     </div>
+    <div v-if="exec.finished" class="actions">
+      <span data-test="total-freed">{{ t('execute.total') }} <strong class="num">{{ signedGb(exec.totalFreed) }}</strong></span>
+      <RouterLink class="btn btn-primary" to="/relatorio" data-test="to-report">{{ t('execute.toReport') }}</RouterLink>
+    </div>
   </header>
 
   <div v-if="!approval" class="card empty" data-test="execute-empty">
@@ -140,9 +144,5 @@ onMounted(async () => {
       </section>
     </template>
 
-    <div v-if="exec.finished" class="footer-actions">
-      <span data-test="total-freed">{{ t('execute.total') }} <strong class="num">{{ signedGb(exec.totalFreed) }}</strong></span>
-      <RouterLink class="btn btn-primary btn-lg" to="/relatorio" data-test="to-report">{{ t('execute.toReport') }}</RouterLink>
-    </div>
   </template>
 </template>

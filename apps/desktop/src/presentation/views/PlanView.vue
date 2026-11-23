@@ -50,6 +50,9 @@ async function copy(text: string) {
     </div>
     <div class="actions">
       <RouterLink class="btn" to="/classificacao">{{ t('plan.back') }}</RouterLink>
+      <button v-if="planStore.plan" type="button" class="btn btn-primary" data-test="approve" :disabled="!planStore.canApprove" @click="approve">
+        {{ t('plan.approve') }}
+      </button>
     </div>
   </header>
 
@@ -87,12 +90,6 @@ async function copy(text: string) {
       </section>
 
       <aside style="display: flex; flex-direction: column; gap: 16px">
-        <section class="card" data-test="plan-tiers">
-          <h2>{{ t('plan.perTier') }}</h2>
-          <div v-for="tier in planStore.plan.tiers" :key="tier.tier" class="kv">
-            <TierBadge :tier="tier.tier" /><span class="num">{{ gb(tier.estimatedBytes) }}</span>
-          </div>
-        </section>
         <section class="card" data-test="approval">
           <h2>{{ t('plan.approval') }}</h2>
           <p class="small muted">{{ t('plan.approvalHint') }}</p>
@@ -113,11 +110,17 @@ async function copy(text: string) {
             <input type="checkbox" data-test="ack" style="margin-top: 2px" :checked="planStore.acknowledged" @change="onAck" />
             <span class="small">{{ t('plan.ack') }}</span>
           </label>
-          <button type="button" class="btn btn-primary btn-lg" data-test="approve" :disabled="!planStore.canApprove" @click="approve">
-            {{ t('plan.approve') }}
-          </button>
+          <p v-if="!planStore.canApprove" class="small muted" data-test="approve-missing">
+            {{ planStore.approvedTiers.length === 0 ? t('plan.missingTier') : t('plan.missingAck') }}
+          </p>
           <p v-if="planStore.approveError" class="small err" role="alert" data-test="approve-error">{{ err(planStore.approveError) }}</p>
           <p class="small muted">{{ t('plan.skillHint') }} <span class="mono">cleanup.ps1 -Plan plan.json -Tier A</span></p>
+        </section>
+        <section class="card" data-test="plan-tiers">
+          <h2>{{ t('plan.perTier') }}</h2>
+          <div v-for="tier in planStore.plan.tiers" :key="tier.tier" class="kv">
+            <TierBadge :tier="tier.tier" /><span class="num">{{ gb(tier.estimatedBytes) }}</span>
+          </div>
         </section>
       </aside>
     </div>
