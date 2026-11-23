@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissoes da janela principal: so eventos do core (progresso da varredura).",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

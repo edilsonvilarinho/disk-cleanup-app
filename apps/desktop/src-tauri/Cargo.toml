@@ -1,0 +1,29 @@
+[package]
+name = "disk-cleanup-desktop"
+description = "Shell desktop (Tauri 2): comandos expostos a interface e raiz de composicao."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "disk_cleanup_desktop_lib"
+crate-type = ["rlib"]
+
+[[bin]]
+name = "disk-cleanup"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+disk-cleanup-domain.workspace = true
+disk-cleanup-application.workspace = true
+disk-cleanup-infrastructure.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2", features = [] }
+
+[lints]
+workspace = true

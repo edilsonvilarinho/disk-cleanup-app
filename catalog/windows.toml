@@ -1,0 +1,287 @@
+# Catálogo de alvos de limpeza — Windows.
+# Portado de .claude/skills/disk-cleanup/references/catalog.md.
+#
+# Cada [[rule]] é um CANDIDATO A VERIFICAR, não uma ordem de execução.
+#   tier      A (cache) | B (desinstalar) | C (regenerável) | D (sistema)
+#   risk      none | low | redownload | long-running
+#   kind      path    -> remove `path`
+#             command -> executa `command`; o ganho é medido em `measure`
+#   watch_env variáveis que, apontando para o alvo, o bloqueiam (pitfall #5)
+#
+# Fora desta versão (dependem de adaptadores ainda não implementados):
+#   - tier B (desinstaladores via registro: MSI/NSIS/Inno/VS/NVIDIA)
+#   - DISM /StartComponentCleanup (estimativa vem de /AnalyzeComponentStore)
+#   - %TEMP% com filtro de idade (> 3 dias)
+#   - Android SDK/NDK (devem sair via sdkmanager, não removendo a pasta)
+
+# ---------------------------------------------------------------- exclusões
+# Além da linha de base obrigatória do domínio (Installer, WinSxS, Package
+# Cache, WindowsApps, pagefile.sys, LocalState, DriverStore, Search).
+
+[[exclusion]]
+pattern = '%USERPROFILE%\.claude\projects'
+reason = "histórico de conversa do Claude Code"
+
+[[exclusion]]
+pattern = '%USERPROFILE%\.codex\sessions'
+reason = "histórico de conversa do Codex"
+
+# ------------------------------------------------------------------ tier A
+
+[[rule]]
+id = "npm-cache"
+label = "npm cache"
+tier = "A"
+risk = "none"
+note = "comando oficial; não apagar a pasta inteira"
+kind = "command"
+command = "npm cache clean --force"
+measure = '%LOCALAPPDATA%\npm-cache'
+
+[[rule]]
+id = "pip-cache"
+label = "pip cache"
+tier = "A"
+risk = "none"
+note = "comando oficial"
+kind = "command"
+command = "pip cache purge"
+measure = '%LOCALAPPDATA%\pip\cache'
+
+[[rule]]
+id = "yarn-cache"
+label = "Yarn cache"
+tier = "A"
+risk = "none"
+kind = "command"
+command = "yarn cache clean"
+measure = '%LOCALAPPDATA%\Yarn\Cache'
+
+[[rule]]
+id = "pnpm-store"
+label = "pnpm store"
+tier = "A"
+risk = "none"
+note = "remove só pacotes não referenciados"
+kind = "command"
+command = "pnpm store prune"
+measure = '%LOCALAPPDATA%\pnpm\store'
+
+[[rule]]
+id = "nuget-packages"
+label = "NuGet packages"
+tier = "A"
+risk = "none"
+kind = "command"
+command = "dotnet nuget locals all --clear"
+measure = '%USERPROFILE%\.nuget\packages'
+
+[[rule]]
+id = "cargo-registry-cache"
+label = "Cargo registry cache"
+tier = "A"
+risk = "none"
+note = "só os .crate baixados; o índice fica"
+kind = "path"
+path = '%USERPROFILE%\.cargo\registry\cache'
+
+[[rule]]
+id = "electron-builder-cache"
+label = "electron-builder cache"
+tier = "A"
+risk = "none"
+kind = "path"
+path = '%LOCALAPPDATA%\electron-builder\Cache'
+
+[[rule]]
+id = "electron-cache"
+label = "Electron cache"
+tier = "A"
+risk = "none"
+kind = "path"
+path = '%LOCALAPPDATA%\electron\Cache'
+
+[[rule]]
+id = "vscode-vsix"
+label = "VS Code — VSIX em cache"
+tier = "A"
+risk = "none"
+note = ".vsix de extensões já instaladas"
+kind = "path"
+path = '%APPDATA%\Code\CachedExtensionVSIXs'
+
+[[rule]]
+id = "vscode-cached-data"
+label = "VS Code — CachedData"
+tier = "A"
+risk = "none"
+kind = "path"
+path = '%APPDATA%\Code\CachedData'
+
+[[rule]]
+id = "chrome-ondevice-model"
+label = "Chrome — modelo on-device"
+tier = "A"
+risk = "none"
+note = "re-baixado pelo Chrome"
+kind = "path"
+path = '%LOCALAPPDATA%\Google\Chrome\User Data\OptGuideOnDeviceModel'
+
+[[rule]]
+id = "chrome-shader-cache"
+label = "Chrome — ShaderCache"
+tier = "A"
+risk = "none"
+kind = "path"
+path = '%LOCALAPPDATA%\Google\Chrome\User Data\ShaderCache'
+
+[[rule]]
+id = "nvidia-dxcache"
+label = "NVIDIA DXCache"
+tier = "A"
+risk = "none"
+note = "arquivos abertos pelo driver podem ficar (resíduo de MB)"
+kind = "path"
+path = '%LOCALAPPDATA%\NVIDIA\DXCache'
+
+[[rule]]
+id = "nvidia-glcache"
+label = "NVIDIA GLCache"
+tier = "A"
+risk = "none"
+kind = "path"
+path = '%LOCALAPPDATA%\NVIDIA\GLCache'
+
+[[rule]]
+id = "crash-dumps"
+label = "Crash dumps"
+tier = "A"
+risk = "none"
+note = "só servem para depurar crash"
+kind = "path"
+path = '%LOCALAPPDATA%\CrashDumps'
+
+[[rule]]
+id = "wer-user"
+label = "Relatórios de erro (usuário)"
+tier = "A"
+risk = "none"
+kind = "path"
+path = '%LOCALAPPDATA%\Microsoft\Windows\WER'
+
+[[rule]]
+id = "wer-system"
+label = "Relatórios de erro (sistema)"
+tier = "A"
+risk = "none"
+note = "requer administrador"
+kind = "path"
+path = '%PROGRAMDATA%\Microsoft\Windows\WER'
+
+[[rule]]
+id = "windows-update-download"
+label = "Windows Update — Download"
+tier = "A"
+risk = "none"
+note = "remover com o serviço wuauserv parado; requer administrador"
+kind = "path"
+path = '%SystemRoot%\SoftwareDistribution\Download'
+
+[[rule]]
+id = "delivery-optimization"
+label = "Delivery Optimization"
+tier = "A"
+risk = "none"
+note = "requer administrador"
+kind = "path"
+path = '%SystemRoot%\SoftwareDistribution\DeliveryOptimization'
+
+[[rule]]
+id = "ollama-updates"
+label = "Ollama — updates"
+tier = "A"
+risk = "none"
+note = "binários de atualização antigos"
+kind = "path"
+path = '%LOCALAPPDATA%\Ollama\updates_v2'
+
+[[rule]]
+id = "discord-cache"
+label = "Discord — Cache"
+tier = "A"
+risk = "none"
+kind = "path"
+path = '%APPDATA%\discord\Cache'
+
+[[rule]]
+id = "discord-code-cache"
+label = "Discord — Code Cache"
+tier = "A"
+risk = "none"
+kind = "path"
+path = '%APPDATA%\discord\Code Cache'
+
+[[rule]]
+id = "onedrive-temp"
+label = "OneDriveTemp"
+tier = "A"
+risk = "none"
+kind = "path"
+path = '%SystemDrive%\OneDriveTemp'
+
+# ------------------------------------------------------------------ tier C
+
+[[rule]]
+id = "gradle-caches"
+label = "Gradle caches"
+tier = "C"
+risk = "redownload"
+note = "rodar 'gradle --stop' antes; o daemon segura arquivos"
+kind = "path"
+path = '%USERPROFILE%\.gradle\caches'
+watch_env = ["GRADLE_USER_HOME"]
+
+[[rule]]
+id = "gradle-wrapper"
+label = "Gradle wrapper (distribuições)"
+tier = "C"
+risk = "redownload"
+kind = "path"
+path = '%USERPROFILE%\.gradle\wrapper'
+
+[[rule]]
+id = "maven-repository"
+label = "Maven repository"
+tier = "C"
+risk = "redownload"
+note = "re-baixado no próximo mvn"
+kind = "path"
+path = '%USERPROFILE%\.m2\repository'
+
+[[rule]]
+id = "nvidia-ngx-models"
+label = "NVIDIA NGX models"
+tier = "C"
+risk = "redownload"
+note = "re-baixado pela NVIDIA App"
+kind = "path"
+path = '%PROGRAMDATA%\NVIDIA\NGX\models'
+
+[[rule]]
+id = "nvidia-app-update-framework"
+label = "NVIDIA App — UpdateFramework"
+tier = "C"
+risk = "redownload"
+note = "payloads de driver antigos"
+kind = "path"
+path = '%PROGRAMDATA%\NVIDIA Corporation\NVIDIA app\UpdateFramework'
+
+[[rule]]
+id = "huggingface-cache"
+label = "HuggingFace cache"
+tier = "C"
+risk = "redownload"
+note = "modelos re-baixados sob demanda"
+kind = "path"
+path = '%USERPROFILE%\.cache\huggingface'
+watch_env = ["HF_HOME", "HUGGINGFACE_HUB_CACHE"]

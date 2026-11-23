@@ -1,0 +1,4 @@
+# Portão de cobertura do núcleo Rust: `cargo cov`.
+# bootstrap.rs/main.rs são a raiz de composição do Tauri (exigem WebView em runtime).
+[alias]
+cov = ["llvm-cov", "--workspace", "--fail-under-lines", "95", "--ignore-filename-regex", '(bootstrap|main)\.rs']

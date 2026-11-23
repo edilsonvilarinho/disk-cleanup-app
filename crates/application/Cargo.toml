@@ -1,0 +1,14 @@
+[package]
+name = "disk-cleanup-application"
+description = "Casos de uso e portas (interfaces) do Disk Cleanup. Depende so do dominio."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+disk-cleanup-domain.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

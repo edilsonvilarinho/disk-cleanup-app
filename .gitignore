@@ -1,0 +1,14 @@
+# Rust
+target/
+
+# Frontend
+node_modules/
+apps/desktop/dist/
+apps/desktop/coverage/
+
+# Tauri (gerado no build)
+apps/desktop/src-tauri/gen/
+
+# Saídas locais
+out/
+*.log

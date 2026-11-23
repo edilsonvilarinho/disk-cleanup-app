@@ -1,0 +1,13 @@
+[package]
+name = "disk-cleanup-domain"
+description = "Regras de negocio puras: tamanhos, volumes, tiers, exclusoes, candidatos, plano e aprovacao. Sem I/O."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+
+[lints]
+workspace = true
