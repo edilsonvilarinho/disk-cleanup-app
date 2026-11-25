@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Linha do espaço usado por varredura. Uma série (sem legenda), eixo Y de 0 à
 // capacidade, crosshair + tooltip por ponteiro e teclado (←/→). Especificação
-// em design/README.md → "Gráfico de linha".
+// em design/README.md → "Gráfico de linha". Clique ou Enter escolhe a
+// varredura (`pick`); `selected` marca a que está em detalhe.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { GIB } from '../../domain/format'
 import { useI18n } from '../i18n'
@@ -12,7 +13,8 @@ export interface UsagePoint {
   usedBytes: number
 }
 
-const props = defineProps<{ points: UsagePoint[]; capacityBytes: number; highlight?: string[] }>()
+const props = defineProps<{ points: UsagePoint[]; capacityBytes: number; highlight?: string[]; selected?: string | null }>()
+const emit = defineEmits<{ pick: [id: string] }>()
 const { t, gb, signedGb, date, count } = useI18n()
 
 const host = ref<HTMLElement | null>(null)
@@ -104,9 +106,17 @@ function onMove(event: PointerEvent) {
   active.value = nearest(((event.clientX - rect.left) * width.value) / rect.width)
 }
 
+function pickActive() {
+  const p = active.value === null ? undefined : props.points[active.value]
+  if (p) emit('pick', p.id)
+}
+
 function onKey(event: KeyboardEvent) {
   const current = active.value ?? lastIndex.value
-  if (event.key === 'ArrowRight') active.value = Math.min(lastIndex.value, current + 1)
+  if (event.key === 'Enter' || event.key === ' ') {
+    active.value = current
+    pickActive()
+  } else if (event.key === 'ArrowRight') active.value = Math.min(lastIndex.value, current + 1)
   else if (event.key === 'ArrowLeft') active.value = Math.max(0, current - 1)
   else return
   event.preventDefault()
@@ -165,10 +175,10 @@ const label = computed(() => {
         v-for="(p, i) in points"
         :key="p.id"
         class="dot"
-        :class="{ sel: highlight?.includes(p.id) }"
+        :class="{ sel: highlight?.includes(p.id), cur: p.id === selected }"
         :cx="x(i)"
         :cy="yBytes(p.usedBytes)"
-        r="4"
+        :r="p.id === selected ? 6 : 4"
       />
       <text
         v-if="points.length"
@@ -186,6 +196,7 @@ const label = computed(() => {
         data-test="chart-hit"
         @pointermove="onMove"
         @pointerleave="active = null"
+        @click="pickActive"
         @focus="active = lastIndex"
         @blur="active = null"
         @keydown="onKey"

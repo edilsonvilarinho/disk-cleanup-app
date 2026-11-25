@@ -57,12 +57,17 @@ Execução), mas o Relatório dos tiers já executados continua acessível.
 
 ## Histórico de varreduras
 
-Toda varredura concluída é salva automaticamente. A tela responde a três perguntas:
+Toda varredura concluída é salva automaticamente. A tela responde a quatro perguntas:
 
 1. **Quanto mudou?** KPIs: nº de varreduras, usado na última, variação desde a anterior, variação no
    período (primeira → última).
 2. **Como evoluiu?** Gráfico de linha do espaço usado, uma marca por varredura.
-3. **O que mudou?** Comparação entre duas varreduras escolhidas (padrão: penúltima → última), por
+3. **Como estava?** "Varredura selecionada": uma varredura só (padrão: a última) com usado, livre,
+   capacidade, variação vs anterior, arquivos, ilegíveis, duração, profundidade e as 10 maiores pastas
+   do volume e do perfil. Escolhida pelo seletor do card, pelo clique/Enter numa marca do gráfico (anel
+   na marca) ou por "Ver" na tabela (linha marcada "em detalhe"). "Comparar com a anterior" leva o
+   card "O que mudou" para anterior → selecionada.
+4. **O que mudou?** Comparação entre duas varreduras escolhidas (padrão: penúltima → última), por
    raiz do volume e por pasta do perfil, ordenada pela maior variação absoluta (10 primeiras).
 
 Regras de dados:

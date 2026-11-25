@@ -19,6 +19,8 @@ export const useHistoryStore = defineStore('history', {
     /** Comparação escolhida pelo usuário; `null` = penúltima → última. */
     fromId: null as string | null,
     toId: null as string | null,
+    /** Varredura em detalhe; `null` = a última. */
+    detailId: null as string | null,
     /** Última gravação falhou (armazenamento cheio ou bloqueado). */
     saveFailed: false,
   }),
@@ -30,6 +32,14 @@ export const useHistoryStore = defineStore('history', {
     },
     to(): ScanSnapshot | null {
       return this.snapshots.find((s) => s.id === this.toId) ?? this.latest
+    },
+    detail(): ScanSnapshot | null {
+      return this.snapshots.find((s) => s.id === this.detailId) ?? this.latest
+    },
+    /** Varredura imediatamente anterior à que está em detalhe. */
+    detailPrevious(): ScanSnapshot | null {
+      const i = this.snapshots.findIndex((s) => s.id === this.detail?.id)
+      return i > 0 ? this.snapshots[i - 1]! : null
     },
     comparison(): Comparison | null {
       const from = this.from
@@ -59,6 +69,7 @@ export const useHistoryStore = defineStore('history', {
       this.snapshots = appendSnapshot(this.snapshots, markRaw(snapshot))
       this.fromId = null
       this.toId = null
+      this.detailId = null
       this.persist()
       return snapshot.id
     },
@@ -71,16 +82,27 @@ export const useHistoryStore = defineStore('history', {
       this.fromId = fromId
       this.toId = toId
     },
+    inspect(id: string) {
+      this.detailId = id
+    },
+    /** Leva a comparação para "anterior → em detalhe". */
+    compareDetailWithPrevious() {
+      const to = this.detail
+      const from = this.detailPrevious
+      if (to && from) this.select(from.id, to.id)
+    },
     remove(id: string) {
       this.snapshots = this.snapshots.filter((s) => s.id !== id)
       if (this.fromId === id) this.fromId = null
       if (this.toId === id) this.toId = null
+      if (this.detailId === id) this.detailId = null
       this.persist()
     },
     clear() {
       this.snapshots = []
       this.fromId = null
       this.toId = null
+      this.detailId = null
       this.persist()
     },
   },

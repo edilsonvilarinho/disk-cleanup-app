@@ -52,6 +52,25 @@ describe('UsageChart', () => {
     expect(w.find('[data-test="chart-tip"]').exists()).toBe(false)
   })
 
+  it('clique, Enter e espaço escolhem a varredura; a selecionada ganha anel', async () => {
+    const w = mount(UsageChart, { props: { points, capacityBytes: 953 * GIB, selected: 'b' }, global: global() })
+    const cur = w.get('circle.cur')
+    expect(cur.attributes('r')).toBe('6')
+    expect(w.findAll('circle[r="4"]')).toHaveLength(2)
+    ;(w.get('svg').element as SVGSVGElement).getBoundingClientRect = () => ({ left: 0, width: 800 }) as DOMRect
+    const hit = w.get('[data-test="chart-hit"]')
+
+    await hit.trigger('click')
+    expect(w.emitted('pick')).toBeUndefined()
+    await hit.trigger('pointermove', { clientX: 0 })
+    await hit.trigger('click')
+    await hit.trigger('pointerleave')
+    await hit.trigger('keydown', { key: 'Enter' })
+    await hit.trigger('keydown', { key: 'ArrowLeft' })
+    await hit.trigger('keydown', { key: ' ' })
+    expect(w.emitted('pick')).toEqual([['a'], ['c'], ['b']])
+  })
+
   it('última data colada na penúltima: mostra a última', () => {
     const close = [point('a', '2026-10-02T12:00:00Z', 1), point('b', '2026-11-22T12:00:00Z', 2), point('c', '2026-11-23T12:00:00Z', 3)]
     const labels = mount(UsageChart, { props: { points: close, capacityBytes: 953 * GIB }, global: global() })
