@@ -357,9 +357,10 @@ details[open] summary { margin-bottom: 10px; }
 .chart .line { fill: none; stroke: var(--bar); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .chart .dot { fill: var(--bar); stroke: var(--surface); stroke-width: 2; }
 .chart .dot.sel { fill: var(--primary); }
+.chart .dot.cur { stroke: var(--primary); stroke-width: 2.5; }
 .chart .end-label { fill: var(--text); font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
 .chart .cross { stroke: var(--border-strong); stroke-width: 1; }
-.chart .hit { fill: transparent; cursor: crosshair; }
+.chart .hit { fill: transparent; cursor: pointer; }
 .tooltip {
   position: absolute; pointer-events: none; z-index: 2;
   background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
@@ -384,6 +385,10 @@ details[open] summary { margin-bottom: 10px; }
 .cmp-stat { display: flex; flex-direction: column; gap: 2px; }
 .cmp-stat .num { text-align: left; font-size: 16px; }
 .diff-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+tr.current td { background: var(--surface-2); }
+.row-actions { display: flex; justify-content: flex-end; gap: 6px; white-space: nowrap; }
+.diff-col h3 .mono { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 .kpi .link { text-decoration: underline; text-underline-offset: 2px; }
 
 /* ---------- Impressão (Exportar PDF): sempre claro, só o conteúdo ---------- */

@@ -541,6 +541,57 @@ describe('Histórico', () => {
     expect(wrapper.find('[data-test="history-save-failed"]').exists()).toBe(true)
   })
 
+  it('detalha uma varredura escolhida pela tabela, pelo seletor ou pelo gráfico', async () => {
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    try {
+      const { wrapper } = await mountApp('/historico', fakeGateway(), { history: memoryHistoryStorage(seeded()) })
+      await flushPromises()
+      // Padrão: a última, com a variação desde a anterior e as maiores pastas.
+      const summary = () => wrapper.get('[data-test="detail-summary"]').text()
+      expect(summary()).toContain('+5,0 GB')
+      expect(wrapper.get('[data-test="detail-roots"]').text()).toContain('Windows')
+      expect(wrapper.get('[data-test="detail-profile"]').text()).toContain('Downloads')
+      expect(wrapper.findAll('[data-test="history-row"]')[0]!.text()).toContain('em detalhe')
+      expect(wrapper.find('circle.cur').exists()).toBe(true)
+
+      // Tabela: "Ver" na mais antiga leva o detalhe até ela.
+      await wrapper.findAll('[data-test="view-scan"]')[1]!.trigger('click')
+      expect((wrapper.get('[data-test="detail-pick"]').element as HTMLSelectElement).value).toBe('a')
+      expect(summary()).toContain('primeira')
+      expect(wrapper.get('[data-test="detail-profile"]').text()).toContain('AppData')
+      expect(wrapper.find('[data-test="detail-compare"]').exists()).toBe(false)
+      expect(wrapper.findAll('[data-test="history-row"]')[1]!.classes()).toContain('current')
+      expect(scroll).toHaveBeenCalledTimes(1)
+
+      // Seletor + atalho de comparação com a anterior.
+      await wrapper.get('[data-test="cmp-from"]').setValue('b')
+      await wrapper.get('[data-test="detail-pick"]').setValue('b')
+      await wrapper.get('[data-test="detail-compare"]').trigger('click')
+      expect(wrapper.get('[data-test="cmp-summary"]').text()).toContain('+5,0 GB')
+      expect(scroll).toHaveBeenCalledTimes(2)
+
+      // Gráfico: ← e Enter escolhem a anterior, sem rolar a página.
+      const hit = wrapper.get('[data-test="chart-hit"]')
+      await hit.trigger('focus')
+      await hit.trigger('keydown', { key: 'ArrowLeft' })
+      await hit.trigger('keydown', { key: 'Enter' })
+      expect((wrapper.get('[data-test="detail-pick"]').element as HTMLSelectElement).value).toBe('a')
+      expect(scroll).toHaveBeenCalledTimes(2)
+    } finally {
+      delete (Element.prototype as Partial<Element>).scrollIntoView
+    }
+  })
+
+  it('detalhe sem perfil avisa em vez de lista vazia', async () => {
+    const [a] = seeded()
+    const solo = { ...a!, profilePath: null, profile: [] }
+    const { wrapper } = await mountApp('/historico', fakeGateway(), { history: memoryHistoryStorage([solo]) })
+    await flushPromises()
+    expect(wrapper.find('[data-test="detail-no-profile"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="detail-roots"]').text()).toContain('Windows')
+  })
+
   it('o Survey mostra a variação desde a varredura anterior', async () => {
     const { wrapper } = await mountApp('/', fakeGateway(), { history: memoryHistoryStorage(seeded()) })
     await wrapper.get('[data-test="start-survey"]').trigger('click')

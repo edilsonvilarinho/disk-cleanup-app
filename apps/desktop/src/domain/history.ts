@@ -7,6 +7,8 @@ export const HISTORY_LIMIT = 100
 /** Variação menor que isso (≈0,05 GiB) não entra na comparação. */
 export const MIN_DELTA_BYTES = Math.round(0.05 * 1024 ** 3)
 export const DIFF_LIMIT = 10
+/** Pastas listadas no detalhe de uma varredura (por lista). */
+export const DETAIL_LIMIT = 10
 
 export interface SnapshotEntry {
   /** Caminho relativo (`key` do núcleo unido por `/`): identidade estável entre varreduras. */
@@ -68,6 +70,11 @@ export function appendSnapshot(list: readonly ScanSnapshot[], snapshot: ScanSnap
 }
 
 const sortByDate = (list: ScanSnapshot[]): ScanSnapshot[] => list.sort((a, b) => a.at.localeCompare(b.at))
+
+/** Maiores entradas de uma varredura (tamanho lógico); não altera a lista guardada. */
+export function largestEntries(list: readonly SnapshotEntry[], limit = DETAIL_LIMIT): SnapshotEntry[] {
+  return [...list].sort((a, b) => b.bytes - a.bytes || a.name.localeCompare(b.name)).slice(0, limit)
+}
 
 export interface EntryDelta {
   key: string

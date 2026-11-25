@@ -5,6 +5,7 @@ import {
   appendSnapshot,
   compareEntries,
   compareSnapshots,
+  largestEntries,
   sanitizeHistory,
   toSnapshot,
   type ScanSnapshot,
@@ -74,6 +75,16 @@ describe('compareSnapshots', () => {
     const a = snap('a', '2026-11-20T10:00:00Z')
     const b = snap('b', '2026-11-23T10:00:00Z', { profilePath: 'C:\\Users\\outro' })
     expect(compareSnapshots(a, b).profile).toBeNull()
+  })
+})
+
+describe('largestEntries', () => {
+  it('maiores primeiro (empate pelo nome), com limite, sem alterar a origem', () => {
+    const list = [e('b', 1), e('a', 5), e('c', 1), e('d', 3)]
+    expect(largestEntries(list).map((x) => x.key)).toEqual(['a', 'd', 'b', 'c'])
+    expect(largestEntries(list, 2).map((x) => x.key)).toEqual(['a', 'd'])
+    expect(list.map((x) => x.key)).toEqual(['b', 'a', 'c', 'd'])
+    expect(largestEntries([])).toEqual([])
   })
 })
 
