@@ -4,7 +4,7 @@
 export const pt = {
   nav: {
     steps: 'Etapas',
-    survey: 'Survey',
+    survey: 'Varredura',
     classify: 'Classificação',
     plan: 'Plano',
     execute: 'Execução',
@@ -23,7 +23,7 @@ export const pt = {
   common: { copied: 'Copiado', copyFailed: 'Falha ao copiar: {detail}', retry: 'Tentar de novo', items: '{n} itens', item: '{n} item' },
   survey: {
     eyebrow: 'Etapa 1 de 5 · somente leitura',
-    title: 'Survey do volume',
+    title: 'Varredura do volume',
     depth: 'Profundidade',
     depth1: '1 nível',
     depth2: '2 níveis',
@@ -179,8 +179,8 @@ export const pt = {
     clearOk: 'Apagar histórico',
     saveFailed: 'Não foi possível gravar o histórico neste computador (armazenamento cheio ou bloqueado).',
     emptyTitle: 'Nenhuma varredura salva',
-    emptyBody: 'Toda varredura concluída entra aqui automaticamente. Faça a primeira no Survey.',
-    toSurvey: 'Ir para o Survey',
+    emptyBody: 'Toda varredura concluída entra aqui automaticamente. Faça a primeira na Varredura.',
+    toSurvey: 'Ir para a Varredura',
     count: 'Varreduras',
     since: 'desde {date}',
     lastUsed: 'Usado na última',

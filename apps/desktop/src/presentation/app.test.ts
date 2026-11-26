@@ -85,12 +85,12 @@ describe('labels', () => {
 describe('shell', () => {
   it('mostra as 5 etapas, o ambiente e alterna o tema', async () => {
     const { wrapper, theme } = await mountApp('/')
-    // Início: só o Survey é navegável; as demais abas ficam trancadas.
+    // Início: só a Varredura é navegável; as demais abas ficam trancadas.
     expect(wrapper.findAll('[data-test="nav"] .flow-step')).toHaveLength(5)
     expect(wrapper.findAll('[data-test="nav"] a')).toHaveLength(1)
-    expect(wrapper.get('[data-test="nav"] a[aria-current="page"]').text()).toContain('Survey')
+    expect(wrapper.get('[data-test="nav"] a[aria-current="page"]').text()).toContain('Varredura')
     expect(wrapper.get('[data-test="step-classify"]').attributes('aria-disabled')).toBe('true')
-    expect(wrapper.get('[data-test="step-classify"]').attributes('title')).toContain('Survey')
+    expect(wrapper.get('[data-test="step-classify"]').attributes('title')).toContain('Varredura')
     expect(wrapper.get('[data-test="env-os"]').text()).toBe('windows')
     const toggle = wrapper.get('[data-test="theme-toggle"]')
     expect(toggle.text()).toContain('Tema claro')
@@ -741,7 +741,7 @@ describe('Idioma', () => {
 
   it('escolha explícita vence o sistema', async () => {
     const { wrapper } = await mountApp('/', fakeGateway(), { languages: ['en-US'], saved: { language: 'pt' } })
-    expect(wrapper.get('h1').text()).toBe('Survey do volume')
+    expect(wrapper.get('h1').text()).toBe('Varredura do volume')
   })
 
   it('erro do núcleo chega como código e é traduzido', async () => {
