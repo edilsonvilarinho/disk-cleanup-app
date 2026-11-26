@@ -329,8 +329,19 @@ details[open] summary { margin-bottom: 10px; }
 .btn:active:not([disabled]) { transform: scale(0.98); }
 .tab, .nav a, .flow-step, .option, .pill, .stage { transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
 
+/* Destaque do item ativo: um elemento só, que desliza entre os itens (useActiveIndicator). */
+.has-ind { position: relative; }
+.active-ind {
+  position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none;
+  border-radius: var(--radius-sm); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border);
+  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1), width 0.32s cubic-bezier(0.4, 0, 0.2, 1), height 0.32s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+}
+.has-ind > a, .has-ind > span, .has-ind > button { position: relative; z-index: 1; }
+.has-ind > a[aria-current="page"], .has-ind > a[aria-current="page"]:hover { background: transparent; }
+
 /* Quem pede menos movimento no sistema não recebe animação nenhuma. */
 @media (prefers-reduced-motion: reduce) {
+  .indet::before { left: 0; width: 100%; opacity: 0.35; }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
@@ -338,13 +349,46 @@ details[open] summary { margin-bottom: 10px; }
   }
 }
 
-/* ---------- Atualização ---------- */
-.update-notice {
-  display: flex; flex-direction: column; gap: 8px;
-  padding: 12px; border-radius: 10px; font-size: 12px;
-  border: 1px solid var(--border-strong); background: var(--surface-2);
+/* ---------- Barra de status (rodapé da janela) ----------
+   Estado vivo à esquerda; volume, sistema e modo no meio; atualização e versão à direita. */
+:root { --sb-h: 30px; }
+.layout { min-height: calc(100vh - var(--sb-h)); padding-bottom: var(--sb-h); }
+@media (min-width: 821px) {
+  .layout > .sidebar { position: sticky; top: 0; height: calc(100vh - var(--sb-h)); overflow-y: auto; flex: 0 0 236px; }
 }
-.update-notice .btn { justify-content: center; }
+.statusbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  height: calc(var(--sb-h) + env(safe-area-inset-bottom, 0px)); padding: 0 10px env(safe-area-inset-bottom, 0px);
+  display: flex; align-items: center; gap: 2px; overflow-x: auto; white-space: nowrap;
+  background: var(--surface); border-top: 1px solid var(--border); font-size: 11.5px; color: var(--muted);
+}
+.sb-item { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 5px; flex: none; }
+.sb-item svg.ok { color: var(--ok); }
+.sb-link:hover { background: var(--hover); color: var(--text); }
+.sb-sep { width: 1px; height: 14px; background: var(--border-strong); margin: 0 2px; flex: none; }
+.sb-right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.sb-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); transition: background 0.3s ease; flex: none; }
+.statusbar.busy .sb-dot { background: var(--info); animation: blink 1s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: 0.3; } }
+.statusbar.busy [data-test="sb-state"] { color: var(--text); }
+.sb-bar { width: 80px; flex: none; }
+.sb-prog { width: 80px; height: 3px; border-radius: 2px; background: var(--track); overflow: hidden; flex: none; }
+.sb-prog > i { display: block; height: 100%; background: var(--info); transition: width 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.swap-enter-active, .swap-leave-active { transition: opacity 0.18s ease, transform 0.18s ease; }
+.swap-enter-from { opacity: 0; transform: translateY(6px); }
+.swap-leave-to { opacity: 0; transform: translateY(-4px); }
+
+/* Indicador indeterminado: atividade sem total conhecido (o núcleo não informa). */
+.indet { position: relative; height: 3px; border-radius: 2px; background: var(--track); overflow: hidden; }
+.indet::before {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 35%; border-radius: inherit;
+  background: var(--bar); animation: indet 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes indet { from { left: -35%; } to { left: 100%; } }
+
+/* ---------- Atualização (dentro da barra de status) ---------- */
+.update-notice { display: inline-flex; align-items: center; gap: 8px; color: var(--info); font-weight: 600; }
+.update-notice .btn { min-height: 22px; padding: 0 8px; font-size: 11.5px; border-radius: 5px; }
 
 /* ---------- Histórico: gráfico de linha e comparação divergente ---------- */
 .chart { position: relative; }
@@ -405,8 +449,8 @@ tr.current td { background: var(--surface-2); }
   }
   @page { margin: 14mm; }
   body { background: #FFFFFF; }
-  .sidebar, .flow, .page-head .actions, .no-print { display: none !important; }
-  .layout { display: block; min-height: 0; }
+  .sidebar, .flow, .statusbar, .page-head .actions, .no-print { display: none !important; }
+  .layout { display: block; min-height: 0; padding-bottom: 0; }
   .main { padding: 0; }
   .container { max-width: none; }
   .card, .kpi, .checklist li, tr { break-inside: avoid; }

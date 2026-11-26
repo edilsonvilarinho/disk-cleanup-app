@@ -5,6 +5,7 @@ import { useSystemStore } from '../application/stores/system'
 import { useUpdateStore } from '../application/stores/update'
 import AppSidebar from './components/AppSidebar.vue'
 import FlowTabs from './components/FlowTabs.vue'
+import StatusBar from './components/StatusBar.vue'
 import { useI18n } from './i18n'
 import { isFlowStep } from './router'
 import { useTheme } from './theme'
@@ -40,4 +41,5 @@ onMounted(() => {
       </div>
     </main>
   </div>
+  <StatusBar />
 </template>

@@ -83,21 +83,32 @@ describe('labels', () => {
 })
 
 describe('shell', () => {
-  it('mostra as 5 etapas, o ambiente e alterna o tema', async () => {
-    const { wrapper, theme } = await mountApp('/')
+  it('mostra as 5 etapas e o ambiente na barra de status; o tema não fica na barra lateral', async () => {
+    const { wrapper } = await mountApp('/')
     // Início: só a Varredura é navegável; as demais abas ficam trancadas.
     expect(wrapper.findAll('[data-test="nav"] .flow-step')).toHaveLength(5)
     expect(wrapper.findAll('[data-test="nav"] a')).toHaveLength(1)
     expect(wrapper.get('[data-test="nav"] a[aria-current="page"]').text()).toContain('Varredura')
     expect(wrapper.get('[data-test="step-classify"]').attributes('aria-disabled')).toBe('true')
     expect(wrapper.get('[data-test="step-classify"]').attributes('title')).toContain('Varredura')
-    expect(wrapper.get('[data-test="env-os"]').text()).toBe('windows')
-    const toggle = wrapper.get('[data-test="theme-toggle"]')
-    expect(toggle.text()).toContain('Tema claro')
-    await toggle.trigger('click')
-    expect(theme.current.value).toBe('light')
-    expect(toggle.text()).toContain('Tema escuro')
+    const bar = wrapper.get('[data-test="statusbar"]')
+    expect(bar.get('[data-test="env-os"]').text()).toBe('windows')
+    // Catálogo igual ao sistema não se repete.
+    expect(bar.find('[data-test="env-catalog"]').exists()).toBe(false)
+    expect(bar.get('[data-test="sb-state"]').text()).toBe('Pronto')
+    expect(bar.text()).toContain('C:\\')
+    expect(bar.text()).toContain('Aprovação explícita')
+    expect(wrapper.find('[data-test="theme-toggle"]').exists()).toBe(false)
+    expect(wrapper.find('.sidebar .env').exists()).toBe(false)
     expect(document.documentElement.getAttribute('lang')).toBe('pt-BR')
+  })
+
+  it('a barra de status mostra o catálogo quando difere do sistema e leva a versão às Configurações', async () => {
+    const systemInfo = vi.fn(async () => ({ os: 'linux', volumeRoot: '/', profile: '/home/u', catalog: 'macos' }))
+    const { wrapper, router } = await mountApp('/', fakeGateway({ systemInfo }))
+    expect(wrapper.get('[data-test="env-catalog"]').text()).toContain('macos')
+    await wrapper.get('[data-test="app-version"]').trigger('click')
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/configuracoes'))
   })
 
   it('libera as abas conforme cada etapa é concluída', async () => {
@@ -163,6 +174,7 @@ describe('Survey', () => {
     await wrapper.get('[data-test="start-survey"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-test="survey-progress"]').text()).toContain('20.000')
+    expect(wrapper.get('[data-test="sb-state"]').text()).toBe('Varrendo C:\\ · 20.000 arquivos')
     expect(wrapper.get('[data-test="start-survey"]').attributes('disabled')).toBeDefined()
     finish(survey)
     await flushPromises()
@@ -262,6 +274,7 @@ describe('Classificação', () => {
     const classify = vi.fn(() => new Promise<typeof classification>(() => {}))
     const { wrapper } = await mountApp('/classificacao', fakeGateway({ classify }))
     expect(wrapper.find('[data-test="classify-loading"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="sb-state"]').text()).toBe('Classificando…')
   })
 })
 
@@ -804,6 +817,7 @@ describe('ramos de apresentação', () => {
     await ctx.wrapper.get('[data-test="confirm-execute"]').trigger('click')
     await flushPromises()
     const running = ctx.wrapper.get('[data-test="running"]').text()
+    expect(ctx.wrapper.get('[data-test="sb-state"]').text()).toBe('Executando tier A · 0/2')
     expect(running).toContain('rodando')
     expect(running).toContain('na fila')
     finish(run)

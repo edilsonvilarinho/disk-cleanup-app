@@ -1,20 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { useSettingsStore } from '../../application/stores/settings'
-import { useSystemStore } from '../../application/stores/system'
-import { useUpdateStore } from '../../application/stores/update'
+import { useActiveIndicator } from '../activeIndicator'
 import { useI18n } from '../i18n'
 import { isFlowStep } from '../router'
-import { useTheme } from '../theme'
-import UpdateNotice from './UpdateNotice.vue'
 
-const system = useSystemStore()
-const settings = useSettingsStore()
-const update = useUpdateStore()
-const theme = useTheme()
-const { t, err } = useI18n()
-const isDark = computed(() => theme.current.value === 'dark')
+// Só marca e seções. Ambiente, versão e atualização ficam na barra de status;
+// o tema fica em Configurações.
+const { t } = useI18n()
 const route = useRoute()
 const inFlow = computed(() => isFlowStep(route.name))
 /** "Limpeza" volta para a última etapa visitada, não para o início. */
@@ -22,10 +15,8 @@ const lastFlowPath = ref('/')
 watch(() => route.path, (path) => {
   if (inFlow.value) lastFlowPath.value = path
 }, { immediate: true })
-
-function toggleTheme() {
-  settings.setTheme(isDark.value ? 'light' : 'dark')
-}
+const navEl = ref<HTMLElement | null>(null)
+const indicator = useActiveIndicator(navEl, () => route.fullPath)
 </script>
 
 <template>
@@ -38,11 +29,12 @@ function toggleTheme() {
       </svg>
       <div style="display: flex; flex-direction: column">
         <span class="brand-name">Disk Cleanup</span>
-        <span class="small muted mono" data-test="app-version">{{ update.version ? `v${update.version}` : '—' }}</span>
+        <span class="small muted">{{ t('bar.tagline') }}</span>
       </div>
     </div>
 
-    <nav class="nav" :aria-label="t('nav.sections')">
+    <nav ref="navEl" class="nav has-ind" :aria-label="t('nav.sections')">
+      <span class="active-ind" :style="indicator" aria-hidden="true" />
       <RouterLink v-slot="{ href, navigate }" :to="lastFlowPath" custom>
         <a :href="href" :aria-current="inFlow ? 'page' : undefined" data-test="nav-cleanup" @click="navigate">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -68,29 +60,5 @@ function toggleTheme() {
         {{ t('nav.settings') }}
       </RouterLink>
     </nav>
-
-    <div class="env">
-      <span class="label-caps">{{ t('env.title') }}</span>
-      <template v-if="system.info">
-        <div class="env-row"><span class="muted">{{ t('env.system') }}</span><span data-test="env-os">{{ system.info.os }}</span></div>
-        <div class="env-row"><span class="muted">{{ t('env.volume') }}</span><span class="mono">{{ system.info.volumeRoot }}</span></div>
-        <div class="env-row"><span class="muted">{{ t('env.catalog') }}</span><span>{{ system.info.catalog }}</span></div>
-      </template>
-      <p v-else-if="system.error" class="small err" data-test="env-error">{{ err(system.error) }}</p>
-      <div class="env-row"><span class="muted">{{ t('env.mode') }}</span><span style="font-weight: 600">{{ t('env.explicit') }}</span></div>
-    </div>
-
-    <div class="spacer" />
-    <UpdateNotice />
-    <button type="button" class="btn btn-lg" data-test="theme-toggle" @click="toggleTheme">
-      <svg v-if="isDark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="4" />
-        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-      </svg>
-      <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
-      </svg>
-      <span>{{ isDark ? t('theme.toLight') : t('theme.toDark') }}</span>
-    </button>
   </aside>
 </template>
