@@ -5,55 +5,113 @@ primário monocromático, cor só para estado e categoria; Inter + JetBrains Mon
 
 | Arquivo | Tela |
 |---|---|
-| `prototypes/01-survey.html` | Survey do volume |
+| `prototypes/01-survey.html` | Varredura do volume (nome antigo: Survey) |
 | `prototypes/02-classificacao.html` | Classificação por tier |
-| `prototypes/03-plano.html` | Plano e aprovação |
-| `prototypes/04-execucao.html` | Execução por tier |
+| `prototypes/03-plano.html` | Plano e aprovação (layout anterior ao 08b) |
+| `prototypes/04-execucao.html` | Execução por tier (layout anterior ao 08b) |
 | `prototypes/05-relatorio.html` | Relatório |
 | `prototypes/06-historico.html` | Histórico de varreduras (análise) |
+| `prototypes/menu/index.html` | Propostas de menu (12), estados em andamento e o **08b**, a direção vigente |
+| `prototypes/menu/08b-fluxo-otimizado.html` | **Referência atual**: barra de status, Plano e Execução otimizados |
 
-Abrir `prototypes/index.html` no navegador (funciona via `file://`, sem servidor). Tema claro/escuro
-no botão da barra lateral. Dados de exemplo.
+Abrir no navegador (funciona via `file://`, sem servidor). Dados de exemplo.
 
-Os tokens (`prototypes/assets/app.css`) são a fonte do CSS do app em
-`apps/desktop/src/styles/app.css`. A paleta dos tiers foi validada para daltonismo nos dois temas.
+**Fonte do CSS:** `apps/desktop/src/styles/app.css`. Os protótipos de `menu/` importam esse arquivo
+direto; `prototypes/assets/app.css` é o retrato dos protótipos originais (01–06) e não é mais
+atualizado. A paleta dos tiers foi validada para daltonismo nos dois temas.
 
 ## Navegação
 
-- **Barra lateral = seções**: Limpeza, Histórico, Configurações. Ambiente e tema embaixo.
+- **Barra lateral = só seções**: marca e Limpeza, Histórico, Configurações. O item ativo tem um
+  destaque que desliza entre os itens. Nada de ambiente, versão ou tema aqui.
+- **Barra de status** (rodapé da janela, 30 px, padrão de IDE): estado vivo à esquerda (**Pronto**,
+  **Varrendo C: · N arquivos**, **Classificando…**, **Executando tier X · n/m** com barra real por
+  item); no meio volume, sistema (e o catálogo só quando difere do sistema) e o modo **Aprovação
+  explícita**; à direita o aviso de atualização (Baixar / Reiniciar e atualizar) e a versão, que leva
+  a Configurações.
+- **Tema só em Configurações** (Sistema/Claro/Escuro). A troca se revela em círculo a partir do clique
+  (View Transitions); sem suporte ou com movimento reduzido, é instantânea.
 - **Limpeza = fluxo em abas** no topo do conteúdo (`.flow`), só nas etapas 1–5. Cada aba é liberada
   pelo pré-requisito dela; aba trancada não é link (`aria-disabled`, cadeado, `title` dizendo o que
-  concluir). Concluída ganha check verde.
+  concluir). Concluída ganha check verde. O destaque da etapa atual desliza; a linha entre abas enche
+  quando a seguinte destranca; a aba destrancada sobe e acende uma vez.
 
 | Aba | Liberada quando |
 |---|---|
-| Survey | sempre |
+| Varredura | sempre |
 | Classificação | varredura concluída |
 | Plano | classificação com ao menos 1 item selecionável marcado |
 | Execução | plano aprovado |
 | Relatório | ao menos um tier executado |
 
-**Nova análise** (cabeçalho do Relatório): volta ao Survey vazio e tranca as abas 2–5 de novo — limpa
+**Nova análise** (cabeçalho do Relatório): volta à Varredura vazia e tranca as abas 2–5 de novo — limpa
 o estado de varredura, classificação, plano, execução, relatório e exportação na interface. O
 histórico de varreduras e as Configurações ficam. Sem confirmação: nada no disco muda, e o aviso ao
 lado do botão lembra de exportar antes.
 
-**Avançar fica no topo.** A ação que leva à próxima etapa é a única primária e fica no cabeçalho
-da etapa (`.page-head .actions`, à direita), nunca no rodapé: o usuário não precisa rolar a página para
-seguir. Desabilitada enquanto o pré-requisito falta, com o motivo visível perto do controle que o
-resolve (ex.: Plano → "Confirme a revisão do plano para aprovar" no card de aprovação, que é o
-primeiro da coluna lateral). Ações da própria etapa (executar um tier, exportar) ficam secundárias.
+**Avançar fica no topo, e o que libera o avanço fica colado nele.** A ação que leva adiante é a única
+primária e fica no cabeçalho da etapa (`.page-head .actions`, à direita), nunca no rodapé. Quando
+falta um pré-requisito, o controle que o resolve fica logo abaixo do botão, não numa coluna lateral
+nem depois de uma tabela; o motivo aparece em texto ao lado do controle.
 
 | Etapa | Ação primária no cabeçalho |
 |---|---|
-| Survey | Classificar candidatos (após a varredura; antes dela, Iniciar varredura) |
+| Varredura | Classificar candidatos (após a varredura; antes dela, Iniciar varredura) |
 | Classificação | Montar plano |
-| Plano | Aprovar |
-| Execução | Ver relatório (ao terminar) |
+| Plano | Aprovar plano |
+| Execução | Executar tier X (o da vez); ao terminar, Ver relatório |
 | Relatório | Nova análise |
 
 Os pré-requisitos são independentes, não em cadeia: rever o Plano descarta a aprovação (tranca a
 Execução), mas o Relatório dos tiers já executados continua acessível.
+
+## Plano
+
+- **Cartão de aprovação logo abaixo do cabeçalho**: à esquerda o resumo do que vai rodar (itens,
+  liberação estimada e, com varredura na sessão, o livre estimado depois); à direita os dois
+  requisitos numerados — **1 · Tiers que vão rodar** (um botão por tier, na cor do tier, com itens e
+  GB) e **2 · Confirmação** (tracejada enquanto pendente, verde quando marcada).
+- **Aprovar usa `aria-disabled`, não `disabled`**: clicar antes da hora não fica mudo — o requisito
+  que falta treme, ganha contorno âmbar por um instante e (se for a confirmação) recebe o foco.
+- **Itens agrupados por tier e recolhidos** (barra e total por grupo, "Expandir todos"). Tier fora da
+  aprovação aparece esmaecido com "fora desta execução". A tela cabe sem rolar.
+- **`plan.json` numa gaveta lateral** (botão no cabeçalho, Esc fecha), com Copiar e a dica da skill.
+
+## Execução
+
+Um tier por vez, sempre (cada tier roda uma vez por aprovação e pede confirmação própria). O que muda
+é deixar claro o passo a passo:
+
+- **Executar tier X no cabeçalho.** Durante a execução vira "Executando tier X…" com indicador.
+- **Guia do passo** logo abaixo: "Passo k de n", o que fazer agora ("Comece pelo tier A", "Próximo:
+  tier C"), segmentos por tier na cor do tier (concluído cheio, atual com contorno pulsando, em
+  execução enchendo por item) e a **confirmação no mesmo cartão**, com o botão destrutivo em vermelho
+  sólido (`.btn-danger-solid`: fundo `--err`, texto `--primary-fg`). O aviso de irreversibilidade é
+  uma linha do guia.
+- **Linha do tempo**: uma linha por tier. O atual fica aberto com o dry-run; o em execução mostra os
+  itens ao vivo (fila → rodando → ok/parcial/pulado/erro, liberado por item); os concluídos recolhem
+  com check e "liberado / previsto", e o resultado abre com um clique; os seguintes aguardam
+  esmaecidos.
+
+## Estados em andamento
+
+Regra: **o visual nunca promete o que o núcleo não mede.**
+
+| Atividade | O núcleo informa | Interface |
+|---|---|---|
+| Varredura | `files`, `logicalBytes` (sem total nem caminho) | barra indeterminada, contadores vivos, tempo decorrido e ritmo (arquivos/s) com gráfico dos últimos 10 s, derivados em `domain/progress.ts` |
+| Classificação | nada até terminar | esqueleto por tier (os tiers são fixos; os itens não) |
+| Execução | `started`/`finished` por item | barra determinada (itens concluídos/total) e liberado somado ao vivo |
+| Atualização | `percent` (pode ser nulo) | determinada com tamanho, texto sem percentual sem ele |
+
+## Movimento
+
+- Troca de página: sobe e esmaece (`.page`, 0,18 s). Cards, KPIs e linhas entram em cascata.
+- Destaque deslizante (`useActiveIndicator`): um elemento só, movido por `transform`, remedido ao fim
+  das transições dos itens; a primeira medida é instantânea.
+- Grupos recolhíveis animam a altura real (`grid-template-rows: 0fr → 1fr`, 0,32 s).
+- Pulso discreto (2×) no botão primário quando a próxima ação fica disponível.
+- `prefers-reduced-motion`: nenhuma animação (regra global no fim do `app.css`).
 
 ## Histórico de varreduras
 
@@ -104,7 +162,7 @@ A polaridade vai também na direção da barra e no sinal do texto (`+`/`−`); 
 Texto fica sempre em tokens de texto, nunca na cor da série. Os tokens de status (`--ok`, `--warn`,
 `--err`) não são reutilizados para polaridade.
 
-### Survey
+### Varredura
 
 O KPI "Usado" mostra a variação desde a varredura anterior (link para o Histórico).
 

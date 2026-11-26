@@ -52,7 +52,7 @@ runners do not bill minutes. A full release still runs two macOS jobs; do not di
 | Public key | `tauri.conf.json` > `plugins.updater.pubkey`; Windows `installMode: passive` |
 | Signing | `bundle.createUpdaterArtifacts: true` (NSIS, AppImage, `.app.tar.gz`); deb/rpm signed in `build-linux` with `tauri signer sign --app-version` (the bundler does not sign them); secrets `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` in every build job |
 | Manifest | `publish-release` → `Generate updater manifest`: fails if any entry lacks its bundle or `.sig`. Linux has three keys: `linux-x86_64` (AppImage, also the fallback), `linux-x86_64-deb`, `linux-x86_64-rpm` — the plugin looks for `{os}-{arch}-{bundle_type}` first (bundle type baked into the binary by the bundler) |
-| UI | Settings → Updates: **Update automatically** (on by default), **Receive beta versions** (off by default), **Check now**; sidebar notice with **Download** / **Restart and update** |
+| UI | Settings → Updates: **Update automatically** (on by default), **Receive beta versions** (off by default), **Check now**; status bar notice with **Download** / **Restart and update** |
 
 Behaviour: with automatic updates on, the app checks on launch and downloads in the background.
 **Installing always waits for the user's click** (on Windows the NSIS installer closes the app; on

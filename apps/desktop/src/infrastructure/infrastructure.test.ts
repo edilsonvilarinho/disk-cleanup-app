@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { applyThemeToDocument, localStorageSettingsStorage, systemPrefersDark, watchSystemTheme } from './browserTheme'
+import { applyThemeToDocument, localStorageSettingsStorage, systemPrefersDark, trackPointer, watchSystemTheme } from './browserTheme'
 import { DemoGateway } from './demoGateway'
 import { TauriGateway } from './tauriGateway'
 import { DemoUpdater, TauriUpdater } from './updater'
@@ -160,6 +160,39 @@ describe('browserTheme', () => {
   it('aplica o tema no elemento raiz', () => {
     applyThemeToDocument('dark')
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+  })
+
+  it('troca o tema com revelação a partir do último clique, salvo sem suporte ou com movimento reduzido', () => {
+    const root = document.documentElement
+    root.setAttribute('data-theme', 'dark')
+    // Sem View Transitions: troca na hora.
+    applyThemeToDocument('light')
+    expect(root.getAttribute('data-theme')).toBe('light')
+
+    const startViewTransition = vi.fn((update: () => void) => update())
+    Object.defineProperty(document, 'startViewTransition', { value: startViewTransition, configurable: true })
+    // Sem clique registrado: centro da janela.
+    applyThemeToDocument('dark')
+    expect(startViewTransition).toHaveBeenCalledTimes(1)
+    expect(root.getAttribute('data-theme')).toBe('dark')
+    expect(root.style.getPropertyValue('--vt-x')).toBe(`${innerWidth / 2}px`)
+
+    let listener: (e: Event) => void = () => {}
+    trackPointer({ addEventListener: ((_t: string, l: (e: Event) => void) => (listener = l)) as never })
+    listener({ clientX: 10, clientY: 20 } as PointerEvent)
+    applyThemeToDocument('light')
+    expect(root.style.getPropertyValue('--vt-x')).toBe('10px')
+    expect(root.style.getPropertyValue('--vt-y')).toBe('20px')
+
+    // Mesmo tema: nada a revelar.
+    applyThemeToDocument('light')
+    expect(startViewTransition).toHaveBeenCalledTimes(2)
+
+    vi.stubGlobal('matchMedia', () => ({ matches: true }))
+    applyThemeToDocument('dark')
+    expect(startViewTransition).toHaveBeenCalledTimes(2)
+    expect(root.getAttribute('data-theme')).toBe('dark')
+    Reflect.deleteProperty(document, 'startViewTransition')
   })
 })
 

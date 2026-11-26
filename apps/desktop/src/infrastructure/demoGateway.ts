@@ -100,6 +100,8 @@ function volume(free: number) {
   }
 }
 
+const SCAN_STEPS = [90_000, 260_000, 330_000, 470_000, 640_000, 700_000, 820_000, 960_000, 1_030_000, 1_100_000]
+
 export class DemoGateway implements DiskCleanupGateway {
   private planned: CandidateDto[] = []
   private extra: string[] = []
@@ -118,7 +120,9 @@ export class DemoGateway implements DiskCleanupGateway {
   }
 
   async runSurvey(_request: SurveyRequest, onProgress: (p: ScanProgressDto) => void): Promise<SurveyDto> {
-    for (const files of [250_000, 640_000, 1_100_000]) {
+    // Passos irregulares: pastas de muitos arquivos pequenos e de poucos grandes,
+    // para o ritmo (arquivos/s) da tela de varredura variar como numa varredura real.
+    for (const files of SCAN_STEPS) {
       await this.wait()
       onProgress({ files, logicalBytes: gb(files / 1500) })
     }
@@ -138,7 +142,7 @@ export class DemoGateway implements DiskCleanupGateway {
       files: 1_100_000,
       unreadable: 37,
       unattributedBytes: gb(56.4),
-      elapsedMs: this.delayMs * 3,
+      elapsedMs: this.delayMs * SCAN_STEPS.length,
     }
   }
 

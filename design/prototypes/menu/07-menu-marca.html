@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Menu 07 · Menu na marca — Disk Cleanup</title>
+<script>(function(){var m;try{m=localStorage.getItem('dc-theme-mode')}catch(e){}if(!m||m==='system')m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',m)})();</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../../apps/desktop/src/styles/app.css">
+<link rel="stylesheet" href="menu-kit.css">
+<style>
+  .sidebar { gap: 20px; }
+  @media (min-width: 821px) { .layout > .sidebar { overflow: visible; } }
+  .brand-wrap { position: relative; }
+  .brand-btn {
+    width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 10px;
+    border: 1px solid transparent; background: transparent; cursor: pointer; text-align: left;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .brand-btn:hover, .brand-btn[aria-expanded="true"] { background: var(--surface-2); border-color: var(--border); }
+  .brand-btn .chev { margin-left: auto; color: var(--muted); transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+  .brand-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+  .upd-badge { position: absolute; left: 32px; top: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--info); border: 2px solid var(--surface); display: none; }
+  body.has-update .upd-badge { display: block; animation: pop 0.3s cubic-bezier(0.3, 1.6, 0.5, 1) both; }
+
+  .pop {
+    position: absolute; left: 0; right: -24px; top: calc(100% + 6px); z-index: 30;
+    background: var(--surface); border: 1px solid var(--border-strong); border-radius: 12px; padding: 6px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18); transform-origin: top left;
+    opacity: 0; transform: scale(0.96) translateY(-4px); pointer-events: none; visibility: hidden;
+    transition: opacity 0.16s ease, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s 0.2s;
+  }
+  .pop.open { opacity: 1; transform: none; pointer-events: auto; visibility: visible; transition: opacity 0.16s ease, transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .pop-sec { display: flex; flex-direction: column; gap: 6px; padding: 10px; font-size: 12px; }
+  .pop-sec + .pop-sec { border-top: 1px solid var(--border); }
+  .pop-item {
+    display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 0 10px; border-radius: 8px;
+    border: 0; background: transparent; cursor: pointer; font-size: 13px; text-align: left; color: var(--text);
+  }
+  .pop-item:hover, .pop-item:focus-visible { background: var(--hover); }
+  .pop.open .pop-sec > * { animation: rise 0.25s ease both; }
+  .pop-upd { display: none; }
+  body.has-update .pop-upd { display: flex; }
+  .pop-upd .dot { color: var(--info); }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand-wrap">
+      <button type="button" class="brand-btn" id="brand" aria-haspopup="true" aria-expanded="false" aria-controls="pop">
+        <span class="brand-mark"><span data-icon="diskdot" data-size="18"></span></span>
+        <span class="brand-text"><span class="brand-name">Disk Cleanup</span><span class="small muted mono">windows · C:\</span></span>
+        <span class="chev" data-icon="chevdown" data-size="14"></span>
+      </button>
+      <span class="upd-badge" aria-hidden="true"></span>
+      <div class="pop" id="pop" role="menu" aria-label="Aplicativo">
+        <div class="pop-sec">
+          <span class="label-caps">Ambiente</span>
+          <div class="env-row"><span class="muted">Sistema</span><span>windows</span></div>
+          <div class="env-row"><span class="muted">Volume</span><span class="mono">C:\</span></div>
+          <div class="env-row"><span class="muted">Catálogo</span><span>windows</span></div>
+          <div class="env-row"><span class="muted">Modo</span><span style="font-weight:600">Aprovação explícita</span></div>
+        </div>
+        <div class="pop-sec">
+          <div class="env-row"><span class="muted">Versão</span><span class="mono">0.1.0-beta.5</span></div>
+          <button type="button" class="pop-item pop-upd" role="menuitem" data-toast="Download iniciado (simulado)"><span class="pill info"><span class="dot"></span>0.1.0-beta.6</span>Baixar atualização</button>
+          <button type="button" class="pop-item" role="menuitem" data-toast="Verificando atualizações (simulado)"><span data-icon="replay"></span>Verificar atualizações</button>
+          <button type="button" class="pop-item" role="menuitem" data-nav="settings"><span data-icon="gear"></span>Configurações</button>
+        </div>
+      </div>
+    </div>
+
+    <nav class="nav" id="nav" aria-label="Seções">
+      <a href="#" data-nav="cleanup"><span data-icon="disk"></span>Limpeza</a>
+      <a href="#" data-nav="history"><span data-icon="history"></span>Histórico</a>
+      <a href="#" data-nav="settings"><span data-icon="gear"></span>Configurações</a>
+    </nav>
+    <div class="spacer"></div>
+  </aside>
+  <main class="main"><div class="container" id="page"></div></main>
+</div>
+<script src="menu-kit.js"></script>
+<script>
+  DC.spec('<b>07 · Menu na marca</b> — padrão "workspace switcher" (Linear, Slack).<ul>' +
+    '<li>A marca vira botão: abre um menu com ambiente, versão, verificar/baixar atualização.</li>' +
+    '<li>Abertura com escala + deslize a partir do canto (0,22 s); fecha com Esc ou clique fora.</li>' +
+    '<li>Atualização disponível = ponto azul na marca, sem cartão permanente.</li>' +
+    '<li>Barra lateral fica só com as 3 seções: máximo de silêncio visual.</li></ul>');
+  DC.slider(document.getElementById('nav'));
+  var brand = document.getElementById('brand'), pop = document.getElementById('pop');
+  function setOpen(open) {
+    pop.classList.toggle('open', open);
+    brand.setAttribute('aria-expanded', String(open));
+  }
+  brand.addEventListener('click', function (e) { e.stopPropagation(); setOpen(!pop.classList.contains('open')); });
+  document.addEventListener('click', function (e) { if (!pop.contains(e.target)) setOpen(false); else if (e.target.closest('.pop-item')) setOpen(false); });
+  addEventListener('keydown', function (e) { if (e.key === 'Escape' && pop.classList.contains('open')) { setOpen(false); brand.focus(); } });
+</script>
+</body>
+</html>

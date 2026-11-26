@@ -39,7 +39,23 @@ function skipText(s: SkippedDto): string {
 
   <div class="note" role="note"><span>{{ t('classify.note') }}</span></div>
 
-  <div v-if="store.status === 'running'" class="note" role="status" data-test="classify-loading">{{ t('classify.loading') }}</div>
+  <!-- Sem progresso informado pelo núcleo: esqueleto por tier (os tiers são fixos; os itens não). -->
+  <section v-if="store.status === 'running'" class="card" role="status" data-test="classify-loading">
+    <div class="card-head">
+      <h2>{{ t('classify.loading') }}</h2>
+      <span class="pill info live"><span class="dot" />{{ t('survey.live') }}</span>
+    </div>
+    <div class="indet" aria-hidden="true" />
+    <div class="skel-grid" aria-hidden="true">
+      <div v-for="(tier, g) in TIERS" :key="tier" class="skel-group">
+        <TierBadge :tier="tier" />
+        <div v-for="r in 3" :key="r" class="skel-row" :style="{ animationDelay: `${g * 0.08 + r * 0.04}s` }">
+          <span class="skel" :style="{ width: `${38 + ((r * 17 + g * 11) % 30)}%` }" />
+          <span class="skel" style="width: 56px" />
+        </div>
+      </div>
+    </div>
+  </section>
   <div v-if="store.error" class="note warn-note" role="alert" data-test="classify-error">
     <span>{{ t('classify.failed', { error: err(store.error) }) }}</span>
     <button type="button" class="btn" data-test="retry" @click="reload">{{ t('common.retry') }}</button>

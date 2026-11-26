@@ -83,21 +83,32 @@ describe('labels', () => {
 })
 
 describe('shell', () => {
-  it('mostra as 5 etapas, o ambiente e alterna o tema', async () => {
-    const { wrapper, theme } = await mountApp('/')
-    // Início: só o Survey é navegável; as demais abas ficam trancadas.
+  it('mostra as 5 etapas e o ambiente na barra de status; o tema não fica na barra lateral', async () => {
+    const { wrapper } = await mountApp('/')
+    // Início: só a Varredura é navegável; as demais abas ficam trancadas.
     expect(wrapper.findAll('[data-test="nav"] .flow-step')).toHaveLength(5)
     expect(wrapper.findAll('[data-test="nav"] a')).toHaveLength(1)
-    expect(wrapper.get('[data-test="nav"] a[aria-current="page"]').text()).toContain('Survey')
+    expect(wrapper.get('[data-test="nav"] a[aria-current="page"]').text()).toContain('Varredura')
     expect(wrapper.get('[data-test="step-classify"]').attributes('aria-disabled')).toBe('true')
-    expect(wrapper.get('[data-test="step-classify"]').attributes('title')).toContain('Survey')
-    expect(wrapper.get('[data-test="env-os"]').text()).toBe('windows')
-    const toggle = wrapper.get('[data-test="theme-toggle"]')
-    expect(toggle.text()).toContain('Tema claro')
-    await toggle.trigger('click')
-    expect(theme.current.value).toBe('light')
-    expect(toggle.text()).toContain('Tema escuro')
+    expect(wrapper.get('[data-test="step-classify"]').attributes('title')).toContain('Varredura')
+    const bar = wrapper.get('[data-test="statusbar"]')
+    expect(bar.get('[data-test="env-os"]').text()).toBe('windows')
+    // Catálogo igual ao sistema não se repete.
+    expect(bar.find('[data-test="env-catalog"]').exists()).toBe(false)
+    expect(bar.get('[data-test="sb-state"]').text()).toBe('Pronto')
+    expect(bar.text()).toContain('C:\\')
+    expect(bar.text()).toContain('Aprovação explícita')
+    expect(wrapper.find('[data-test="theme-toggle"]').exists()).toBe(false)
+    expect(wrapper.find('.sidebar .env').exists()).toBe(false)
     expect(document.documentElement.getAttribute('lang')).toBe('pt-BR')
+  })
+
+  it('a barra de status mostra o catálogo quando difere do sistema e leva a versão às Configurações', async () => {
+    const systemInfo = vi.fn(async () => ({ os: 'linux', volumeRoot: '/', profile: '/home/u', catalog: 'macos' }))
+    const { wrapper, router } = await mountApp('/', fakeGateway({ systemInfo }))
+    expect(wrapper.get('[data-test="env-catalog"]').text()).toContain('macos')
+    await wrapper.get('[data-test="app-version"]').trigger('click')
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/configuracoes'))
   })
 
   it('libera as abas conforme cada etapa é concluída', async () => {
@@ -153,20 +164,35 @@ describe('Survey', () => {
     expect(wrapper.get('[data-test="to-classify"]').attributes('href')).toContain('classificacao')
   })
 
-  it('mostra o progresso enquanto varre', async () => {
+  it('mostra o progresso enquanto varre: contadores, tempo decorrido e ritmo', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
     let finish: (v: typeof survey) => void = () => {}
+    let progress: (p: { files: number; logicalBytes: number }) => void = () => {}
     const runSurvey = vi.fn((_r, onProgress) => {
+      progress = onProgress
       onProgress({ files: 20_000, logicalBytes: 5 * 1024 ** 3 })
       return new Promise<typeof survey>((resolve) => (finish = resolve))
     })
     const { wrapper } = await mountApp('/', fakeGateway({ runSurvey }))
     await wrapper.get('[data-test="start-survey"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('[data-test="survey-progress"]').text()).toContain('20.000')
+    const card = () => wrapper.get('[data-test="survey-progress"]')
+    expect(card().text()).toContain('20.000')
+    expect(card().text()).toContain('Varrendo C:\\')
+    expect(wrapper.get('[data-test="sb-state"]').text()).toBe('Varrendo C:\\ · 20.000 arquivos')
     expect(wrapper.get('[data-test="start-survey"]').attributes('disabled')).toBeDefined()
+    progress({ files: 70_000, logicalBytes: 9 * 1024 ** 3 })
+    vi.advanceTimersByTime(500)
+    await flushPromises()
+    // 50.000 arquivos em 0,5 s = 100.000 arquivos/s.
+    expect(wrapper.get('[data-test="scan-rate"]').text()).toBe('100.000')
+    vi.advanceTimersByTime(1500)
+    await flushPromises()
+    expect(wrapper.get('[data-test="scan-clock"]').text()).toBe('00:02')
     finish(survey)
     await flushPromises()
     expect(wrapper.find('[data-test="survey-progress"]').exists()).toBe(false)
+    vi.useRealTimers()
   })
 
   it('classifica a saúde do volume e omite seções vazias', async () => {
@@ -262,6 +288,7 @@ describe('Classificação', () => {
     const classify = vi.fn(() => new Promise<typeof classification>(() => {}))
     const { wrapper } = await mountApp('/classificacao', fakeGateway({ classify }))
     expect(wrapper.find('[data-test="classify-loading"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="sb-state"]').text()).toBe('Classificando…')
   })
 })
 
@@ -281,7 +308,30 @@ describe('Plano', () => {
     expect(gateway.buildPlan).toHaveBeenCalledWith('C:', ['npm-cache', 'nvidia-dxcache', 'gradle-caches'])
     expect(wrapper.get('[data-test="plan-tiers"]').text()).toContain('Cache')
     expect(wrapper.get('[data-test="plan-items"]').text()).toContain('Rótulo gradle-caches')
+    // Grupos por tier começam recolhidos; abrir um e depois "expandir/recolher todos".
+    const groups = wrapper.findAll('[data-test="plan-group"]')
+    expect(groups.every((g) => g.attributes('data-open') === 'false')).toBe(true)
+    await groups[0]!.get('button').trigger('click')
+    expect(groups[0]!.attributes('data-open')).toBe('true')
+    await wrapper.get('[data-test="toggle-groups"]').trigger('click')
+    expect(wrapper.findAll('[data-test="plan-group"]').every((g) => g.attributes('data-open') === 'true')).toBe(true)
+    expect(wrapper.get('[data-test="toggle-groups"]').text()).toBe('Recolher todos')
+    await wrapper.get('[data-test="toggle-groups"]').trigger('click')
+    expect(wrapper.findAll('[data-test="plan-group"]').every((g) => g.attributes('data-open') === 'false')).toBe(true)
+    // plan.json fica numa gaveta: abre, fecha pelo botão e pelo Esc.
+    expect(wrapper.find('[data-test="plan-json"]').exists()).toBe(false)
+    await wrapper.get('[data-test="open-json"]').trigger('click')
     expect(wrapper.get('[data-test="plan-json"]').text()).toContain('"volume": "C:"')
+    await wrapper.get('[data-test="close-json"]').trigger('click')
+    expect(wrapper.find('[data-test="json-drawer"]').exists()).toBe(false)
+    await wrapper.get('[data-test="open-json"]').trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    await flushPromises()
+    expect(wrapper.find('[data-test="json-drawer"]').exists()).toBe(true)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(wrapper.find('[data-test="json-drawer"]').exists()).toBe(false)
+    await wrapper.get('[data-test="open-json"]').trigger('click')
     await wrapper.get('[data-test="copy-json"]').trigger('click')
     await flushPromises()
     expect(writeText).toHaveBeenCalled()
@@ -316,21 +366,48 @@ describe('Aprovação no Plano', () => {
   it('só aprova com ciência e leva para a Execução', async () => {
     const { wrapper, gateway, router } = await planScreen()
     const approve = wrapper.get('[data-test="approve"]')
-    expect(approve.attributes('disabled')).toBeDefined()
+    expect(approve.attributes('aria-disabled')).toBe('true')
     expect(wrapper.get('[data-test="approve-missing"]').text()).toContain('Confirme a revisão')
     expect(wrapper.get('[data-test="approve-tier-A"]').element).toHaveProperty('checked', true)
+    expect(wrapper.get('[data-test="run-count"]').text()).toBe('3')
+    // Sem varredura nesta sessão não há espaço livre de partida para estimar.
+    expect(wrapper.find('[data-test="free-after"]').exists()).toBe(false)
+    // Clicar antes da hora não aprova: destaca a confirmação que falta e põe o foco nela.
+    await approve.trigger('click')
+    await flushPromises()
+    expect(gateway.approvePlan).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-test="ack"]').element.closest('label')!.classList.contains('attn')).toBe(true)
     await wrapper.get('[data-test="ack"]').setValue(true)
-    expect(approve.attributes('disabled')).toBeUndefined()
+    expect(approve.attributes('aria-disabled')).toBe('false')
     expect(wrapper.find('[data-test="approve-missing"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="approve-ready"]').text()).toBe('Pronto para aprovar.')
     await wrapper.get('[data-test="approve-tier-A"]').setValue(false)
     await wrapper.get('[data-test="approve-tier-C"]').setValue(false)
     expect(wrapper.get('[data-test="approve-missing"]').text()).toContain('ao menos um tier')
+    expect(wrapper.get('[data-test="plan-items"]').text()).toContain('fora desta execução')
+    await approve.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="plan-tiers"]').classes()).toContain('attn')
     await wrapper.get('[data-test="approve-tier-A"]').setValue(true)
     await approve.trigger('click')
     await flushPromises()
     expect(gateway.approvePlan).toHaveBeenCalledWith(['A'], true)
     // A Execução é carregada sob demanda: a navegação termina depois do import.
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/execucao'))
+  })
+
+  it('com varredura feita, estima o livre depois dos tiers que vão rodar', async () => {
+    const { wrapper, router } = await mountApp('/')
+    await wrapper.get('[data-test="start-survey"]').trigger('click')
+    await flushPromises()
+    await router.push('/classificacao')
+    await flushPromises()
+    await router.push('/plano')
+    await flushPromises()
+    const before = wrapper.get('[data-test="free-after"]').text()
+    await wrapper.get('[data-test="approve-tier-C"]').setValue(false)
+    expect(wrapper.get('[data-test="free-after"]').text()).not.toBe(before)
+    expect(wrapper.get('[data-test="run-count"]').text()).toBe('2')
   })
 
   it('mostra a recusa do núcleo e fica no Plano', async () => {
@@ -365,9 +442,17 @@ describe('Execução', () => {
     expect(wrapper.findAll('[data-test="stage"]')).toHaveLength(2)
     expect(wrapper.findAll('[data-test="step"]')).toHaveLength(2)
     expect(wrapper.get('[data-test="step"]').text()).toContain('npm cache clean --force')
+    // Guia: passo 1 de 2, começando pelo tier A; o tier seguinte aguarda.
+    expect(wrapper.get('[data-test="guide"]').text()).toContain('Passo 1 de 2')
+    expect(wrapper.get('[data-test="guide"]').text()).toContain('Comece pelo tier A · Cache')
+    const stages = wrapper.findAll('[data-test="stage"]')
+    expect(stages[0]!.classes()).toContain('current')
+    expect(stages[1]!.text()).toContain('Aguardando')
 
     await wrapper.get('[data-test="execute"]').trigger('click')
     expect(wrapper.get('[data-test="confirm"]').text()).toContain('2 itens')
+    expect(wrapper.get('[data-test="guide"]').text()).toContain('Confirmar tier A')
+    expect(wrapper.get('[data-test="execute"]').attributes('disabled')).toBeDefined()
     await wrapper.get('[data-test="cancel"]').trigger('click')
     expect(wrapper.find('[data-test="confirm"]').exists()).toBe(false)
     expect(gateway.executeTier).not.toHaveBeenCalled()
@@ -382,11 +467,21 @@ describe('Execução', () => {
     expect(results[1]!.text()).toContain('dx.bin: em uso')
     expect(gateway.previewTier).toHaveBeenLastCalledWith('C')
     expect(wrapper.find('[data-test="to-report"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="guide"]').text()).toContain('Próximo: tier C')
+    // Tier concluído recolhe; o resultado abre com um clique (e o atual não recolhe).
+    const done = wrapper.findAll('[data-test="stage"]')[0]!
+    expect(done.attributes('data-open')).toBe('false')
+    await done.get('button').trigger('click')
+    expect(done.attributes('data-open')).toBe('true')
+    await wrapper.findAll('[data-test="stage"]')[1]!.get('button').trigger('click')
+    expect(wrapper.findAll('[data-test="stage"]')[1]!.attributes('data-open')).toBe('true')
 
     await wrapper.get('[data-test="execute"]').trigger('click')
     await wrapper.get('[data-test="confirm-execute"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-test="total-freed"]').text()).toContain('24,8 GB')
+    expect(wrapper.get('[data-test="guide"]').text()).toContain('Execução concluída')
+    expect(wrapper.get('[data-test="guide"]').text()).toContain('Passo 2 de 2')
     expect(wrapper.get('[data-test="to-report"]').attributes('href')).toContain('relatorio')
   })
 
@@ -396,12 +491,37 @@ describe('Execução', () => {
     await wrapper.get('[data-test="execute"]').trigger('click')
     await wrapper.get('[data-test="confirm-execute"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('[data-test="running"]').text()).toContain('Executando')
+    expect(wrapper.get('[data-test="guide"]').text()).toContain('Executando tier A · Cache')
+    expect(wrapper.get('[data-test="executing"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="running"]').text()).toContain('na fila')
 
     const failing = await executeScreen(
       fakeGateway({ previewTier: vi.fn(async () => Promise.reject(new Error('nenhum plano aprovado'))) }),
     )
     expect(failing.wrapper.get('[data-test="execute-error"]').text()).toContain('nenhum plano aprovado')
+  })
+})
+
+describe('Barra de status na Execução', () => {
+  it('conta os itens já concluídos do tier em execução', async () => {
+    const executeTier = vi.fn((_tier, onEvent) => {
+      onEvent({ kind: 'started', id: 'npm-cache', result: null })
+      onEvent({ kind: 'finished', id: 'npm-cache', result: runA.items[0]! })
+      onEvent({ kind: 'started', id: 'nvidia-dxcache', result: null })
+      return new Promise<never>(() => {})
+    })
+    const ctx = await mountApp('/', fakeGateway({ executeTier }))
+    usePlanStore(ctx.pinia).approval = approval
+    await ctx.router.push('/execucao')
+    await flushPromises()
+    await ctx.wrapper.get('[data-test="execute"]').trigger('click')
+    await ctx.wrapper.get('[data-test="confirm-execute"]').trigger('click')
+    await flushPromises()
+    expect(ctx.wrapper.get('[data-test="sb-state"]').text()).toBe('Executando tier A · 1/2')
+    expect(ctx.wrapper.get('[data-test="guide"]').text()).toContain('1 de 2 itens')
+    const items = ctx.wrapper.findAll('[data-test="running"] .exec-item')
+    expect(items[0]!.classes()).toContain('ok')
+    expect(items[1]!.classes()).toContain('running')
   })
 })
 
@@ -741,7 +861,7 @@ describe('Idioma', () => {
 
   it('escolha explícita vence o sistema', async () => {
     const { wrapper } = await mountApp('/', fakeGateway(), { languages: ['en-US'], saved: { language: 'pt' } })
-    expect(wrapper.get('h1').text()).toBe('Survey do volume')
+    expect(wrapper.get('h1').text()).toBe('Varredura do volume')
   })
 
   it('erro do núcleo chega como código e é traduzido', async () => {
@@ -804,6 +924,7 @@ describe('ramos de apresentação', () => {
     await ctx.wrapper.get('[data-test="confirm-execute"]').trigger('click')
     await flushPromises()
     const running = ctx.wrapper.get('[data-test="running"]').text()
+    expect(ctx.wrapper.get('[data-test="sb-state"]').text()).toBe('Executando tier A · 0/2')
     expect(running).toContain('rodando')
     expect(running).toContain('na fila')
     finish(run)
