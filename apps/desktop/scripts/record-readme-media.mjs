@@ -39,8 +39,9 @@ const pause = (page, ms) => page.waitForTimeout(ms)
 async function survey(page) {
   await page.goto(`${BASE}/#/`)
   await pause(page, 900)
+  // Cartão ao vivo: contadores, tempo, ritmo; a barra de status acompanha.
   await page.click('[data-test="start-survey"]')
-  await page.waitForSelector('[data-test="kpi-used"]')
+  await page.waitForSelector('[data-test="kpi-used"]', { timeout: 15_000 })
   await pause(page, 2200)
   await page.mouse.wheel(0, 500)
   await pause(page, 1800)
@@ -59,20 +60,27 @@ async function classify(page) {
   await page.click('[data-test="tab-A"]')
   await pause(page, 600)
   await page.click('[data-test="to-plan"]')
-  await page.waitForSelector('[data-test="plan-json"]')
-  await pause(page, 1500)
-  await page.mouse.wheel(0, 600)
-  await pause(page, 1800)
+  await page.waitForSelector('[data-test="approval"]')
+  await pause(page, 1300)
+  // Grupo por tier recolhível e plan.json na gaveta lateral.
+  await page.click('[data-test="plan-group"] button')
+  await pause(page, 1200)
+  await page.click('[data-test="open-json"]')
+  await pause(page, 1600)
+  await page.keyboard.press('Escape')
+  await pause(page, 800)
 }
 
 async function theme(page) {
-  await page.goto(`${BASE}/#/`)
-  await page.click('[data-test="start-survey"]')
-  await page.waitForSelector('[data-test="kpi-used"]')
-  await pause(page, 1200)
-  await page.click('[data-test="theme-toggle"]')
+  // O tema fica em Configurações; a troca se revela em círculo a partir do clique.
+  await page.goto(`${BASE}/#/configuracoes`)
+  await page.waitForSelector('[data-test="theme-dark"]')
+  await pause(page, 1000)
+  await page.click('[data-test="theme-dark"]')
   await pause(page, 1500)
-  await page.click('[data-test="theme-toggle"]')
+  await page.click('[data-test="theme-light"]')
+  await pause(page, 1500)
+  await page.click('[data-test="nav-history"]')
   await pause(page, 1200)
 }
 
@@ -85,8 +93,16 @@ async function tour(page) {
   await page.click('[data-test="tab-C"]')
   await pause(page, 1300)
   await page.click('[data-test="to-plan"]')
-  await page.waitForSelector('[data-test="plan-json"]')
-  await pause(page, 2000)
+  await page.waitForSelector('[data-test="approval"]')
+  await pause(page, 1200)
+  // Aprovar antes da hora aponta o que falta (aria-disabled: o Playwright exige force); com a confirmação, aprova.
+  await page.click('[data-test="approve"]', { force: true })
+  await pause(page, 1300)
+  await page.click('[data-test="ack"]')
+  await pause(page, 700)
+  await page.click('[data-test="approve"]')
+  await page.waitForSelector('[data-test="execute"]')
+  await pause(page, 1800)
 }
 
 async function executeReport(page) {
@@ -100,12 +116,15 @@ async function executeReport(page) {
   await page.click('[data-test="approve"]')
   await page.waitForSelector('[data-test="execute"]')
   await pause(page, 1300)
+  // Guia do passo: executar no topo, confirmar no próprio guia, itens ao vivo.
   await page.click('[data-test="execute"]')
   await pause(page, 1100)
   await page.click('[data-test="confirm-execute"]')
-  await page.waitForSelector('[data-test="result"]')
+  await page.waitForSelector('[data-test="result"]', { state: 'attached' })
+  await page.waitForSelector('[data-test="execute"]')
   await pause(page, 1400)
   await page.click('[data-test="execute"]')
+  await pause(page, 700)
   await page.click('[data-test="confirm-execute"]')
   await page.waitForSelector('[data-test="to-report"]')
   await pause(page, 1200)

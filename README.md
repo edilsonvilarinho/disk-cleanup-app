@@ -25,7 +25,7 @@
 <h3 align="center"><a href="../../releases"><ins>Download</ins></a> &nbsp;·&nbsp; <a href="docs/architecture.md"><ins>Architecture →</ins></a></h3>
 
 <p align="center">
-  <img src="docs/assets/readme/tour.gif" alt="Disk Cleanup tour: volume survey, candidate classification by tier and the cleanup plan with its plan.json" width="960" />
+  <img src="docs/assets/readme/tour.gif" alt="Disk Cleanup tour: live volume scan, candidate classification by tier, plan approval and the guided execution" width="960" />
 </p>
 
 ## Features
@@ -37,13 +37,14 @@
 ### Volume survey
 
 One parallel walk of the whole volume aggregates every view at once: roots, second level and the
-user profile. Cloud folders (OneDrive, Google Drive, Dropbox, iCloud) show **logical × real** size,
-so 60 GB of placeholders are not mistaken for 60 GB on disk. Unreadable folders are counted, not
-hidden.
+user profile. While it runs you see files read, logical size, elapsed time and the live rate
+(files/s) — no fake percentage, since the total is unknown until the walk ends. Cloud folders
+(OneDrive, Google Drive, Dropbox, iCloud) show **logical × real** size, so 60 GB of placeholders are
+not mistaken for 60 GB on disk. Unreadable folders are counted, not hidden.
 
 </td>
 <td width="50%">
-  <img src="docs/assets/readme/survey.gif" alt="Running a read-only survey and reading the volume dashboard" width="100%" />
+  <img src="docs/assets/readme/survey.gif" alt="Running a read-only scan with live counters and rate, then reading the volume dashboard" width="100%" />
 </td>
 </tr>
 <tr>
@@ -54,11 +55,13 @@ hidden.
 A data-driven catalog (`catalog/windows.toml`) turns paths into candidates in four tiers — cache,
 uninstall, regenerable directories, system. Mandatory exclusions (`Windows\Installer`, `WinSxS`,
 `Package Cache`…) can never enter a plan, and a tool still referenced by `PATH` or a watched
-variable (e.g. `CUDA_PATH`) is **blocked**. The plan exports a `plan.json`.
+variable (e.g. `CUDA_PATH`) is **blocked**. The plan fits one screen: the tiers that will run and
+the review confirmation sit right under **Approve** (clicking it early points at what is missing),
+items are grouped per tier, and the `plan.json` opens in a side drawer.
 
 </td>
 <td width="50%">
-  <img src="docs/assets/readme/classify-plan.gif" alt="Selecting candidates per tier, viewing exclusions and building the plan" width="100%" />
+  <img src="docs/assets/readme/classify-plan.gif" alt="Selecting candidates per tier, viewing exclusions, building the plan and opening the plan.json drawer" width="100%" />
 </td>
 </tr>
 <tr>
@@ -66,8 +69,10 @@ variable (e.g. `CUDA_PATH`) is **blocked**. The plan exports a `plan.json`.
 
 ### Execution and report
 
-Approve the plan tier by tier, read the dry-run, confirm, and watch every item run with the free
-space measured before and after it. A locked file never aborts the tier — it becomes a pending item.
+Execution is guided one tier at a time: **Run tier X** stays at the top, a step card says what to
+do next (step k of n) and holds the confirmation, and a timeline keeps the current tier open with its
+dry-run while finished tiers collapse into their results. Watch every item run with the free space
+measured before and after it. A locked file never aborts the tier — it becomes a pending item.
 Removal never follows symlinks or junctions, and broad or protected folders (volume root, profile,
 `Program Files`…) are refused even if the catalog asks. The report compares measured × estimated
 per tier, lists divergences and pending items, and copies as Markdown.
@@ -85,7 +90,8 @@ per tier, lists divergences and pending items, and copies as Markdown.
 English and Portuguese across the whole app — including the reasons and errors that come from the
 Rust core, which now speaks in codes the UI translates. **Automatic** follows the system language.
 Theme follows the system or stays light/dark, extra folders can be protected on top of the mandatory
-exclusions, and the default scan depth is remembered.
+exclusions, and the default scan depth is remembered. A status bar at the bottom of the window shows
+what is running, the volume, the approval mode, the version and any update.
 
 </td>
 <td width="50%">
@@ -97,12 +103,12 @@ exclusions, and the default scan depth is remembered.
 
 ### Light and dark
 
-A neutral, professional look in both themes. It follows the system preference and remembers your
-choice.
+A neutral, professional look in both themes. It follows the system preference or your choice in
+Settings, and the switch reveals the new theme in a circle from where you clicked.
 
 </td>
 <td width="50%">
-  <img src="docs/assets/readme/theme.gif" alt="Switching between light and dark themes" width="100%" />
+  <img src="docs/assets/readme/theme.gif" alt="Switching between light and dark themes in Settings with a circular reveal" width="100%" />
 </td>
 </tr>
 <tr>
@@ -112,7 +118,7 @@ choice.
 
 Clean architecture in Rust (domain → application → infrastructure) and Vue, built test-first.
 Coverage gates fail the build below 95%: today the Rust core sits at 98.9% of lines (99 tests) and
-the UI at 100% of lines (105 tests).
+the UI at 99.1% of lines (169 tests).
 
 </td>
 <td width="50%">
@@ -125,7 +131,7 @@ the UI at 100% of lines (105 tests).
 
 | Step | State |
 |---|---|
-| 1. Survey | done |
+| 1. Scan (survey) | done |
 | 2. Classification | done — catalogs for Windows, Linux and macOS (tiers A and C) |
 | 3. Plan and approval | done — `plan.json` in the format of the `disk-cleanup` skill |
 | 4. Execution | done — paths and commands; uninstallers (tier B), DISM and an elevated helper are next |
