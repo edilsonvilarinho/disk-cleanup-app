@@ -138,8 +138,19 @@ a.flow-step:hover { background: var(--hover); color: var(--text); }
 .flow-step.done:not([aria-current="page"]) { color: var(--text); }
 .flow-step.done:not([aria-current="page"]) .step-num { color: var(--ok); border-color: var(--ok); }
 .flow-step.locked { opacity: 0.45; cursor: not-allowed; }
-.flow-sep { flex: 1 1 12px; min-width: 12px; height: 1px; background: var(--border-strong); }
-.flow-sep.on { background: var(--muted); }
+/* Linha entre abas: enche da esquerda para a direita quando a aba seguinte destranca. */
+.flow-sep { position: relative; flex: 1 1 12px; min-width: 12px; height: 1px; background: var(--border-strong); overflow: hidden; }
+.flow-sep::after { content: ''; position: absolute; inset: 0; background: var(--muted); transform: scaleX(0); transform-origin: left; transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1); }
+.flow-sep.on::after { transform: scaleX(1); }
+.flow .flow-step[aria-current="page"] { background: transparent; }
+.flow-step .step-num { transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease; }
+/* Aba que acabou de destrancar: sobe e acende uma vez (a âncora nasce no destrancar). */
+a.flow-step.unlocking { animation: unlock 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes unlock { 0% { opacity: 0.45; } 35% { opacity: 1; transform: translateY(-3px); } 100% { transform: none; } }
+.pop-enter-active { animation: pop 0.35s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.pop-leave-active { transition: opacity 0.1s ease; }
+.pop-leave-to { opacity: 0; }
+@keyframes pop { from { transform: scale(0); } }
 .env { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 12px; }
 .env-row { display: flex; justify-content: space-between; gap: 8px; }
 .label-caps { color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-size: 11px; }
