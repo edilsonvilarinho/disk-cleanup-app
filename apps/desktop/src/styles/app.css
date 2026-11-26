@@ -401,6 +401,40 @@ details[open] summary { margin-bottom: 10px; }
 .update-notice { display: inline-flex; align-items: center; gap: 8px; color: var(--info); font-weight: 600; }
 .update-notice .btn { min-height: 22px; padding: 0 8px; font-size: 11.5px; border-radius: 5px; }
 
+/* ---------- Atividade em andamento: varredura e classificação ---------- */
+.live .dot { position: relative; }
+.live .dot::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: currentColor; animation: ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite; }
+@keyframes ping { 75%, 100% { transform: scale(2.6); opacity: 0; } }
+.scan .indet, [data-test="classify-loading"] .indet { height: 4px; }
+.scan-head { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.scan-title { display: flex; flex-direction: column; gap: 2px; flex: 1 1 200px; min-width: 0; }
+.scan-disk {
+  position: relative; width: 44px; height: 44px; border-radius: 12px; flex: none; display: grid; place-items: center; overflow: hidden;
+  border: 1px solid var(--border-strong); background: var(--surface-2);
+}
+/* Faixa que varre o disco de cima a baixo. */
+.scan-disk::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 45%; top: -45%;
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--text) 16%, transparent));
+  animation: sweep 1.5s ease-in-out infinite;
+}
+@keyframes sweep { to { top: 100%; } }
+.scan-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: 10px; }
+.scan-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 12px; border-radius: 10px; background: var(--surface-2); }
+.scan-stat .v { font-family: var(--font-mono); font-size: 22px; font-weight: 500; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.spark-wrap { display: flex; flex-direction: column; gap: 6px; }
+.spark { display: block; width: 100%; height: 44px; }
+.spark .l { fill: none; stroke: var(--bar); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.skel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 16px; }
+.skel-group { display: flex; flex-direction: column; gap: 8px; }
+.skel-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-left: 16px; animation: rise 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.skel {
+  display: block; height: 10px; border-radius: 5px;
+  background: linear-gradient(90deg, var(--track) 0%, var(--hover) 45%, var(--track) 90%);
+  background-size: 250% 100%; animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer { from { background-position: 125% 0; } to { background-position: -125% 0; } }
+
 /* ---------- Plano: aprovação colada no botão Aprovar ---------- */
 .approve-card { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 20px; align-items: start; }
 @media (max-width: 860px) { .approve-card { grid-template-columns: minmax(0, 1fr); } }

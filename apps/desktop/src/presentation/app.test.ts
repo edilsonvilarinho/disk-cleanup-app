@@ -164,21 +164,35 @@ describe('Survey', () => {
     expect(wrapper.get('[data-test="to-classify"]').attributes('href')).toContain('classificacao')
   })
 
-  it('mostra o progresso enquanto varre', async () => {
+  it('mostra o progresso enquanto varre: contadores, tempo decorrido e ritmo', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
     let finish: (v: typeof survey) => void = () => {}
+    let progress: (p: { files: number; logicalBytes: number }) => void = () => {}
     const runSurvey = vi.fn((_r, onProgress) => {
+      progress = onProgress
       onProgress({ files: 20_000, logicalBytes: 5 * 1024 ** 3 })
       return new Promise<typeof survey>((resolve) => (finish = resolve))
     })
     const { wrapper } = await mountApp('/', fakeGateway({ runSurvey }))
     await wrapper.get('[data-test="start-survey"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('[data-test="survey-progress"]').text()).toContain('20.000')
+    const card = () => wrapper.get('[data-test="survey-progress"]')
+    expect(card().text()).toContain('20.000')
+    expect(card().text()).toContain('Varrendo C:\\')
     expect(wrapper.get('[data-test="sb-state"]').text()).toBe('Varrendo C:\\ · 20.000 arquivos')
     expect(wrapper.get('[data-test="start-survey"]').attributes('disabled')).toBeDefined()
+    progress({ files: 70_000, logicalBytes: 9 * 1024 ** 3 })
+    vi.advanceTimersByTime(500)
+    await flushPromises()
+    // 50.000 arquivos em 0,5 s = 100.000 arquivos/s.
+    expect(wrapper.get('[data-test="scan-rate"]').text()).toBe('100.000')
+    vi.advanceTimersByTime(1500)
+    await flushPromises()
+    expect(wrapper.get('[data-test="scan-clock"]').text()).toBe('00:02')
     finish(survey)
     await flushPromises()
     expect(wrapper.find('[data-test="survey-progress"]').exists()).toBe(false)
+    vi.useRealTimers()
   })
 
   it('classifica a saúde do volume e omite seções vazias', async () => {

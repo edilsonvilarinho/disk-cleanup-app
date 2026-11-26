@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useHistoryStore } from '../../application/stores/history'
 import { useSettingsStore } from '../../application/stores/settings'
 import { useSurveyStore } from '../../application/stores/survey'
 import { useSystemStore } from '../../application/stores/system'
 import type { Health, UsageEntryDto } from '../../domain/models'
+import { clock, currentRate, pushSample, rates, sparkPath, type ProgressSample } from '../../domain/progress'
 import BarList from '../components/BarList.vue'
 import KpiCard from '../components/KpiCard.vue'
 import { useI18n } from '../i18n'
@@ -25,6 +26,41 @@ const bars = (list: UsageEntryDto[]) => list.slice(0, 10).map((e) => ({ name: e.
 // Computadas: o filho recebe a mesma referência enquanto o relatório não muda.
 const rootBars = computed(() => bars(report.value?.roots ?? []))
 const profileBars = computed(() => bars(report.value?.profile ?? []))
+
+// Enquanto varre: amostra o contador a cada meio segundo para tempo e ritmo.
+const SAMPLE_MS = 500
+const samples = ref<ProgressSample[]>([])
+const startedAt = ref(0)
+const now = ref(0)
+let timer: ReturnType<typeof setInterval> | undefined
+
+function sample() {
+  now.value = Date.now()
+  samples.value = pushSample(samples.value, { at: now.value, files: survey.progress.files })
+}
+
+function stopSampling() {
+  clearInterval(timer)
+  timer = undefined
+}
+
+watch(
+  () => survey.status === 'running',
+  (running) => {
+    stopSampling()
+    if (!running) return
+    startedAt.value = Date.now()
+    samples.value = []
+    sample()
+    timer = setInterval(sample, SAMPLE_MS)
+  },
+  { immediate: true },
+)
+onBeforeUnmount(stopSampling)
+
+const elapsed = computed(() => clock(now.value - startedAt.value))
+const rate = computed(() => Math.round(currentRate(samples.value)))
+const spark = computed(() => sparkPath(rates(samples.value), 400, 44))
 
 function start() {
   if (!system.info) return
@@ -59,9 +95,38 @@ function start() {
     </div>
   </header>
 
-  <div v-if="survey.status === 'running'" class="note" role="status" aria-live="polite" data-test="survey-progress">
-    <span>{{ t('survey.progress', { root: system.info?.volumeRoot ?? '', files: count(survey.progress.files), size: gb(survey.progress.logicalBytes) }) }}</span>
-  </div>
+  <!-- Sem total conhecido: barra indeterminada, contadores vivos, tempo e ritmo derivados. -->
+  <section v-if="survey.status === 'running'" class="card scan" role="status" aria-live="polite" data-test="survey-progress">
+    <div class="scan-head">
+      <span class="scan-disk" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="16" rx="3" />
+          <path d="M3 14h18" />
+        </svg>
+      </span>
+      <div class="scan-title">
+        <h2>{{ t('survey.scanning', { root: system.info?.volumeRoot ?? '' }) }}</h2>
+        <span class="small muted">{{ t('survey.readOnly') }}</span>
+      </div>
+      <span class="pill info live"><span class="dot" />{{ t('survey.live') }}</span>
+      <span class="mono small muted" data-test="scan-clock">{{ elapsed }}</span>
+    </div>
+    <div class="indet" aria-hidden="true" />
+    <div class="scan-stats">
+      <div class="scan-stat"><span class="small muted">{{ t('survey.filesRead') }}</span><span class="v">{{ count(survey.progress.files) }}</span></div>
+      <div class="scan-stat"><span class="small muted">{{ t('survey.logicalRead') }}</span><span class="v">{{ gb(survey.progress.logicalBytes) }}</span></div>
+      <div class="scan-stat">
+        <span class="small muted">{{ t('survey.rate') }}</span><span class="v" data-test="scan-rate">{{ count(rate) }}</span>
+        <span class="small muted">{{ t('survey.perSecond') }}</span>
+      </div>
+    </div>
+    <div class="spark-wrap">
+      <span class="small muted">{{ t('survey.rateWindow') }}</span>
+      <svg class="spark" viewBox="0 0 400 44" preserveAspectRatio="none" aria-hidden="true">
+        <path class="l" :d="spark" />
+      </svg>
+    </div>
+  </section>
   <div v-if="survey.error" class="note warn-note" role="alert" data-test="survey-error">
     <span>{{ t('survey.failed', { error: err(survey.error) }) }}</span>
   </div>
