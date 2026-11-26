@@ -18,6 +18,7 @@ import { ThemeController } from './application/theme'
 import { updaterPlugin } from './application/updater'
 import {
   applyThemeToDocument,
+  trackPointer,
   localStorageSettingsStorage,
   systemPrefersDark,
   watchSystemTheme,
@@ -45,6 +46,7 @@ pinia.use(updaterPlugin(inTauri ? new TauriUpdater() : new DemoUpdater()))
 
 const theme = new ThemeController(systemPrefersDark, applyThemeToDocument)
 watchSystemTheme(() => theme.refresh())
+trackPointer()
 
 const app = createApp(App).use(pinia).use(createAppRouter()).provide(THEME_KEY, theme)
 app.config.errorHandler = vueErrorHandler()

@@ -350,6 +350,14 @@ details[open] summary { margin-bottom: 10px; }
 .has-ind > a, .has-ind > span:not(.active-ind), .has-ind > button { position: relative; z-index: 1; }
 .has-ind > a[aria-current="page"], .has-ind > a[aria-current="page"]:hover { background: transparent; }
 
+/* Troca de tema: o novo tema se revela em círculo a partir do clique (browserTheme). */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-new(root) { animation: vt-reveal 0.55s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes vt-reveal {
+  from { clip-path: circle(0 at var(--vt-x, 50%) var(--vt-y, 50%)); }
+  to { clip-path: circle(var(--vt-r, 150vmax) at var(--vt-x, 50%) var(--vt-y, 50%)); }
+}
+
 /* Quem pede menos movimento no sistema não recebe animação nenhuma. */
 @media (prefers-reduced-motion: reduce) {
   .indet::before { left: 0; width: 100%; opacity: 0.35; }
