@@ -428,9 +428,17 @@ describe('Execução', () => {
     expect(wrapper.findAll('[data-test="stage"]')).toHaveLength(2)
     expect(wrapper.findAll('[data-test="step"]')).toHaveLength(2)
     expect(wrapper.get('[data-test="step"]').text()).toContain('npm cache clean --force')
+    // Guia: passo 1 de 2, começando pelo tier A; o tier seguinte aguarda.
+    expect(wrapper.get('[data-test="guide"]').text()).toContain('Passo 1 de 2')
+    expect(wrapper.get('[data-test="guide"]').text()).toContain('Comece pelo tier A · Cache')
+    const stages = wrapper.findAll('[data-test="stage"]')
+    expect(stages[0]!.classes()).toContain('current')
+    expect(stages[1]!.text()).toContain('Aguardando')
 
     await wrapper.get('[data-test="execute"]').trigger('click')
     expect(wrapper.get('[data-test="confirm"]').text()).toContain('2 itens')
+    expect(wrapper.get('[data-test="guide"]').text()).toContain('Confirmar tier A')
+    expect(wrapper.get('[data-test="execute"]').attributes('disabled')).toBeDefined()
     await wrapper.get('[data-test="cancel"]').trigger('click')
     expect(wrapper.find('[data-test="confirm"]').exists()).toBe(false)
     expect(gateway.executeTier).not.toHaveBeenCalled()
@@ -445,11 +453,21 @@ describe('Execução', () => {
     expect(results[1]!.text()).toContain('dx.bin: em uso')
     expect(gateway.previewTier).toHaveBeenLastCalledWith('C')
     expect(wrapper.find('[data-test="to-report"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="guide"]').text()).toContain('Próximo: tier C')
+    // Tier concluído recolhe; o resultado abre com um clique (e o atual não recolhe).
+    const done = wrapper.findAll('[data-test="stage"]')[0]!
+    expect(done.attributes('data-open')).toBe('false')
+    await done.get('button').trigger('click')
+    expect(done.attributes('data-open')).toBe('true')
+    await wrapper.findAll('[data-test="stage"]')[1]!.get('button').trigger('click')
+    expect(wrapper.findAll('[data-test="stage"]')[1]!.attributes('data-open')).toBe('true')
 
     await wrapper.get('[data-test="execute"]').trigger('click')
     await wrapper.get('[data-test="confirm-execute"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-test="total-freed"]').text()).toContain('24,8 GB')
+    expect(wrapper.get('[data-test="guide"]').text()).toContain('Execução concluída')
+    expect(wrapper.get('[data-test="guide"]').text()).toContain('Passo 2 de 2')
     expect(wrapper.get('[data-test="to-report"]').attributes('href')).toContain('relatorio')
   })
 
@@ -459,12 +477,37 @@ describe('Execução', () => {
     await wrapper.get('[data-test="execute"]').trigger('click')
     await wrapper.get('[data-test="confirm-execute"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('[data-test="running"]').text()).toContain('Executando')
+    expect(wrapper.get('[data-test="guide"]').text()).toContain('Executando tier A · Cache')
+    expect(wrapper.get('[data-test="executing"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="running"]').text()).toContain('na fila')
 
     const failing = await executeScreen(
       fakeGateway({ previewTier: vi.fn(async () => Promise.reject(new Error('nenhum plano aprovado'))) }),
     )
     expect(failing.wrapper.get('[data-test="execute-error"]').text()).toContain('nenhum plano aprovado')
+  })
+})
+
+describe('Barra de status na Execução', () => {
+  it('conta os itens já concluídos do tier em execução', async () => {
+    const executeTier = vi.fn((_tier, onEvent) => {
+      onEvent({ kind: 'started', id: 'npm-cache', result: null })
+      onEvent({ kind: 'finished', id: 'npm-cache', result: runA.items[0]! })
+      onEvent({ kind: 'started', id: 'nvidia-dxcache', result: null })
+      return new Promise<never>(() => {})
+    })
+    const ctx = await mountApp('/', fakeGateway({ executeTier }))
+    usePlanStore(ctx.pinia).approval = approval
+    await ctx.router.push('/execucao')
+    await flushPromises()
+    await ctx.wrapper.get('[data-test="execute"]').trigger('click')
+    await ctx.wrapper.get('[data-test="confirm-execute"]').trigger('click')
+    await flushPromises()
+    expect(ctx.wrapper.get('[data-test="sb-state"]').text()).toBe('Executando tier A · 1/2')
+    expect(ctx.wrapper.get('[data-test="guide"]').text()).toContain('1 de 2 itens')
+    const items = ctx.wrapper.findAll('[data-test="running"] .exec-item')
+    expect(items[0]!.classes()).toContain('ok')
+    expect(items[1]!.classes()).toContain('running')
   })
 })
 

@@ -347,7 +347,7 @@ details[open] summary { margin-bottom: 10px; }
   border-radius: var(--radius-sm); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border);
   transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1), width 0.32s cubic-bezier(0.4, 0, 0.2, 1), height 0.32s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
 }
-.has-ind > a, .has-ind > span, .has-ind > button { position: relative; z-index: 1; }
+.has-ind > a, .has-ind > span:not(.active-ind), .has-ind > button { position: relative; z-index: 1; }
 .has-ind > a[aria-current="page"], .has-ind > a[aria-current="page"]:hover { background: transparent; }
 
 /* Quem pede menos movimento no sistema não recebe animação nenhuma. */
@@ -436,7 +436,8 @@ details[open] summary { margin-bottom: 10px; }
 .ack input { margin-top: 2px; }
 .ack.on { border-style: solid; border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); background: color-mix(in srgb, var(--ok) 6%, transparent); }
 /* Clique em Aprovar sem requisito: o requisito que falta treme e ganha contorno. */
-.attn { animation: attn 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) both; box-shadow: 0 0 0 2px var(--warn); }
+.attn { animation: attn 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) both, attn-ring 1.8s ease both; }
+@keyframes attn-ring { 0%, 65% { box-shadow: 0 0 0 2px var(--warn); } 100% { box-shadow: 0 0 0 0 transparent; } }
 @keyframes attn { 10%, 90% { transform: translateX(-1px); } 20%, 80% { transform: translateX(2px); } 30%, 50%, 70% { transform: translateX(-4px); } 40%, 60% { transform: translateX(4px); } }
 /* Ação seguinte pronta: um pulso discreto, duas vezes. */
 .btn-primary.ready:not([aria-disabled="true"]):not(:disabled) { animation: ready 1.6s ease-out 0.3s 2; }
@@ -472,6 +473,66 @@ details[open] summary { margin-bottom: 10px; }
   .grp-items li > :nth-child(2), .grp-items li > :nth-child(3) { display: none; }
   .grp-bar { display: none; }
 }
+
+/* ---------- Execução: guia do passo atual + linha do tempo por tier ---------- */
+/* Ação destrutiva: vermelho sólido com texto do tom de fundo (contraste nos dois temas). */
+.btn-danger-solid { background: var(--err); border-color: var(--err); color: var(--primary-fg); font-weight: 600; }
+.btn-danger-solid:hover { background: var(--err); opacity: 0.9; }
+.spin-ring { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; display: inline-block; animation: spin 0.8s linear infinite; flex: none; }
+.guide { gap: 12px; }
+.guide.is-done { border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }
+.guide.is-done h2 { color: var(--ok); }
+.guide-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; }
+.guide-txt { display: flex; flex-direction: column; gap: 4px; flex: 1 1 320px; min-width: 0; }
+.guide-txt h2 { font-size: 17px; }
+.guide-segs { display: flex; gap: 6px; flex: 0 1 320px; min-width: 200px; }
+.seg { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.seg-bar { position: relative; width: 100%; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.seg-bar > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--tc); transition: width 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.seg.current .seg-bar { box-shadow: 0 0 0 1px var(--tc); animation: seg-pulse 1.6s ease-in-out infinite; }
+@keyframes seg-pulse { 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--tc) 35%, transparent); } }
+.seg-lbl { display: inline-flex; align-items: center; gap: 3px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.seg.done .seg-lbl { color: var(--ok); }
+.seg.running .seg-lbl, .seg.current .seg-lbl { color: var(--text); font-weight: 600; }
+.warn-line { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.warn-line svg { color: var(--warn); flex: none; }
+
+.xlist { gap: 2px; padding: 6px; }
+.xrow { border: 1px solid transparent; border-radius: 10px; transition: border-color 0.2s ease, background 0.2s ease, opacity 0.2s ease; }
+.xrow .xrow-head .num { margin-left: auto; }
+.xrow.current, .xrow.running { border-color: var(--border-strong); background: var(--surface-2); }
+.xrow.running { border-color: color-mix(in srgb, var(--info) 45%, var(--border)); }
+.xrow.waiting { opacity: 0.7; }
+.xrow.current .xrow-head, .xrow.running .xrow-head { cursor: default; }
+.xrow.current .xrow-head:hover, .xrow.running .xrow-head:hover { background: transparent; }
+.xrow.current .chev, .xrow.running .chev { visibility: hidden; }
+.xrow-inner { display: flex; flex-direction: column; gap: 6px; padding: 0 2px 4px; }
+.xrow-inner > p { padding: 0 12px; }
+.xs { width: 22px; height: 22px; border-radius: 50%; flex: none; display: inline-grid; place-items: center; font-family: var(--font-mono); font-size: 11px; }
+.xs.n { border: 1px solid var(--border-strong); color: var(--muted); }
+.xrow.current .xs.n { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+.xs.ok { background: var(--ok); color: #fff; animation: pop 0.35s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.xs.spin-ring { width: 18px; height: 18px; margin: 2px; color: var(--info); }
+.pill.strong { color: var(--text); border-color: var(--border-strong); }
+
+/* Itens ao vivo: fila → rodando → resultado */
+.exec-list { list-style: none; margin: 0; padding: 0 6px 6px; display: flex; flex-direction: column; gap: 2px; position: relative; }
+.exec-item { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 36px; padding: 0 8px; border-radius: 8px; font-size: 13px; transition: background 0.2s ease, opacity 0.2s ease; }
+.exec-item.queued { opacity: 0.55; }
+.exec-item.running { background: var(--surface); }
+.exec-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exec-ico { position: relative; width: 18px; height: 18px; display: grid; place-items: center; }
+.exec-ico .ring { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--border-strong); }
+.exec-ico svg { position: relative; opacity: 0; transform: scale(0.4); color: var(--surface); transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.exec-item.running .ring { border-color: var(--track); border-top-color: var(--text); animation: spin 0.8s linear infinite; }
+.exec-item.ok .exec-ico { color: var(--ok); }
+.exec-item.partial .exec-ico { color: var(--warn); }
+.exec-item.skipped .exec-ico, .exec-item.failed .exec-ico { color: var(--muted); }
+.exec-item.ok .ring, .exec-item.partial .ring { background: currentColor; border-color: currentColor; animation: pop 0.3s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.exec-item.ok svg, .exec-item.partial svg { opacity: 1; transform: scale(1); }
+.exec-item.ok .exec-st { color: var(--ok); }
+.exec-item.partial .exec-st { color: var(--warn); }
+.exec-item.failed .exec-st { color: var(--err); }
 
 /* Gaveta lateral (plan.json fora do fluxo de leitura) */
 .drawer-wrap { position: fixed; inset: 0; z-index: 85; }

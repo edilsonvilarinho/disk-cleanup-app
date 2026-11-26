@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, nextTick, ref } from 'vue'
-import { useActiveIndicator } from './activeIndicator'
+import { SETTLE_MS, useActiveIndicator } from './activeIndicator'
 
 describe('useActiveIndicator', () => {
   it('some sem item ativo e acompanha o item marcado; a primeira medição não anima', async () => {
@@ -26,5 +26,25 @@ describe('useActiveIndicator', () => {
     window.dispatchEvent(new Event('resize'))
     expect(style!.value.transition).toBeUndefined()
     wrapper.unmount()
+  })
+
+  it('remede depois das transições dos itens', async () => {
+    vi.useFakeTimers()
+    const tick = ref(0)
+    let style: ReturnType<typeof useActiveIndicator> | null = null
+    const Probe = defineComponent({
+      setup() {
+        const el = ref<HTMLElement | null>(null)
+        style = useActiveIndicator(el, () => tick.value)
+        return () => h('nav', { ref: el }, tick.value ? [h('a', { 'aria-current': 'page' }, 'x')] : [])
+      },
+    })
+    const wrapper = mount(Probe)
+    tick.value = 1
+    await nextTick()
+    vi.advanceTimersByTime(SETTLE_MS)
+    expect(style!.value.opacity).toBe('1')
+    wrapper.unmount()
+    vi.useRealTimers()
   })
 })
