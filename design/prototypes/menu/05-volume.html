@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Menu 05 · Volume em destaque — Disk Cleanup</title>
+<script>(function(){var m;try{m=localStorage.getItem('dc-theme-mode')}catch(e){}if(!m||m==='system')m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',m)})();</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../../apps/desktop/src/styles/app.css">
+<link rel="stylesheet" href="menu-kit.css">
+<style>
+  .sidebar { gap: 22px; }
+  .vol { border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; animation: rise 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) 0.08s both; }
+  .vol-top { display: flex; align-items: center; gap: 14px; }
+  .ring { position: relative; width: 64px; height: 64px; flex: none; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring .trk { stroke: var(--track); }
+  .ring .val {
+    stroke: var(--err); stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100;
+    animation: ring-fill 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.25s forwards; transition: stroke 0.3s ease;
+  }
+  @keyframes ring-fill { to { stroke-dashoffset: 6.5; } }
+  .ring .pct { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+  body.is-scanning .ring .val { stroke: var(--bar); stroke-dasharray: 22 78; stroke-dashoffset: 0; animation: ring-spin 1s linear infinite; }
+  body.is-scanning .ring .pct { color: var(--muted); }
+  @keyframes ring-spin { to { stroke-dashoffset: -100; } }
+  .vol-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .vol-txt .big { font-family: var(--font-mono); font-size: 15px; font-weight: 500; }
+  .vol-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; }
+  .vol-foot .link { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; background: none; border: 0; padding: 0; font-size: 12px; }
+  .vol-foot .link:hover { color: var(--text); }
+  .facts { display: flex; flex-direction: column; gap: 6px; font-size: 12px; padding: 0 4px; }
+  .facts .env-row { opacity: 0; animation: rise 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .facts .env-row:nth-child(1) { animation-delay: 0.3s; }
+  .facts .env-row:nth-child(2) { animation-delay: 0.36s; }
+  .scan-only { display: none; } body.is-scanning .scan-only { display: inline; } body.is-scanning .idle-only { display: none; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark"><span data-icon="diskdot" data-size="18"></span></span>
+      <div class="brand-text"><span class="brand-name">Disk Cleanup</span><span class="small muted mono">v0.1.0-beta.5</span></div>
+    </div>
+
+    <nav class="nav" id="nav" aria-label="Seções">
+      <a href="#" data-nav="cleanup"><span data-icon="disk"></span>Limpeza</a>
+      <a href="#" data-nav="history"><span data-icon="history"></span>Histórico</a>
+      <a href="#" data-nav="settings"><span data-icon="gear"></span>Configurações</a>
+    </nav>
+
+    <section class="vol" aria-label="Volume C:\">
+      <div class="vol-top">
+        <div class="ring" role="img" aria-label="93,5% ocupado">
+          <svg viewBox="0 0 36 36" aria-hidden="true"><circle class="trk" cx="18" cy="18" r="15.9" fill="none" stroke-width="3.2"/><circle class="val" cx="18" cy="18" r="15.9" fill="none" stroke-width="3.2" pathLength="100"/></svg>
+          <span class="pct"><span class="idle-only">93%</span><span class="scan-only">…</span></span>
+        </div>
+        <div class="vol-txt">
+          <span class="label-caps mono" style="letter-spacing:0">C:\</span>
+          <span class="big">61,6 GB livres</span>
+          <span class="small muted">de 953,0 GB</span>
+        </div>
+      </div>
+      <div class="vol-foot">
+        <span class="pill err"><span class="dot"></span><span class="idle-only">Crítico</span><span class="scan-only">Varrendo</span></span>
+        <button type="button" class="link" data-nav="history">há 3 min</button>
+      </div>
+    </section>
+
+    <div class="facts">
+      <div class="env-row"><span class="muted">Sistema · catálogo</span><span>windows</span></div>
+      <div class="env-row"><span class="muted">Modo</span><span style="font-weight:600">Aprovação explícita</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="update-notice when-update" role="status"><span>Versão 0.1.0-beta.6 disponível</span><button type="button" class="btn" data-toast="Download iniciado (simulado)">Baixar</button></div>
+  </aside>
+  <main class="main"><div class="container" id="page"></div></main>
+</div>
+<script src="menu-kit.js"></script>
+<script>
+  DC.spec('<b>05 · Volume em destaque</b> — o menu responde "quanto espaço eu tenho?".<ul>' +
+    '<li>Anel de ocupação preenche ao abrir. A cor segue a saúde do volume (Crítico = <span class="mono">--err</span>), com rótulo em texto ao lado.</li>' +
+    '<li>Durante a varredura o anel vira indeterminado (gira) e o selo diz "Varrendo".</li>' +
+    '<li><b>Pré-requisito:</b> o dado vem da última varredura salva no histórico (usado/livre/capacidade). Sem nenhuma varredura, o cartão mostra "Sem varredura · Iniciar".</li>' +
+    '<li>Volume antes de varrer (como o PC Manager) exige expor capacidade/livre no <span class="mono">SystemInfoDto</span>: hoje ele não tem.</li></ul>');
+  DC.slider(document.getElementById('nav'));
+</script>
+</body>
+</html>

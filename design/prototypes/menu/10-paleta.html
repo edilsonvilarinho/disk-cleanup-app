@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Menu 10 · Paleta de comandos — Disk Cleanup</title>
+<script>(function(){var m;try{m=localStorage.getItem('dc-theme-mode')}catch(e){}if(!m||m==='system')m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',m)})();</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../../apps/desktop/src/styles/app.css">
+<link rel="stylesheet" href="menu-kit.css">
+<style>
+  .sidebar { gap: 20px; }
+  kbd { font-family: var(--font-mono); font-size: 10.5px; min-width: 18px; height: 18px; padding: 0 4px; display: inline-grid; place-items: center; border-radius: 4px; border: 1px solid var(--border-strong); color: var(--muted); background: var(--surface); }
+  .search {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px; padding: 0 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); cursor: pointer; font-size: 13px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .search:hover { border-color: var(--border-strong); color: var(--text); }
+  .search .keys { margin-left: auto; display: inline-flex; gap: 3px; }
+  .env-mini { display: flex; flex-direction: column; gap: 6px; padding: 0 10px; font-size: 12px; }
+
+  /* Paleta */
+  .scrim {
+    position: fixed; inset: 0; z-index: 80; display: flex; justify-content: center; align-items: flex-start;
+    padding: 12vh 16px 16px; background: color-mix(in srgb, var(--bg) 55%, transparent);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    opacity: 0; visibility: hidden; transition: opacity 0.18s ease, visibility 0s 0.18s;
+  }
+  .scrim.open { opacity: 1; visibility: visible; transition: opacity 0.18s ease; }
+  .palette {
+    width: min(560px, 100%); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28); overflow: hidden;
+    transform: scale(0.97) translateY(-8px); transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .scrim.open .palette { transform: none; }
+  .pal-input { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--border); color: var(--muted); }
+  .pal-input input { flex: 1; min-width: 0; height: 50px; border: 0; outline: 0; background: transparent; font-size: 15px; color: var(--text); }
+  .pal-list { list-style: none; margin: 0; padding: 6px; max-height: 340px; overflow-y: auto; }
+  .pal-group { padding: 8px 10px 4px; font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .pal-item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 10px; border-radius: 8px; cursor: pointer; color: var(--muted); }
+  .pal-item .t { color: var(--text); }
+  .pal-item .hint { margin-left: auto; font-size: 12px; }
+  .pal-item[aria-selected="true"] { background: var(--surface-2); color: var(--text); box-shadow: inset 2px 0 0 var(--primary); }
+  .scrim.open .pal-list.anim .pal-item { animation: rise 0.22s ease both; }
+  .pal-empty { padding: 20px; text-align: center; color: var(--muted); font-size: 13px; }
+  .pal-foot { display: flex; gap: 14px; padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark"><span data-icon="diskdot" data-size="18"></span></span>
+      <div class="brand-text"><span class="brand-name">Disk Cleanup</span><span class="small muted mono">v0.1.0-beta.5</span></div>
+    </div>
+    <button type="button" class="search" id="open-pal" aria-haspopup="dialog"><span data-icon="search" data-size="15"></span>Ir para ou executar…<span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span></button>
+    <nav class="nav" id="nav" aria-label="Seções">
+      <a href="#" data-nav="cleanup"><span data-icon="disk"></span>Limpeza</a>
+      <a href="#" data-nav="history"><span data-icon="history"></span>Histórico</a>
+      <a href="#" data-nav="settings"><span data-icon="gear"></span>Configurações</a>
+    </nav>
+    <div class="spacer"></div>
+    <div class="update-notice when-update" role="status"><span>Versão 0.1.0-beta.6 disponível</span><button type="button" class="btn" data-toast="Download iniciado (simulado)">Baixar</button></div>
+    <div class="env-mini">
+      <div class="env-row"><span class="muted">Ambiente</span><span class="mono">windows · C:\</span></div>
+      <div class="env-row"><span class="muted">Modo</span><span style="font-weight:600">Aprovação explícita</span></div>
+    </div>
+  </aside>
+  <main class="main"><div class="container" id="page"></div></main>
+</div>
+
+<div class="scrim" id="scrim" aria-hidden="true">
+  <div class="palette" role="dialog" aria-modal="true" aria-label="Paleta de comandos">
+    <label class="pal-input"><span data-icon="search"></span><input id="pal-q" type="text" placeholder="Digite um comando ou tela…" autocomplete="off" aria-controls="pal-list" aria-activedescendant=""></label>
+    <ul class="pal-list" id="pal-list" role="listbox"></ul>
+    <div class="pal-foot"><span><kbd>↑</kbd> <kbd>↓</kbd> navegar</span><span><kbd>Enter</kbd> executar</span><span><kbd>Esc</kbd> fechar</span></div>
+  </div>
+</div>
+<script src="menu-kit.js"></script>
+<script>
+  DC.spec('<b>10 · Paleta de comandos</b> — teclado primeiro, menu enxuto.<ul>' +
+    '<li><span class="mono">Ctrl+K</span> abre a paleta (fundo desfocado, escala + deslize, itens em cascata).</li>' +
+    '<li>Telas e ações num só lugar: Nova varredura, trocar tema, simular atualização. Filtro sem acento.</li>' +
+    '<li>Tema continua configurado em Configurações; a paleta só oferece o atalho.</li>' +
+    '<li>Ambiente reduzido a duas linhas no rodapé.</li></ul>');
+  DC.slider(document.getElementById('nav'));
+  var CMDS = [
+    { g: 'Telas', t: 'Limpeza', i: 'disk', run: function () { DC.go('cleanup'); } },
+    { g: 'Telas', t: 'Histórico', i: 'history', run: function () { DC.go('history'); } },
+    { g: 'Telas', t: 'Configurações', i: 'gear', run: function () { DC.go('settings'); } },
+    { g: 'Ações', t: 'Nova varredura', i: 'bolt', h: 'C:\\', run: function () { DC.startScan(); } },
+    { g: 'Ações', t: 'Alternar tema claro/escuro', i: 'moon', run: function () { DC.toggleTheme(); } },
+    { g: 'Ações', t: 'Verificar atualizações', i: 'download', run: function () { DC.toast('Verificando atualizações (simulado)'); } }
+  ];
+  var scrim = document.getElementById('scrim'), q = document.getElementById('pal-q'), list = document.getElementById('pal-list');
+  var shown = [], sel = 0, opener = null;
+  var norm = function (s) { return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); };
+  function draw() {
+    var term = norm(q.value.trim());
+    shown = CMDS.filter(function (c) { return !term || norm(c.t).indexOf(term) >= 0; });
+    sel = Math.min(sel, Math.max(0, shown.length - 1));
+    var html = '', g = null;
+    shown.forEach(function (c, i) {
+      if (c.g !== g) { g = c.g; html += '<li class="pal-group" role="presentation">' + g + '</li>'; }
+      html += '<li class="pal-item" role="option" id="opt-' + i + '" data-i="' + i + '" aria-selected="' + (i === sel) + '" style="animation-delay:' + (i * 0.025) + 's">' +
+        DC.icon(c.i) + '<span class="t">' + c.t + '</span>' + (c.h ? '<span class="hint mono">' + c.h + '</span>' : '') + '</li>';
+    });
+    list.innerHTML = html || '<li class="pal-empty">Nada encontrado</li>';
+    q.setAttribute('aria-activedescendant', shown.length ? 'opt-' + sel : '');
+  }
+  function open() { opener = document.activeElement; list.classList.add("anim"); setTimeout(function () { list.classList.remove("anim"); }, 450); scrim.classList.add("open"); scrim.setAttribute('aria-hidden', 'false'); q.value = ''; sel = 0; draw(); setTimeout(function () { q.focus(); }, 30); }
+  function close() { scrim.classList.remove('open'); scrim.setAttribute('aria-hidden', 'true'); if (opener) opener.focus(); }
+  function exec(i) { var c = shown[i]; if (!c) return; close(); setTimeout(c.run, 120); }
+  document.getElementById('open-pal').addEventListener('click', open);
+  q.addEventListener('input', function () { sel = 0; draw(); });
+  list.addEventListener('click', function (e) { var li = e.target.closest('.pal-item'); if (li) exec(+li.dataset.i); });
+  list.addEventListener('pointermove', function (e) {
+    var li = e.target.closest('.pal-item');
+    if (li && +li.dataset.i !== sel) { sel = +li.dataset.i; list.querySelectorAll('.pal-item').forEach(function (x) { x.setAttribute('aria-selected', String(+x.dataset.i === sel)); x.style.animation = 'none'; }); }
+  });
+  scrim.addEventListener('click', function (e) { if (e.target === scrim) close(); });
+  addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); scrim.classList.contains('open') ? close() : open(); return; }
+    if (!scrim.classList.contains('open')) return;
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowDown') { e.preventDefault(); sel = (sel + 1) % Math.max(1, shown.length); draw(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); sel = (sel - 1 + shown.length) % Math.max(1, shown.length); draw(); }
+    else if (e.key === 'Enter') { e.preventDefault(); exec(sel); }
+  });
+</script>
+</body>
+</html>

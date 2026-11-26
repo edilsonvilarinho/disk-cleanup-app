@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Menu 02 · Progresso do fluxo — Disk Cleanup</title>
+<script>(function(){var m;try{m=localStorage.getItem('dc-theme-mode')}catch(e){}if(!m||m==='system')m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',m)})();</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../../apps/desktop/src/styles/app.css">
+<link rel="stylesheet" href="menu-kit.css">
+<style>
+  .sidebar { gap: 24px; }
+  /* Barra de acento à esquerda, desliza entre os itens */
+  .nav-bar {
+    position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; width: 3px !important;
+    border-radius: 2px; background: var(--primary);
+    transition: transform 0.36s cubic-bezier(0.4, 0, 0.2, 1), height 0.36s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+  }
+  .nav a { padding-left: 14px; }
+  .nav a.has-sub { flex-direction: column; align-items: stretch; justify-content: center; gap: 6px; padding-top: 8px; padding-bottom: 10px; }
+  .nav a.has-sub .top { display: flex; align-items: center; gap: 10px; }
+  .sub { display: flex; flex-direction: column; gap: 6px; padding-left: 26px; overflow: hidden; }
+  .sub-txt { font-size: 11.5px; color: var(--muted); font-weight: 500; }
+  .segs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; }
+  .segs i { height: 3px; border-radius: 2px; background: var(--track); position: relative; overflow: hidden; }
+  .segs i.on::after { content: ''; position: absolute; inset: 0; background: var(--ok); transform-origin: left; animation: grow 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .segs i.cur::after { content: ''; position: absolute; inset: 0; background: var(--text); transform-origin: left; animation: grow 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s both; }
+  body.is-scanning .segs i.cur::after { animation: seg-scan 1.2s ease-in-out infinite; }
+  @keyframes seg-scan { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+  .scan-txt { display: none; }
+  body.is-scanning .scan-txt { display: inline; }
+  body.is-scanning .idle-txt { display: none; }
+
+  /* Ambiente recolhível: grid 0fr → 1fr anima a altura real */
+  .disclosure { border: 1px solid var(--border); border-radius: 10px; font-size: 12px; }
+  .disclosure > button {
+    width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+    border: 0; background: transparent; cursor: pointer; border-radius: 10px; text-align: left;
+  }
+  .disclosure > button:hover { background: var(--hover); }
+  .disclosure .chev { margin-left: auto; transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1); color: var(--muted); }
+  .disclosure[data-open="true"] .chev { transform: rotate(90deg); }
+  .disclosure .body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+  .disclosure[data-open="true"] .body { grid-template-rows: 1fr; }
+  .disclosure .body > div { overflow: hidden; }
+  .disclosure .rows { display: flex; flex-direction: column; gap: 8px; padding: 2px 12px 12px; }
+  .disclosure .rows > * { opacity: 0; transform: translateY(-4px); transition: opacity 0.2s ease, transform 0.2s ease; }
+  .disclosure[data-open="true"] .rows > * { opacity: 1; transform: none; }
+  .disclosure[data-open="true"] .rows > :nth-child(2) { transition-delay: 0.04s; }
+  .disclosure[data-open="true"] .rows > :nth-child(3) { transition-delay: 0.08s; }
+  .disclosure[data-open="true"] .rows > :nth-child(4) { transition-delay: 0.12s; }
+  .summary-line { display: flex; flex-direction: column; gap: 1px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark"><span data-icon="diskdot" data-size="18"></span></span>
+      <div class="brand-text"><span class="brand-name">Disk Cleanup</span><span class="small muted mono">v0.1.0-beta.5</span></div>
+    </div>
+
+    <nav class="nav" id="nav" aria-label="Seções">
+      <a href="#" data-nav="cleanup" class="has-sub">
+        <span class="top"><span data-icon="disk"></span>Limpeza</span>
+        <span class="sub" aria-label="Progresso da limpeza">
+          <span class="sub-txt"><span class="idle-txt" id="flow-txt">Varredura · 1 de 5</span><span class="scan-txt">Varrendo C:\…</span></span>
+          <span class="segs" id="segs" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+        </span>
+      </a>
+      <a href="#" data-nav="history"><span data-icon="history"></span>Histórico</a>
+      <a href="#" data-nav="settings"><span data-icon="gear"></span>Configurações</a>
+    </nav>
+
+    <div class="disclosure" id="env" data-open="false">
+      <button type="button" aria-expanded="false" aria-controls="env-body">
+        <span class="summary-line"><span class="label-caps">Ambiente</span><span class="mono">windows · C:\</span></span>
+        <span class="chev" data-icon="chevron"></span>
+      </button>
+      <div class="body" id="env-body"><div><div class="rows">
+        <div class="env-row"><span class="muted">Sistema</span><span>windows</span></div>
+        <div class="env-row"><span class="muted">Volume</span><span class="mono">C:\</span></div>
+        <div class="env-row"><span class="muted">Catálogo</span><span>windows</span></div>
+        <div class="env-row"><span class="muted">Modo</span><span style="font-weight:600">Aprovação explícita</span></div>
+      </div></div></div>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="update-notice when-update" role="status"><span>Versão 0.1.0-beta.6 disponível</span><button type="button" class="btn" data-toast="Download iniciado (simulado)">Baixar</button></div>
+  </aside>
+  <main class="main"><div class="container" id="page"></div></main>
+</div>
+<script src="menu-kit.js"></script>
+<script>
+  DC.spec('<b>02 · Progresso do fluxo</b> — o menu diz em que ponto da limpeza você está.<ul>' +
+    '<li>Limpeza mostra a etapa atual e 5 segmentos (concluída = verde, atual = cheia, demais = trilho), ao vivo: avance o fluxo e veja o menu acompanhar. Dados: os mesmos de <span class="mono">flowStates</span>.</li>' +
+    '<li>Durante a varredura o segmento atual corre e o texto muda para "Varrendo C:\\…" (clique em Nova varredura).</li>' +
+    '<li>Ambiente recolhido em uma linha; abre com altura animada e linhas em cascata.</li>' +
+    '<li>Acento de 3 px desliza à esquerda do item ativo.</li></ul>');
+  DC.slider(document.getElementById('nav'), 'nav-bar');
+  var NAMES = ['Varredura', 'Classificação', 'Plano', 'Execução', 'Relatório'];
+  document.addEventListener('dc:flow', function (e) {
+    var d = e.detail, segs = document.getElementById('segs').children;
+    for (var i = 0; i < 5; i++) {
+      var cls = d.done[i] && i !== d.index ? 'on' : (i === d.index ? 'cur' : '');
+      if (segs[i].className !== cls) segs[i].className = cls;
+    }
+    document.getElementById('flow-txt').textContent = NAMES[d.index] + ' · ' + (d.index + 1) + ' de 5';
+  });
+  var env = document.getElementById('env');
+  env.querySelector('button').addEventListener('click', function () {
+    var open = env.getAttribute('data-open') !== 'true';
+    env.setAttribute('data-open', String(open));
+    this.setAttribute('aria-expanded', String(open));
+  });
+</script>
+</body>
+</html>

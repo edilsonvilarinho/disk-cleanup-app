@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Menu 06 · Grupos e atalhos — Disk Cleanup</title>
+<script>(function(){var m;try{m=localStorage.getItem('dc-theme-mode')}catch(e){}if(!m||m==='system')m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',m)})();</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../../apps/desktop/src/styles/app.css">
+<link rel="stylesheet" href="menu-kit.css">
+<style>
+  .sidebar { gap: 18px; }
+  .group { display: flex; flex-direction: column; gap: 6px; }
+  .group > .label-caps { padding: 0 10px; font-size: 10.5px; }
+  .nav a .k {
+    margin-left: auto; display: inline-flex; gap: 3px; opacity: 0; transform: translateX(4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .nav a:hover .k, .nav a:focus-visible .k, .show-keys .nav a .k { opacity: 1; transform: none; }
+  kbd {
+    font-family: var(--font-mono); font-size: 10.5px; min-width: 18px; height: 18px; padding: 0 4px;
+    display: inline-grid; place-items: center; border-radius: 4px; border: 1px solid var(--border-strong);
+    color: var(--muted); background: var(--surface); box-shadow: 0 1px 0 var(--border-strong);
+  }
+  .foot {
+    display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 8px; font-size: 12px; color: var(--muted);
+    border: 0; background: transparent; cursor: pointer; text-align: left; width: 100%;
+  }
+  .foot:hover { background: var(--hover); color: var(--text); }
+  .foot .ok-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
+  .foot .arrow { margin-left: auto; transition: transform 0.2s ease; }
+  .foot:hover .arrow { transform: translateX(3px); }
+  .key-hint { font-size: 11.5px; color: var(--muted); padding: 0 10px; display: flex; align-items: center; gap: 6px; }
+  .flash { animation: flash 0.6s ease; }
+  @keyframes flash { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--text) 30%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
+</style>
+</head>
+<body data-env-in-settings>
+<div class="layout">
+  <aside class="sidebar" id="side">
+    <div class="brand">
+      <span class="brand-mark"><span data-icon="diskdot" data-size="18"></span></span>
+      <div class="brand-text"><span class="brand-name">Disk Cleanup</span><span class="small muted mono">v0.1.0-beta.5</span></div>
+    </div>
+
+    <div class="group">
+      <span class="label-caps">Análise</span>
+      <nav class="nav" id="nav1" aria-label="Análise">
+        <a href="#" data-nav="cleanup"><span data-icon="disk"></span>Limpeza<span class="k"><kbd>Ctrl</kbd><kbd>1</kbd></span></a>
+        <a href="#" data-nav="history"><span data-icon="history"></span>Histórico<span class="k"><kbd>Ctrl</kbd><kbd>2</kbd></span></a>
+      </nav>
+    </div>
+    <div class="group">
+      <span class="label-caps">Aplicativo</span>
+      <nav class="nav" id="nav2" aria-label="Aplicativo">
+        <a href="#" data-nav="settings"><span data-icon="gear"></span>Configurações<span class="k"><kbd>Ctrl</kbd><kbd>,</kbd></span></a>
+      </nav>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="update-notice when-update" role="status"><span>Versão 0.1.0-beta.6 disponível</span><button type="button" class="btn" data-toast="Download iniciado (simulado)">Baixar</button></div>
+    <span class="key-hint">Segure <kbd>Ctrl</kbd> para ver atalhos</span>
+    <button type="button" class="foot" id="foot" data-nav="settings" aria-label="Ambiente: windows, C:\. Detalhes em Configurações">
+      <span class="ok-dot" aria-hidden="true"></span><span class="mono">windows · C:\</span><span class="arrow" data-icon="chevron" data-size="14"></span>
+    </button>
+  </aside>
+  <main class="main"><div class="container" id="page"></div></main>
+</div>
+<script src="menu-kit.js"></script>
+<script>
+  DC.spec('<b>06 · Grupos e atalhos</b> — o menu passa a ser só navegação.<ul>' +
+    '<li>Seções rotuladas: Análise (Limpeza, Histórico) e Aplicativo (Configurações). Escala para novas telas sem virar lista solta.</li>' +
+    '<li>Atalhos <span class="mono">Ctrl+1</span>, <span class="mono">Ctrl+2</span>, <span class="mono">Ctrl+,</span>. Aparecem no hover ou segurando Ctrl.</li>' +
+    '<li>Ambiente sai do menu: rodapé de uma linha que leva a Configurações → card Ambiente (veja lá).</li>' +
+    '<li>Destaque desliza entre os dois grupos (indicador por grupo).</li></ul>');
+  DC.slider(document.getElementById('nav1'));
+  DC.slider(document.getElementById('nav2'));
+  var side = document.getElementById('side');
+  var MAP = { '1': 'cleanup', '2': 'history', ',': 'settings' };
+  addEventListener('keydown', function (e) {
+    if (e.key === 'Control') side.classList.add('show-keys');
+    if (e.ctrlKey && MAP[e.key]) {
+      e.preventDefault();
+      DC.go(MAP[e.key]);
+      var a = side.querySelector('.nav [data-nav="' + MAP[e.key] + '"]');
+      a.classList.remove('flash'); void a.offsetWidth; a.classList.add('flash');
+    }
+  });
+  addEventListener('keyup', function (e) { if (e.key === 'Control') side.classList.remove('show-keys'); });
+  addEventListener('blur', function () { side.classList.remove('show-keys'); });
+</script>
+</body>
+</html>

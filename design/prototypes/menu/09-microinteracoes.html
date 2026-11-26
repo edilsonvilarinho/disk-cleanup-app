@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Menu 09 · Microinterações — Disk Cleanup</title>
+<script>(function(){var m;try{m=localStorage.getItem('dc-theme-mode')}catch(e){}if(!m||m==='system')m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',m)})();</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../../apps/desktop/src/styles/app.css">
+<link rel="stylesheet" href="menu-kit.css">
+<style>
+  .sidebar { gap: 24px; }
+  /* Destaque com mola: passa um pouco e volta */
+  .nav-ind { transition: transform 0.45s cubic-bezier(0.34, 1.4, 0.5, 1), width 0.3s ease, height 0.45s cubic-bezier(0.34, 1.4, 0.5, 1), opacity 0.2s ease; }
+
+  /* Holofote que segue o cursor dentro do item */
+  .nav a { overflow: hidden; }
+  .nav a::before {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;
+    background: radial-gradient(120px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--text) 9%, transparent), transparent 70%);
+    transition: opacity 0.2s ease;
+  }
+  .nav a:hover::before { opacity: 1; }
+  .nav a:hover { background: transparent; }
+  .nav a:active { transform: scale(0.98); }
+  .nav a { transition: color 0.15s ease, transform 0.1s ease; }
+
+  /* Ícones com personalidade, cada um coerente com o que representa */
+  .nav [data-icon] svg { transition: transform 0.5s cubic-bezier(0.34, 1.4, 0.5, 1); }
+  .nav [data-nav="history"]:hover [data-icon] svg { transform: rotate(-360deg); transition-duration: 0.8s; }
+  .nav [data-nav="settings"]:hover [data-icon] svg { transform: rotate(90deg); }
+  .nav [data-nav="cleanup"] [data-icon] { position: relative; overflow: hidden; border-radius: 3px; }
+  .nav [data-nav="cleanup"] [data-icon]::after {
+    content: ''; position: absolute; left: 0; right: 0; height: 3px; top: -3px;
+    background: currentColor; opacity: 0.5; border-radius: 2px;
+  }
+  .nav [data-nav="cleanup"]:hover [data-icon]::after { animation: icon-scan 0.9s ease-in-out infinite; }
+  @keyframes icon-scan { to { top: 100%; } }
+
+  /* Onda de clique */
+  .ripple { position: absolute; border-radius: 50%; pointer-events: none; background: color-mix(in srgb, var(--text) 14%, transparent); transform: scale(0); animation: ripple 0.55s ease-out forwards; }
+  @keyframes ripple { to { transform: scale(1); opacity: 0; } }
+
+  /* Ambiente: linhas surgem em cascata, valores "digitados" */
+  .env { animation: rise 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s both; }
+  .env .env-row { animation: rise 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .env .env-row:nth-child(2) { animation-delay: 0.18s; }
+  .env .env-row:nth-child(3) { animation-delay: 0.24s; }
+  .env .env-row:nth-child(4) { animation-delay: 0.3s; }
+  .env .env-row:nth-child(5) { animation-delay: 0.36s; }
+  .env .env-row > :last-child { transition: color 0.2s ease; }
+  .env .env-row:hover > :last-child { color: var(--text); }
+  .env .env-row:hover { background: var(--surface-2); border-radius: 6px; }
+  .env .env-row { padding: 2px 4px; margin: 0 -4px; }
+
+  /* Marca: o disco "respira" uma vez ao abrir */
+  .brand-mark { animation: breathe 0.9s cubic-bezier(0.34, 1.4, 0.5, 1) 0.1s both; }
+  @keyframes breathe { 0% { transform: scale(0.6) rotate(-8deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+  .brand-name { display: inline-block; animation: rise 0.4s ease 0.2s both; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark"><span data-icon="diskdot" data-size="18"></span></span>
+      <div class="brand-text"><span class="brand-name">Disk Cleanup</span><span class="small muted mono">v0.1.0-beta.5</span></div>
+    </div>
+
+    <nav class="nav" id="nav" aria-label="Seções">
+      <a href="#" data-nav="cleanup"><span data-icon="disk"></span>Limpeza</a>
+      <a href="#" data-nav="history"><span data-icon="history"></span>Histórico</a>
+      <a href="#" data-nav="settings"><span data-icon="gear"></span>Configurações</a>
+    </nav>
+
+    <div class="env">
+      <span class="label-caps">Ambiente</span>
+      <div class="env-row"><span class="muted">Sistema</span><span>windows</span></div>
+      <div class="env-row"><span class="muted">Volume</span><span class="mono">C:\</span></div>
+      <div class="env-row"><span class="muted">Catálogo</span><span>windows</span></div>
+      <div class="env-row"><span class="muted">Modo</span><span style="font-weight:600">Aprovação explícita</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="update-notice when-update" role="status"><span>Versão 0.1.0-beta.6 disponível</span><button type="button" class="btn" data-toast="Download iniciado (simulado)">Baixar</button></div>
+  </aside>
+  <main class="main"><div class="container" id="page"></div></main>
+</div>
+<script src="menu-kit.js"></script>
+<script>
+  DC.spec('<b>09 · Microinterações</b> — estrutura atual, sem tema, com movimento em cada toque.<ul>' +
+    '<li>Ícones reagem ao hover com significado: disco varre, histórico volta no tempo, engrenagem gira 90°.</li>' +
+    '<li>Holofote segue o cursor dentro do item; clique deixa uma onda; destaque ativo chega com mola.</li>' +
+    '<li>Marca e ambiente entram em cascata na abertura (botão Repetir da moldura não recarrega a barra; recarregue a página).</li>' +
+    '<li>Tudo some com <span class="mono">prefers-reduced-motion</span> (regra global já existente no app).</li></ul>');
+  DC.slider(document.getElementById('nav'));
+  document.querySelectorAll('.nav a').forEach(function (a) {
+    a.addEventListener('pointermove', function (e) {
+      var r = a.getBoundingClientRect();
+      a.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+      a.style.setProperty('--my', (e.clientY - r.top) + 'px');
+    });
+    a.addEventListener('pointerdown', function (e) {
+      if (DC.reduce) return;
+      var r = a.getBoundingClientRect(), d = Math.max(r.width, r.height) * 2.2;
+      var s = document.createElement('span');
+      s.className = 'ripple';
+      s.style.width = s.style.height = d + 'px';
+      s.style.left = (e.clientX - r.left - d / 2) + 'px';
+      s.style.top = (e.clientY - r.top - d / 2) + 'px';
+      a.appendChild(s);
+      setTimeout(function () { s.remove(); }, 600);
+    });
+  });
+</script>
+</body>
+</html>

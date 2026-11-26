@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Menu 03 · Trilho recolhível — Disk Cleanup</title>
+<script>(function(){var m;try{m=localStorage.getItem('dc-theme-mode')}catch(e){}if(!m||m==='system')m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',m);try{if(localStorage.getItem('dc-rail')==='1')document.documentElement.classList.add('rail')}catch(e){}})();</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../../apps/desktop/src/styles/app.css">
+<link rel="stylesheet" href="menu-kit.css">
+<style>
+  :root { --ease: cubic-bezier(0.4, 0, 0.2, 1); }
+  .sidebar { gap: 24px; overflow-x: hidden; padding-left: 12px; padding-right: 12px; }
+  @media (min-width: 821px) {
+    .layout > .sidebar { flex: 0 0 auto; width: 248px; transition: width 0.28s var(--ease), padding 0.28s var(--ease); }
+    .rail .layout > .sidebar { width: 64px; }
+  }
+  .brand { padding: 0 3px; position: relative; }
+  .brand-text, .lbl, .env-compact .rows {
+    transition: opacity 0.18s ease, transform 0.28s var(--ease); white-space: nowrap;
+  }
+  .rail .brand-text, .rail .lbl, .rail .env-compact .rows { opacity: 0; transform: translateX(-6px); pointer-events: none; }
+  .rail .brand-text, .rail .env-compact .rows { position: absolute; }
+  .rail .update-notice { padding: 6px; align-items: center; }
+  .rail .update-notice .lbl { display: none; }
+  .rail .update-notice .btn { padding: 0; width: 38px; min-height: 34px; }
+  .collapse-btn {
+    margin-left: auto; width: 30px; height: 30px; border-radius: 8px; border: 0; background: transparent; color: var(--muted);
+    display: grid; place-items: center; cursor: pointer; flex: none; transition: background 0.15s ease, transform 0.28s var(--ease);
+  }
+  .collapse-btn:hover { background: var(--hover); color: var(--text); }
+  .rail .brand { flex-direction: column; gap: 14px; align-items: center; }
+  .rail .collapse-btn { margin-left: 0; transform: rotate(180deg); }
+  .nav a { overflow: hidden; }
+  .rail .nav a { padding: 0 12px; }
+
+  /* Dica (tooltip) só no trilho */
+  [data-tip]::after {
+    content: attr(data-tip); position: absolute; left: calc(100% + 10px); top: 50%; z-index: 20;
+    transform: translate(-4px, -50%); opacity: 0; pointer-events: none; white-space: nowrap;
+    padding: 5px 9px; border-radius: 6px; font-size: 12px; font-weight: 500;
+    background: var(--primary); color: var(--primary-fg); transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .rail [data-tip]:hover::after, .rail [data-tip]:focus-visible::after { opacity: 1; transform: translate(0, -50%); }
+  .rail .layout > .sidebar { overflow: visible; }
+
+  .env-compact { position: relative; display: flex; align-items: flex-start; gap: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; font-size: 12px; transition: padding 0.28s var(--ease), border-color 0.2s ease; }
+  .rail .env-compact { padding: 10px 0; border-color: transparent; justify-content: center; }
+  .env-compact .ico { color: var(--ok); margin-top: 1px; flex: none; }
+  .env-compact .rows { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  kbd { font-family: var(--font-mono); font-size: 11px; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--border-strong); color: var(--muted); }
+  .hint { font-size: 11.5px; color: var(--muted); padding: 0 6px; transition: opacity 0.18s ease; white-space: nowrap; }
+  .rail .hint { opacity: 0; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="side">
+    <div class="brand">
+      <span class="brand-mark"><span data-icon="diskdot" data-size="18"></span></span>
+      <div class="brand-text"><span class="brand-name">Disk Cleanup</span><span class="small muted mono">v0.1.0-beta.5</span></div>
+      <button type="button" class="collapse-btn" id="collapse" aria-label="Recolher menu" aria-expanded="true" data-tip="Expandir  [">
+        <span data-icon="panel"></span>
+      </button>
+    </div>
+
+    <nav class="nav" id="nav" aria-label="Seções">
+      <a href="#" data-nav="cleanup" data-tip="Limpeza"><span data-icon="disk"></span><span class="lbl">Limpeza</span></a>
+      <a href="#" data-nav="history" data-tip="Histórico"><span data-icon="history"></span><span class="lbl">Histórico</span></a>
+      <a href="#" data-nav="settings" data-tip="Configurações"><span data-icon="gear"></span><span class="lbl">Configurações</span></a>
+    </nav>
+
+    <div class="env-compact" data-tip="windows · C:\ · Aprovação explícita" tabindex="0" aria-label="Ambiente: windows, volume C:\, aprovação explícita">
+      <span class="ico" data-icon="shield"></span>
+      <div class="rows">
+        <span class="mono">windows · C:\</span>
+        <span class="muted">Aprovação explícita</span>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="update-notice when-update" role="status" data-tip="Atualização disponível"><span class="lbl">Versão 0.1.0-beta.6 disponível</span><button type="button" class="btn" data-toast="Download iniciado (simulado)"><span data-icon="download"></span><span class="lbl">Baixar</span></button></div>
+    <span class="hint">Recolher: <kbd>[</kbd></span>
+  </aside>
+  <main class="main"><div class="container" id="page"></div></main>
+</div>
+<script src="menu-kit.js"></script>
+<script>
+  DC.spec('<b>03 · Trilho recolhível</b> — padrão Linear/Vercel: 248 px ↔ 64 px.<ul>' +
+    '<li>Botão no topo ou tecla <span class="mono">[</span> recolhe. A largura anima em 0,28 s e os rótulos somem antes de cortar.</li>' +
+    '<li>No trilho, cada ícone ganha dica ao passar o mouse ou focar. O ambiente vira um escudo com a dica completa.</li>' +
+    '<li>Estado lembrado entre sessões (no app: preferência em <span class="mono">dc-history</span>/settings, não no Rust).</li>' +
+    '<li>Ganha largura útil para tabelas de Classificação e Plano.</li></ul>');
+  var move = DC.slider(document.getElementById('nav'));
+  var root = document.documentElement, btn = document.getElementById('collapse');
+  function sync() {
+    var rail = root.classList.contains('rail');
+    btn.setAttribute('aria-expanded', String(!rail));
+    btn.setAttribute('aria-label', rail ? 'Expandir menu' : 'Recolher menu');
+  }
+  function toggle() {
+    root.classList.toggle('rail');
+    try { localStorage.setItem('dc-rail', root.classList.contains('rail') ? '1' : '0'); } catch (e) {}
+    sync();
+    /* acompanha a largura durante a transição */
+    var t0 = performance.now();
+    (function f(t) { move(true); if (t - t0 < 320) requestAnimationFrame(f); })(t0);
+  }
+  btn.addEventListener('click', toggle);
+  addEventListener('keydown', function (e) {
+    if (e.key === '[' && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) toggle();
+  });
+  sync();
+</script>
+</body>
+</html>

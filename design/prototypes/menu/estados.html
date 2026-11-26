@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estados em andamento — Disk Cleanup</title>
+<script>(function(){var m;try{m=localStorage.getItem('dc-theme-mode')}catch(e){}if(!m||m==='system')m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',m)})();</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../../apps/desktop/src/styles/app.css">
+<link rel="stylesheet" href="menu-kit.css">
+<style>
+  .sidebar { gap: 24px; }
+  .env-compact { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 12px; animation: rise 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s both; }
+  .env-compact .row { display: flex; align-items: center; gap: 8px; }
+  .env-compact .row > :last-child { margin-left: auto; text-align: right; }
+  .mode-chip { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-weight: 600; }
+  .mode-chip [data-icon] { color: var(--ok); }
+</style>
+</head>
+<body data-start="states">
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark"><span data-icon="diskdot" data-size="18"></span></span>
+      <div class="brand-text"><span class="brand-name">Disk Cleanup</span><span class="small muted mono">v0.1.0-beta.5</span></div>
+    </div>
+
+    <nav class="nav" id="nav" aria-label="Seções">
+      <a href="#" data-nav="cleanup"><span data-icon="disk"></span>Limpeza</a>
+      <a href="#" data-nav="history"><span data-icon="history"></span>Histórico</a>
+      <a href="#" data-nav="settings"><span data-icon="gear"></span>Configurações</a>
+    </nav>
+
+    <section class="env-compact" aria-label="Ambiente">
+      <span class="label-caps">Ambiente</span>
+      <div class="row"><span class="muted">Volume</span><span class="mono">C:\</span></div>
+      <div class="row"><span class="muted">Sistema e catálogo</span><span title="Catálogo selecionado: windows">windows</span></div>
+      <div class="mode-chip"><span data-icon="shield"></span>Aprovação explícita</div>
+    </section>
+
+    <div class="spacer"></div>
+    <div class="update-notice when-update" role="status"><span>Versão 0.1.0-beta.6 disponível</span><button type="button" class="btn" data-toast="Download iniciado (simulado)">Baixar</button></div>
+  </aside>
+  <main class="main"><div class="container" id="page"></div></main>
+</div>
+<script src="menu-kit.js"></script>
+<script>
+  DC.slider(document.getElementById('nav'));
+</script>
+</body>
+</html>

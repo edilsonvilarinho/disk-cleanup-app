@@ -11,6 +11,7 @@ primário monocromático, cor só para estado e categoria; Inter + JetBrains Mon
 | `prototypes/04-execucao.html` | Execução por tier |
 | `prototypes/05-relatorio.html` | Relatório |
 | `prototypes/06-historico.html` | Histórico de varreduras (análise) |
+| `prototypes/menu/index.html` | Propostas do menu lateral (12) e estados em andamento |
 
 Abrir `prototypes/index.html` no navegador (funciona via `file://`, sem servidor). Tema claro/escuro
 no botão da barra lateral. Dados de exemplo.
