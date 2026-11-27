@@ -2,6 +2,7 @@ import { markRaw } from 'vue'
 import type { PiniaPlugin } from 'pinia'
 import type { UserRule } from '../domain/models'
 import type { ScanSchedule } from '../domain/monitor'
+import { isVersion } from '../domain/releaseNotes'
 import type { LanguagePreference } from '../i18n/i18n'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
@@ -32,6 +33,10 @@ export interface Settings {
   lowSpaceGb: LowSpaceGb
   /** Varredura agendada, somente leitura. */
   schedule: ScanSchedule
+  /** Mostrar as notas de versão na primeira abertura depois de atualizar. */
+  releaseNotes: boolean
+  /** Última versão cujas notas foram vistas (ou instalada sem nada a mostrar). */
+  seenVersion: string | null
 }
 
 export const LOW_SPACE_OPTIONS = [0, 10, 15, 25, 50] as const
@@ -56,6 +61,8 @@ export const DEFAULT_SETTINGS: Settings = {
   backgroundEnabled: false,
   lowSpaceGb: 15,
   schedule: 'off',
+  releaseNotes: true,
+  seenVersion: null,
 }
 
 /** Porta de persistência das preferências. */
@@ -106,6 +113,8 @@ export function sanitizeSettings(raw: unknown): Settings {
     backgroundEnabled: flag(r.backgroundEnabled, DEFAULT_SETTINGS.backgroundEnabled),
     lowSpaceGb: pick(r.lowSpaceGb, LOW_SPACE_OPTIONS, DEFAULT_SETTINGS.lowSpaceGb),
     schedule: pick(r.schedule, SCHEDULE_OPTIONS, DEFAULT_SETTINGS.schedule),
+    releaseNotes: flag(r.releaseNotes, DEFAULT_SETTINGS.releaseNotes),
+    seenVersion: typeof r.seenVersion === 'string' && isVersion(r.seenVersion) ? r.seenVersion : null,
   }
 }
 

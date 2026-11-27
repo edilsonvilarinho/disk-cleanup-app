@@ -44,7 +44,9 @@ Same model as usage-monitor's `usage-monitor-release-beta`. Publishing is the st
 5. Compute the version:
    - last stable: `git describe --tags --abbrev=0 --match "v[0-9]*" --exclude "*-beta*"`
    - highest beta of the series: `git -c versionsort.suffix=- tag --sort=-version:refname --list "vX.Y.Z-beta.*" | head -n 1`
-6. The CI run of the commit must be green — same check as the stable skill, step 6.
+6. The CI run of the commit must be green — same check as the stable skill, step 6 — and
+   `apps/desktop/src/releaseNotes/catalog.ts` must have an entry for `X.Y.Z-beta.N` (same check as the
+   stable skill; `verify-version` refuses the tag otherwise).
 7. Publish:
    - `git -c user.name=claude -c user.email=claude@anthropic.com tag -a vX.Y.Z-beta.N -m "vX.Y.Z-beta.N"`
    - `git push origin vX.Y.Z-beta.N`

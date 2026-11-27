@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disk Cleanup — notas de versão</title>
+<script>(function(){var m;try{m=localStorage.getItem('dc-theme-mode')}catch(e){}if(!m||m==='system')m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',m)})();</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../../apps/desktop/src/styles/app.css">
+<link rel="stylesheet" href="../menu/menu-kit.css">
+<style>
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 20px 80px; display: flex; flex-direction: column; gap: 24px; }
+  .gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 14px; }
+  .item { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); transition: border-color 0.15s ease, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); animation: rise 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .item:hover { border-color: var(--border-strong); transform: translateY(-2px); }
+  .item .n { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .item b { font-size: 15px; }
+  .item p { color: var(--muted); font-size: 13px; margin: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-top: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .card ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 13px; }
+  .card ul b { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page-head"><div class="titles"><span class="label-caps">System design · proposta</span><h1>Notas de versão depois de atualizar</h1></div></header>
+  <div class="note"><span>Três formas de mostrar o que mudou na primeira abertura depois de instalar uma versão nova. Conteúdo real da <span class="mono">v0.1.0-beta.7</span>, em pt-BR e en (PT/EN na barra do protótipo). Os clipes ocupam o lugar dos GIFs e têm a mesma moldura; <b>beta.5 → 7</b> simula quem pulou uma versão.</span></div>
+
+  <div class="gal">
+    <a class="item" href="01-modal-destaques.html"><span class="n">01</span><b>Modal de destaques</b><p>Abre sozinho uma vez. Uma novidade por vez com GIF, segmentos de progresso como o guia da Execução, último passo com correções (Antes / Agora) e conhecidos.</p></a>
+    <a class="item" href="02-gaveta-changelog.html" style="animation-delay:.04s"><span class="n">02</span><b>Gaveta “O que mudou”</b><p>Não bloqueia: aviso acima da barra de status, gaveta lateral (a do plan.json) com abas por versão, filtros Novidades/Correções/Conhecidos e itens recolhidos.</p></a>
+    <a class="item" href="03-tour-contexto.html" style="animation-delay:.08s"><span class="n">03</span><b>Tour no lugar</b><p>Faixa abaixo das abas, tour com holofote agrupado por lugar (5 paradas para 8 novidades) e selos “Novo” até a pessoa visitar.</p></a>
+  </div>
+
+  <section class="card">
+    <div class="card-head"><h2>Comparação</h2></div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th></th><th>01 · Modal</th><th>02 · Gaveta</th><th>03 · No lugar</th></tr></thead>
+      <tbody>
+        <tr><td>Interrompe</td><td>Sim, uma vez</td><td>Não</td><td>Não (tour é opcional)</td></tr>
+        <tr><td>GIFs tocando</td><td>1 por vez</td><td>1 por item aberto</td><td>1 por parada</td></tr>
+        <tr><td>Correções / bugs</td><td>Último passo</td><td>Filtro próprio</td><td>Painel na faixa</td></tr>
+        <tr><td>Versão pulada</td><td>Texto no último passo</td><td>Aba própria</td><td>Linha no painel</td></tr>
+        <tr><td>Ensina onde fica</td><td>Botão “Abrir”</td><td>Botão “Abrir”</td><td>Aponta o lugar</td></tr>
+        <tr><td>Custo de construir</td><td>Baixo</td><td>Baixo (reusa a gaveta)</td><td>Alto (posição, foco, resize)</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Comum aos três (proposta de implementação)</h2></div>
+    <ul>
+      <li><b>Quando mostrar:</b> versão instalada (<span class="mono">updater.appVersion()</span>) maior que a última vista, guardada no <span class="mono">localStorage</span> como as demais preferências. Sem chave e sem <span class="mono">dc-history</span> = instalação nova: grava e não mostra. Sem chave e com histórico = quem atualizou de uma versão anterior a este recurso: mostra.</li>
+      <li><b>Conteúdo</b> no pacote, não buscado na rede (a CSP não libera domínio externo e o app funciona offline): um arquivo por versão com textos <span class="mono">{pt, en}</span>, tipado para que faltar <span class="mono">en</span> não compile, como em <span class="mono">messages.ts</span>.</li>
+      <li><b>GIFs</b> gravados pelo <span class="mono">scripts/record-readme-media.mjs</span> (DemoGateway + Playwright + ffmpeg), um cenário por novidade. O pacote leva mídia só da versão instalada; versões anteriores ficam em texto. Os GIFs atuais do README têm 0,5–6 MB: precisa de orçamento por versão.</li>
+      <li><b>Corpo da release no GitHub</b> gerado do mesmo arquivo — hoje é a lista de commits em pt-BR.</li>
+      <li><b>Bugs</b> com Antes / Agora sobre o mesmo alvo; <b>conhecidos</b> em âmbar, separados das correções.</li>
+      <li><b>Configurações › Atualizações:</b> “Mostrar novidades depois de atualizar” e o histórico de versões.</li>
+    </ul>
+  </section>
+</div>
+</body>
+</html>

@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import type { UpdaterPort } from '../application/updater'
 import type { UpdateInfo, UpdateProgress } from '../domain/models'
+import { RELEASE_NOTES } from '../releaseNotes/catalog'
 
 const UPDATE_EVENT = 'update-progress'
 
@@ -36,8 +37,10 @@ export class TauriUpdater implements UpdaterPort {
 
 /** Fora do Tauri (navegador, `pnpm dev`, gravação dos GIFs): nunca há atualização. */
 export class DemoUpdater implements UpdaterPort {
+  /** Última versão do catálogo com metadado `+demo` (mesma precedência SemVer da versão),
+   *  para as notas de versão aparecerem na demonstração quando há versão vista mais antiga. */
   async appVersion(): Promise<string> {
-    return '0.0.0-demo'
+    return `${RELEASE_NOTES[0]?.version ?? '0.0.0'}+demo`
   }
 
   async check(_beta: boolean): Promise<UpdateInfo | null> {

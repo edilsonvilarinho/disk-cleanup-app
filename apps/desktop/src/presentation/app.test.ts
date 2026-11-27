@@ -1080,6 +1080,9 @@ describe('Configurações', () => {
       backgroundEnabled: false,
       lowSpaceGb: 15,
       schedule: 'off',
+      releaseNotes: true,
+      // Instalação nova (sem preferências nem histórico): a versão já conta como vista.
+      seenVersion: '0.1.0',
     })
   })
 
@@ -1368,5 +1371,128 @@ describe('Atualizações', () => {
     expect(wrapper.get('[data-test="update-settings"]').text()).toContain('Installed version: —')
     expect(wrapper.get('[data-test="update-notice"]').text()).toContain('Version 0.2.0 ready to install')
     expect(wrapper.get('[data-test="update-restart"]').text()).toBe('Restart and update')
+  })
+})
+
+describe('Notas de versão', () => {
+  // Atualizou da beta.5 direto para a beta.7: as notas das duas versões entram.
+  const updated = () => ({ updater: fakeUpdater({ appVersion: vi.fn(async () => '0.1.0-beta.7') }), saved: { seenVersion: '0.1.0-beta.5' } })
+
+  it('aviso não bloqueante com contagens; dispensar grava a versão e mantém o selo na barra de status', async () => {
+    const { wrapper, saved } = await mountApp('/', fakeGateway(), updated())
+    const notice = wrapper.get('[data-test="rn-notice"]')
+    expect(notice.text()).toContain('Atualizado para v0.1.0-beta.7')
+    expect(notice.text()).toContain('Lixeira, mapa do volume e duplicados · inclui v0.1.0-beta.6')
+    expect(notice.get('[data-test="rn-count-new"]').text()).toBe('13 Novidades')
+    expect(notice.get('[data-test="rn-count-fixed"]').text()).toBe('2 Correções')
+    expect(notice.get('[data-test="rn-count-known"]').text()).toBe('3 Problemas conhecidos')
+    expect(wrapper.get('[data-test="rn-chip"]').text()).toBe('Novidades da v0.1.0-beta.7')
+    // Nada é gravado enquanto a pessoa não interage.
+    expect(saved.some((s) => s.seenVersion === '0.1.0-beta.7')).toBe(false)
+    await wrapper.get('[data-test="rn-dismiss"]').trigger('click')
+    expect(wrapper.find('[data-test="rn-notice"]').exists()).toBe(false)
+    expect(saved.at(-1)).toMatchObject({ seenVersion: '0.1.0-beta.7' })
+    await wrapper.get('[data-test="rn-chip"]').trigger('click')
+    expect(wrapper.find('[data-test="rn-drawer"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="rn-chip"]').exists()).toBe(false)
+  })
+
+  it('gaveta: abas por versão, filtros, item recolhido com antes/agora, Esc fecha', async () => {
+    const { wrapper, saved } = await mountApp('/', fakeGateway(), updated())
+    await wrapper.get('[data-test="rn-open"]').trigger('click')
+    const drawer = wrapper.get('[data-test="rn-drawer"]')
+    expect(saved.at(-1)).toMatchObject({ seenVersion: '0.1.0-beta.7' })
+    expect(drawer.text()).toContain('Atualizado para v0.1.0-beta.7')
+    expect(drawer.text()).toContain('27 de nov. de 2026')
+    expect(drawer.get('[data-test="rn-tab-0.1.0-beta.7"]').attributes('aria-selected')).toBe('true')
+    expect(drawer.get('[data-test="rn-tab-0.1.0-beta.7"]').text()).toContain('instalada')
+    // Só o primeiro item abre: um GIF/detalhe por vez.
+    expect(drawer.findAll('[data-test="rn-item"]')).toHaveLength(13)
+    expect(drawer.findAll('[data-test="rn-detail"]')).toHaveLength(1)
+    expect(drawer.get('[data-test="rn-detail"]').text()).toContain('Definitivo ou Lixeira')
+    // Versão antiga: só texto (o pacote leva GIF apenas da mais recente).
+    expect(drawer.find('[data-test="rn-media"]').exists()).toBe(false)
+    await drawer.get('[data-test="rn-filter-fixed"]').trigger('click')
+    expect(drawer.findAll('[data-test="rn-item"]')).toHaveLength(2)
+    const fix = drawer.get('[data-test="rn-fix"]')
+    expect(fix.text()).toContain('Antes')
+    expect(fix.text()).toContain('Agora · v0.1.0-beta.7')
+    expect(fix.text()).toContain(String.raw`C:\Windows\Installer`)
+    // Abrir o segundo e recolher o primeiro.
+    const items = drawer.findAll('[data-test="rn-item"] > button')
+    await items[1]!.trigger('click')
+    await items[0]!.trigger('click')
+    expect(items[0]!.attributes('aria-expanded')).toBe('false')
+    expect(items[1]!.attributes('aria-expanded')).toBe('true')
+    await drawer.get('[data-test="rn-expand"]').trigger('click')
+    expect(drawer.findAll('[data-test="rn-detail"]')).toHaveLength(2)
+    expect(drawer.find('[data-test="rn-expand"]').exists()).toBe(false)
+    // Versão pulada na própria aba, sem filtro de correções (não teve).
+    await drawer.get('[data-test="rn-tab-0.1.0-beta.6"]').trigger('click')
+    expect(drawer.text()).toContain('Barra de status e fluxo passo a passo')
+    // O rótulo cita a versão instalada, não a aba aberta.
+    expect(drawer.text()).toContain('Atualizado para v0.1.0-beta.7')
+    expect(drawer.text()).not.toContain('Atualizado para v0.1.0-beta.6')
+    expect(drawer.find('[data-test="rn-filter-fixed"]').exists()).toBe(false)
+    expect(drawer.findAll('[data-test="rn-item"]')).toHaveLength(5)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    await flushPromises()
+    expect(wrapper.find('[data-test="rn-drawer"]').exists()).toBe(true)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(wrapper.find('[data-test="rn-drawer"]').exists()).toBe(false)
+    // Esc com a gaveta fechada não faz nada.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+  })
+
+  it('versão mais recente: GIF no item aberto, com texto alternativo; sem correções, sem atalho para elas', async () => {
+    const { wrapper } = await mountApp('/', fakeGateway(), {
+      updater: fakeUpdater({ appVersion: vi.fn(async () => '0.1.0-beta.8') }),
+      saved: { seenVersion: '0.1.0-beta.7' },
+    })
+    expect(wrapper.find('[data-test="rn-open-fixes"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="rn-count-fixed"]').exists()).toBe(false)
+    await wrapper.get('[data-test="rn-open"]').trigger('click')
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
+    const media = wrapper.get('[data-test="rn-media"]')
+    expect(media.attributes('src')).toContain('rn-release-notes')
+    expect(media.attributes('loading')).toBe('lazy')
+    expect(media.attributes('alt')).toContain('barra de status')
+  })
+
+  it('“Correções” no aviso abre filtrado; “Abrir” leva à tela e fecha a gaveta', async () => {
+    const { wrapper, router } = await mountApp('/', fakeGateway(), updated())
+    await wrapper.get('[data-test="rn-open-fixes"]').trigger('click')
+    expect(wrapper.get('[data-test="rn-filter-fixed"]').attributes('aria-pressed')).toBe('true')
+    await wrapper.get('[data-test="rn-filter-new"]').trigger('click')
+    await wrapper.get('[data-test="rn-expand"]').trigger('click')
+    await wrapper.get('[data-test="rn-go-b7-rules"]').trigger('click')
+    // Configurações é carregada sob demanda: espera o import dinâmico.
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('settings'))
+    expect(wrapper.find('[data-test="rn-drawer"]').exists()).toBe(false)
+  })
+
+  it('Configurações: liga/desliga e histórico de versões abre só a escolhida', async () => {
+    const { wrapper, saved } = await mountApp('/configuracoes', fakeGateway(), {
+      updater: fakeUpdater({ appVersion: vi.fn(async () => '0.1.0-beta.7') }),
+      saved: { seenVersion: '0.1.0-beta.7' },
+    })
+    expect(wrapper.find('[data-test="rn-notice"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="rn-chip"]').exists()).toBe(false)
+    const versions = wrapper.get('[data-test="rn-versions"]')
+    expect(versions.text()).toContain('v0.1.0-beta.7')
+    expect(versions.text()).toContain('instalada')
+    expect(versions.text()).toContain('26 de nov. de 2026 · Barra de status e fluxo passo a passo')
+    await wrapper.get('[data-test="release-notes"]').setValue(false)
+    expect(saved.at(-1)).toMatchObject({ releaseNotes: false })
+    await wrapper.get('[data-test="rn-see-0.1.0-beta.6"]').trigger('click')
+    const drawer = wrapper.get('[data-test="rn-drawer"]')
+    expect(drawer.text()).toContain('Histórico de versões')
+    expect(drawer.find('[role="tablist"]').exists()).toBe(false)
+    await drawer.get('.drawer-scrim').trigger('click')
+    expect(wrapper.find('[data-test="rn-drawer"]').exists()).toBe(false)
+    await wrapper.get('[data-test="rn-see-0.1.0-beta.7"]').trigger('click')
+    await wrapper.get('[data-test="rn-close"]').trigger('click')
+    expect(wrapper.find('[data-test="rn-drawer"]').exists()).toBe(false)
   })
 })

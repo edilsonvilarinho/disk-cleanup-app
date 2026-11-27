@@ -36,6 +36,10 @@ version comes from the tag, and CI builds and publishes every package.
    `apps/desktop`.
    - Do not package locally as a release gate: `build-windows`, `build-linux` and `build-macos` own
      packaging; a local build proves one OS only.
+   - **In-app release notes:** `grep -F "version: 'X.Y.Z'," apps/desktop/src/releaseNotes/catalog.ts`
+     must match on that commit — `verify-version` refuses the tag otherwise. Missing → stop and report:
+     the entry (and optional GIFs) goes in through a PR first, see `docs/release.md` → *In-app release
+     notes*. Do not commit it to `main` from this skill.
 7. Publish:
    - annotated tag with the temporary agent git identity:
      `git -c user.name=claude -c user.email=claude@anthropic.com tag -a vX.Y.Z -m "vX.Y.Z"`

@@ -7,6 +7,7 @@ import { useClassificationStore } from '../../application/stores/classification'
 import { useExecutionStore } from '../../application/stores/execution'
 import { useSurveyStore } from '../../application/stores/survey'
 import { useSystemStore } from '../../application/stores/system'
+import { useReleaseNotesStore } from '../../application/stores/releaseNotes'
 import { useUpdateStore } from '../../application/stores/update'
 import { useI18n } from '../i18n'
 import UpdateNotice from './UpdateNotice.vue'
@@ -16,6 +17,7 @@ const survey = useSurveyStore()
 const classification = useClassificationStore()
 const exec = useExecutionStore()
 const update = useUpdateStore()
+const releaseNotes = useReleaseNotesStore()
 const { t, err, count, date } = useI18n()
 
 /** Itens do tier em execução que já terminaram (evento `finished` com resultado). */
@@ -96,6 +98,9 @@ const nextScan = computed(() => nextScanAt(settingsStore.schedule, historyStore.
 
     <span v-if="nextScan" class="sb-item" :title="t('settings.schedule')" data-test="sb-next-scan">{{ t('bar.nextScan', { when: date(nextScan.toISOString()) }) }}</span>
     <span class="sb-right">
+      <button v-if="releaseNotes.chip" type="button" class="sb-item sb-link sb-news" data-test="rn-chip" @click="releaseNotes.open()">
+        <span class="dot" aria-hidden="true" />{{ t('releaseNotes.chip', { version: `v${releaseNotes.pending[0]!.version}` }) }}
+      </button>
       <UpdateNotice />
       <RouterLink class="sb-item sb-link" to="/configuracoes" :title="t('bar.version')">
         <span class="mono" data-test="app-version">{{ update.version ? `v${update.version}` : '—' }}</span>

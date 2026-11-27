@@ -46,6 +46,8 @@ export const useSettingsStore = defineStore('settings', {
         backgroundEnabled: this.backgroundEnabled,
         lowSpaceGb: this.lowSpaceGb,
         schedule: this.schedule,
+        releaseNotes: this.releaseNotes,
+        seenVersion: this.seenVersion,
       })
     },
     setLanguage(language: LanguagePreference) {
@@ -109,6 +111,15 @@ export const useSettingsStore = defineStore('settings', {
     },
     setSchedule(schedule: ScanSchedule) {
       this.schedule = schedule
+      this.persist()
+    },
+    setReleaseNotes(enabled: boolean) {
+      this.releaseNotes = enabled
+      this.persist()
+    },
+    setSeenVersion(version: string) {
+      if (this.seenVersion === version) return
+      this.seenVersion = version
       this.persist()
     },
     setFindOrphans(enabled: boolean) {

@@ -252,6 +252,8 @@ describe('browserTheme', () => {
       backgroundEnabled: true,
       lowSpaceGb: 25 as const,
       schedule: 'weekly' as const,
+      releaseNotes: true,
+      seenVersion: '0.1.0-beta.7',
     }
     localStorageSettingsStorage.save(settings)
     expect(localStorageSettingsStorage.load()).toEqual(settings)
@@ -355,7 +357,7 @@ describe('TauriUpdater', () => {
 describe('DemoUpdater', () => {
   it('fora do Tauri informa a versão de demonstração e nunca tem atualização', async () => {
     const updater = new DemoUpdater()
-    expect(await updater.appVersion()).toBe('0.0.0-demo')
+    expect(await updater.appVersion()).toBe('0.1.0-beta.8+demo')
     expect(await updater.check(true)).toBeNull()
     const onProgress = vi.fn()
     await expect(updater.download(onProgress)).rejects.toEqual({ code: 'update_none', params: {} })

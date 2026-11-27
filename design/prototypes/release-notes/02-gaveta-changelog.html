@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notas de versão 02 · Gaveta do que mudou — Disk Cleanup</title>
+<script>(function(){var m;try{m=localStorage.getItem('dc-theme-mode')}catch(e){}if(!m||m==='system')m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',m)})();</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../../apps/desktop/src/styles/app.css">
+<link rel="stylesheet" href="../menu/menu-kit.css">
+<link rel="stylesheet" href="rn-kit.css">
+<style>
+  /* Aviso não bloqueante logo acima da barra de status, alinhado à direita (onde fica a versão). */
+  .rn-pop {
+    position: fixed; right: 12px; bottom: calc(var(--sb-h) + 10px); z-index: 60; width: min(380px, calc(100vw - 24px));
+    display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 12px; border: 1px solid var(--border-strong);
+    background: var(--surface); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18); animation: pop-up 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  @keyframes pop-up { from { opacity: 0; transform: translateY(10px); } }
+  .rn-pop .row { display: flex; align-items: flex-start; gap: 10px; }
+  .rn-pop .ico { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: color-mix(in srgb, var(--info) 12%, var(--surface)); color: var(--info); flex: none; }
+  .rn-pop .counts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .rn-x { width: 28px; height: 28px; border-radius: 7px; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; flex: none; margin-left: auto; }
+  .rn-x:hover { background: var(--hover); color: var(--text); }
+  .proto-bar { right: auto; left: 16px; }
+
+  /* Gaveta: o mesmo .drawer do plan.json, mais larga. */
+  .drawer-wrap { bottom: var(--sb-h); }
+  .drawer { width: min(640px, 100%); gap: 14px; animation: dr-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .drawer-scrim { animation: fade-in 0.25s ease both; }
+  @keyframes dr-in { from { transform: translateX(100%); } }
+  .dr-head { display: flex; align-items: flex-start; gap: 10px; }
+  .dr-head h2 { font-size: 17px; letter-spacing: -0.01em; }
+  .vtabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .vtabs button { min-height: 30px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; }
+  .vtabs button[aria-selected="true"] { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); font-weight: 600; }
+  .vtabs .mono { font-size: 11.5px; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filters button { min-height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border); background: transparent; cursor: pointer; font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+  .filters button[aria-pressed="true"] { color: var(--text); border-color: var(--border-strong); background: var(--surface-2); font-weight: 600; }
+  .filters .n { font-family: var(--font-mono); font-size: 11px; }
+  .rn-grp-title { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .rn-row .grp-head { align-items: flex-start; }
+  .rn-row .grp-head .gi-name { gap: 3px; flex: 1; }
+  .rn-row .grp-head .gi-name b { font-weight: 600; font-size: 13.5px; }
+  .rn-row .ttl { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .rn-row .chev { margin-top: 2px; }
+  .rn-detail { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+  .rn-detail p { margin: 0; color: var(--muted); font-size: 13px; }
+  .rn-row.seen .grp-head .gi-name b { font-weight: 500; }
+  .rn-row .unseen { width: 7px; height: 7px; border-radius: 50%; background: var(--info); flex: none; margin-top: 6px; }
+  .dr-foot { margin-top: auto; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 12px; }
+  .compact li { padding: 6px 0; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted); list-style: none; }
+  .compact li b { color: var(--text); font-weight: 500; }
+  .compact { margin: 0; padding: 0; }
+  .hl-target { box-shadow: 0 0 0 2px var(--info), 0 0 0 6px color-mix(in srgb, var(--info) 18%, transparent) !important; border-radius: 10px; transition: box-shadow 0.3s ease; }
+</style>
+</head>
+<body>
+<script src="rn-kit.js"></script>
+<script>
+(function () {
+  'use strict';
+  var R = RN, t = R.t, UI = R.UI, L = R.L, icon = R.icon, esc = R.esc;
+  var S = { sec: 'cleanup', pop: true, drawer: false, v: R.CURRENT, filter: 'all', open: {}, seenItems: {}, pending: true };
+  var untrap = null;
+
+  R.shell();
+  R.protoBar({ title: '02 · Gaveta', restart: function () { S.pop = true; S.drawer = false; S.pending = true; S.v = R.CURRENT; S.filter = 'all'; S.open = {}; S.seenItems = {}; S.sec = 'cleanup'; closeDrawer(true); render(); } });
+
+  function counts(rel) { return { new: R.byKind(rel, 'new').length, fixed: R.byKind(rel, 'fixed').length, known: R.byKind(rel, 'known').length }; }
+
+  function render() {
+    R.paintStatic();
+    document.querySelectorAll('#nav a').forEach(function (a) { if (a.getAttribute('data-sec') === S.sec) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    var p = document.getElementById('page');
+    var sp = R.spec('<b>02 · Gaveta “O que mudou”</b><ul>' +
+      '<li><b>Não bloqueia:</b> depois de atualizar, um aviso acima da barra de status (onde já ficam a atualização e a versão) com as contagens. Nada se abre sozinho por cima da tela.</li>' +
+      '<li><b>Gaveta lateral</b> — o mesmo componente do <span class="mono">plan.json</span> (Esc fecha). Versões novas em abas; versão pulada (beta.5 → 7) ganha a própria aba.</li>' +
+      '<li><b>Lista recolhida</b> (padrão do Plano): só o primeiro item abre. O GIF só carrega quando o item abre — no app, <span class="mono">loading="lazy"</span> e nada de 8 GIFs tocando juntos.</li>' +
+      '<li><b>Bugs</b> têm filtro próprio; cada correção mostra <b>Antes / Agora</b> no mesmo alvo. Conhecidos ficam em âmbar, separados.</li>' +
+      '<li>O selo da barra de status some quando a pessoa abre a gaveta; a versão continua levando a Configurações › Atualizações, com o histórico.</li>' +
+      '<li>Contra: quem ignora o aviso não vê os GIFs. A favor: nunca atrapalha quem abriu o app para limpar.</li></ul>');
+    if (S.sec === 'settings') R.settingsPage(function (v) { S.v = v; openDrawer(); }, { before: sp });
+    else { p.innerHTML = R.surveyPage() + sp; p.querySelector('#start').onclick = function () { R.toast(L('Varredura (simulada)', 'Scan (simulated)')); }; }
+
+    var news = document.getElementById('sb-news');
+    news.innerHTML = S.pending ? '<button type="button" class="sb-item sb-news"><span class="dot"></span>' + esc(R.fill(t(UI.newsChip), { v: R.short(R.CURRENT) })) + '</button>' : '';
+    if (S.pending) news.querySelector('button').onclick = function () { S.v = R.CURRENT; openDrawer(); };
+    document.getElementById('sb-ver').onclick = function () { S.sec = 'settings'; render(); };
+    paintPop();
+    if (S.drawer) paintDrawer();
+  }
+
+  function paintPop() {
+    var old = document.querySelector('.rn-pop'); if (old) old.remove();
+    if (!S.pop) return;
+    var rels = R.since(R.seen()), cur = rels[0], c = { new: 0, fixed: 0, known: 0 };
+    rels.forEach(function (r) { var k = counts(r); c.new += k.new; c.fixed += k.fixed; c.known += k.known; });
+    var el = document.createElement('div'); el.className = 'rn-pop'; el.setAttribute('role', 'status');
+    el.innerHTML = '<div class="row"><span class="ico">' + icon('spark', 16) + '</span><span class="gi-name" style="gap:2px">' +
+      '<b>' + t(UI.updatedTo) + ' ' + R.short(R.CURRENT) + '</b><span class="small muted">' + esc(t(cur.headline)) + (rels.length > 1 ? ' · ' + L('inclui a ', 'includes ') + rels.slice(1).map(function (r) { return R.short(r.v); }).join(', ') : '') + '</span></span>' +
+      '<button type="button" class="rn-x" aria-label="' + t(UI.close) + '">' + icon('x', 14, 2) + '</button></div>' +
+      '<div class="counts"><span class="kind new">' + c.new + ' ' + t(UI.groups.new) + '</span><span class="kind fixed">' + c.fixed + ' ' + t(UI.groups.fixed) + '</span><span class="kind known">' + c.known + ' ' + t(UI.groups.known) + '</span></div>' +
+      '<div style="display:flex;gap:8px"><button type="button" class="btn btn-primary" data-open style="min-height:34px">' + t(UI.whatsNew) + ' ' + icon('arrow', 14, 2) + '</button>' +
+      '<button type="button" class="btn" data-fix style="min-height:34px">' + icon('bug', 14) + t(UI.groups.fixed) + '</button></div>';
+    document.body.appendChild(el);
+    el.querySelector('.rn-x').onclick = function () { S.pop = false; paintPop(); R.toast(L('O selo fica na barra de status', 'The badge stays in the status bar')); };
+    el.querySelector('[data-open]').onclick = function () { S.v = R.CURRENT; S.filter = 'all'; openDrawer(); };
+    el.querySelector('[data-fix]').onclick = function () { S.v = R.CURRENT; S.filter = 'fixed'; openDrawer(); };
+  }
+
+  function openDrawer() {
+    S.drawer = true; S.pop = false; S.pending = false;
+    render();
+  }
+  function closeDrawer(silent) {
+    var w = document.getElementById('rn-drawer'); if (w) w.remove();
+    if (untrap) { untrap(); untrap = null; }
+    S.drawer = false;
+    if (!silent) { var b = document.getElementById('sb-ver'); if (b) b.focus(); }
+  }
+
+  function paintDrawer() {
+    var w = document.getElementById('rn-drawer');
+    var fresh = !w;
+    if (fresh) {
+      w = document.createElement('div'); w.className = 'drawer-wrap'; w.id = 'rn-drawer';
+      w.innerHTML = '<div class="drawer-scrim"></div><aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="dr-title"></aside>';
+      document.body.appendChild(w);
+      w.querySelector('.drawer-scrim').onclick = function () { closeDrawer(); };
+      untrap = R.trapFocus(w, function () { closeDrawer(); });
+    } else w.querySelector('.drawer').style.animation = 'none';
+    var dr = w.querySelector('.drawer');
+    var rels = R.since(R.seen()), versions = rels.length > 1 ? rels : [R.release(S.v) || rels[0]];
+    if (versions.indexOf(R.release(S.v)) < 0) versions = [R.release(S.v)];
+    var rel = R.release(S.v), c = counts(rel);
+    var isNewer = rels.indexOf(rel) >= 0;
+
+    var tabs = versions.length > 1 ? '<div class="vtabs" role="tablist">' + versions.map(function (r) {
+      return '<button type="button" role="tab" aria-selected="' + (r.v === S.v) + '" data-v="' + r.v + '"><span class="mono">' + R.short(r.v) + '</span>' + (r.v === R.CURRENT ? '<span class="pill ok" style="padding:0 6px"><span class="dot"></span>' + t(UI.installed) + '</span>' : '') + '</button>';
+    }).join('') + '</div>' : '';
+    var filters = '<div class="filters" role="group">' + [['all', L('Tudo', 'All'), c.new + c.fixed + c.known], ['new', t(UI.groups.new), c.new], ['fixed', t(UI.groups.fixed), c.fixed], ['known', t(UI.groups.known), c.known]]
+      .filter(function (f) { return f[0] === 'all' || f[2] > 0; })
+      .map(function (f) { return '<button type="button" aria-pressed="' + (S.filter === f[0]) + '" data-f="' + f[0] + '">' + (f[0] === 'fixed' ? icon('bug', 12) : '') + f[1] + ' <span class="n">' + f[2] + '</span></button>'; }).join('') + '</div>';
+
+    var hasMedia = rel.v === R.CURRENT;
+    var groups = ['new', 'fixed', 'known'].filter(function (k) { return S.filter === 'all' || S.filter === k; }).map(function (k) {
+      var items = R.byKind(rel, k); if (!items.length) return '';
+      if (!hasMedia) {
+        // Versões anteriores: só texto (o pacote leva mídia apenas da versão instalada).
+        return '<ul class="compact">' + items.map(function (it) { return '<li><b>' + esc(t(it.title)) + '</b> — ' + esc(t(it.body)) + ' ' + R.where(it) + '</li>'; }).join('') + '</ul>';
+      }
+      return (S.filter === 'all' ? '<div class="rn-grp-title"><span class="kind ' + k + '">' + t(UI.groups[k]) + '</span><span class="small muted">' + items.length + '</span></div>' : '') +
+        '<div class="grps">' + items.map(function (it, i) {
+          if (S.open[it.id] == null) S.open[it.id] = (k === 'new' && i === 0) || (S.filter === 'fixed' && i === 0);
+          var o = S.open[it.id];
+          return '<div class="grp rn-row' + (S.seenItems[it.id] ? ' seen' : '') + '" data-open="' + o + '" data-id="' + it.id + '">' +
+            '<button type="button" class="grp-head" aria-expanded="' + o + '">' + (S.seenItems[it.id] || !isNewer ? '<span style="width:7px;flex:none"></span>' : '<span class="unseen" aria-hidden="true"></span>') +
+            '<span class="gi-name"><span class="ttl"><b>' + esc(t(it.title)) + '</b>' + (it.exp ? '<span class="kind exp">' + t(UI.kinds.exp) + '</span>' : '') + '</span>' + R.where(it) + '</span>' +
+            '<span class="chev">' + icon('chevdown', 16) + '</span></button>' +
+            '<div class="grp-body"><div><div class="rn-detail" data-detail></div></div></div></div>';
+        }).join('') + '</div>';
+    }).join('');
+
+    dr.innerHTML = '<div class="dr-head"><div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span class="label-caps">' + (isNewer ? t(UI.updatedTo) : t(UI.versionHistory)) + '</span>' +
+      '<h2 id="dr-title">' + esc(t(rel.headline)) + '</h2><span class="small muted"><span class="ver-chip">v' + rel.v + '</span> · ' + R.fmtDate(rel.date) + '</span></div>' +
+      '<button type="button" class="rn-x" id="dr-x" aria-label="' + t(UI.close) + '">' + icon('x', 16, 2) + '</button></div>' +
+      '<p style="margin:0;color:var(--muted);font-size:13px">' + esc(t(rel.summary)) + '</p>' + tabs + filters +
+      '<div style="display:flex;flex-direction:column;gap:8px">' + groups + '</div>' +
+      '<div class="dr-foot"><button type="button" class="btn" id="dr-all" style="min-height:34px">' + icon('history', 14) + t(UI.allVersions) + '</button><span class="spacer"></span>' +
+      (hasMedia ? '<button type="button" class="btn" id="dr-expand" style="min-height:34px">' + L('Expandir todos', 'Expand all') + '</button>' : '') + '</div>';
+
+    dr.querySelectorAll('.rn-row[data-open="true"]').forEach(fillDetail);
+    dr.querySelector('#dr-x').onclick = function () { closeDrawer(); };
+    dr.querySelector('#dr-all').onclick = function () { closeDrawer(true); S.sec = 'settings'; render(); };
+    var ex = dr.querySelector('#dr-expand'); if (ex) ex.onclick = function () { rel.items.forEach(function (it) { S.open[it.id] = true; }); paintDrawer(); };
+    dr.querySelectorAll('[data-v]').forEach(function (b) { b.onclick = function () { S.v = b.getAttribute('data-v'); S.filter = 'all'; paintDrawer(); }; });
+    dr.querySelectorAll('[data-f]').forEach(function (b) { b.onclick = function () { S.filter = b.getAttribute('data-f'); paintDrawer(); }; });
+    dr.querySelectorAll('.rn-row > .grp-head').forEach(function (h) {
+      h.onclick = function () {
+        var row = h.parentElement, id = row.getAttribute('data-id'), o = row.getAttribute('data-open') !== 'true';
+        S.open[id] = o; row.setAttribute('data-open', String(o)); h.setAttribute('aria-expanded', String(o));
+        if (o) fillDetail(row);
+        else setTimeout(function () { if (row.getAttribute('data-open') !== 'true') row.querySelector('[data-detail]').innerHTML = ''; }, 340);
+      };
+    });
+    if (fresh) dr.querySelector('#dr-x').focus({ preventScroll: true });
+  }
+
+  /* O detalhe (e o GIF) só existe enquanto o item está aberto. */
+  function fillDetail(row) {
+    var id = row.getAttribute('data-id'), it = R.release(S.v).items.filter(function (x) { return x.id === id; })[0];
+    var d = row.querySelector('[data-detail]'); if (d.childElementCount) return;
+    S.seenItems[id] = true; row.classList.add('seen');
+    var u = row.querySelector('.unseen'); if (u) u.style.visibility = 'hidden';
+    d.innerHTML = '<p>' + esc(t(it.body)) + '</p>' + (it.ba ? R.beforeAfter(it) : '') + '<div data-c></div>' +
+      (it.route ? '<div><button type="button" class="btn" data-go style="min-height:32px">' + t(UI.open) + ' ' + esc(t(it.area).split(' › ')[0]) + ' ' + icon('arrow', 14, 2) + '</button></div>' : '');
+    if (it.scene) d.querySelector('[data-c]').appendChild(R.clip(it.scene));
+    var g = d.querySelector('[data-go]'); if (g) g.onclick = function () {
+      closeDrawer(true); S.sec = it.route === 'settings' ? 'settings' : 'cleanup'; render();
+      var tg = S.sec === 'settings' ? document.querySelector('.card') : document.querySelector('.flow-step[data-step="' + ({ survey: 0, classify: 1, plan: 2, execute: 3 })[it.route] + '"]');
+      if (tg) { tg.classList.add('hl-target'); setTimeout(function () { tg.classList.remove('hl-target'); }, 2200); }
+      R.toast(L('No app: abre ', 'In the app: opens ') + t(it.area));
+    };
+  }
+
+  document.getElementById('nav').addEventListener('click', function (e) {
+    var a = e.target.closest('a'); if (!a) return; e.preventDefault();
+    if (a.getAttribute('data-sec') === 'history') { R.toast(L('Histórico fora deste protótipo', 'History is out of this prototype')); return; }
+    S.sec = a.getAttribute('data-sec'); render();
+  });
+  document.addEventListener('rn:lang', render);
+  render();
+})();
+</script>
+</body>
+</html>

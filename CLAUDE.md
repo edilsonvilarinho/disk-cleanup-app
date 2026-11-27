@@ -102,6 +102,9 @@ test fake.
 - Vue: no `v-html`, user paths rendered as text only, CSP with no external domains; non-initial
   views are lazy-loaded; core reports are `markRaw`.
 - Auto-update never installs on its own: download is automatic, install only on user click.
+- In-app release notes live in `apps/desktop/src/releaseNotes/catalog.ts` (`{pt, en}`, newest first).
+  Every tag needs an entry (`release.yml` refuses otherwise); GIFs only for the newest version, ≤ 4 MB
+  (`catalog.test.ts`). Process in `docs/release.md`.
 
 Workflow is test-first (red → green → refactor); coverage gates of 95% apply to both Rust and UI.
 The repo enforces LF line endings (`.gitattributes`).

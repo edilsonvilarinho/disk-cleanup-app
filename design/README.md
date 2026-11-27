@@ -14,6 +14,7 @@ primário monocromático, cor só para estado e categoria; Inter + JetBrains Mon
 | `prototypes/menu/index.html` | Propostas de menu (12), estados em andamento e o **08b**, a direção vigente |
 | `prototypes/menu/08b-fluxo-otimizado.html` | **Referência atual**: barra de status, Plano e Execução otimizados |
 | `prototypes/menu/13-funcionalidades.html` | Proposta: as 10 novas funcionalidades encaixadas nas telas do 08b (setas ← → trocam a proposta) |
+| `prototypes/release-notes/index.html` | Notas de versão pt/en depois de atualizar: 01 modal, **02 gaveta (aprovada e implementada)**, 03 tour no lugar |
 
 Abrir no navegador (funciona via `file://`, sem servidor). Dados de exemplo.
 
@@ -166,6 +167,42 @@ Texto fica sempre em tokens de texto, nunca na cor da série. Os tokens de statu
 ### Varredura
 
 O KPI "Usado" mostra a variação desde a varredura anterior (link para o Histórico).
+
+## Notas de versão
+
+Direção aprovada: **02 · gaveta** (`prototypes/release-notes/02-gaveta-changelog.html`). Não interrompe:
+quem abriu o app para limpar não é bloqueado.
+
+- **Quando:** na abertura, se a versão instalada é maior (SemVer) que `seenVersion` (em `dc-settings`).
+  Instalação nova grava a versão e não mostra nada. Sem `seenVersion` mas com preferências ou
+  histórico salvos = atualizou de uma versão anterior ao recurso: mostra só a versão instalada.
+  Versão pulada (beta.5 → beta.7) traz as notas de todas as versões no meio.
+- **Aviso** fixo acima da barra de status, à direita (onde ficam atualização e versão): versão,
+  título, contagens por tipo, **Ver novidades** (primária), **Correções** (abre já filtrado) e ×.
+  Nada é gravado até a pessoa interagir; dispensar ou abrir grava `seenVersion`.
+- **Selo** na barra de status ("Novidades da vX") até a gaveta ser aberta na sessão.
+- **Gaveta** = o `.drawer` do `plan.json` (Esc e o fundo fecham), 640 px. Abas por versão só quando há
+  mais de uma nova; filtros Tudo / Novidades / Correções / Problemas conhecidos (tipo sem item não
+  aparece); itens recolhidos (`.grp`), só o primeiro aberto; **Expandir todos** no rodapé.
+- **GIF só existe com o item aberto** (`<img loading="lazy">` dentro do `v-if`): nunca vários tocando.
+- **Correção** mostra **Antes / Agora** sobre o mesmo alvo (vermelho/verde com rótulo; a cor nunca
+  está sozinha). **Problemas conhecidos** em âmbar, separados das correções.
+- **Abrir {tela}** só para telas sempre acessíveis (Varredura, Histórico, Configurações); etapas
+  trancadas do fluxo mostram só o lugar em texto ("Plano › Destino").
+- **Configurações › Atualizações:** "Mostrar novidades depois de atualizar" (ligado por padrão;
+  desligado, grava a versão sem mostrar) e **Histórico de versões** com "Ver notas" por versão.
+
+| Tipo | Token | Rótulo |
+|---|---|---|
+| Novo | `--info` | Novidades |
+| Corrigido | `--ok` | Correções |
+| Conhecido | `--warn` | Problemas conhecidos |
+| Experimental | `--muted`, borda tracejada | Experimental |
+
+**Mídia:** GIFs gravados do modo demonstração por `apps/desktop/scripts/record-readme-media.mjs`
+(cenários `rn-*`: janela 960×600 → 640 px, 10 fps, 64 cores). O pacote leva GIF **só da versão mais
+recente**, até 4 MB no total (`catalog.test.ts` falha fora disso); versões antigas ficam em texto. A
+demonstração informa `<última versão do catálogo>+demo`, com a mesma precedência SemVer.
 
 ## Exportação do relatório
 
