@@ -13,6 +13,7 @@ primário monocromático, cor só para estado e categoria; Inter + JetBrains Mon
 | `prototypes/06-historico.html` | Histórico de varreduras (análise) |
 | `prototypes/menu/index.html` | Propostas de menu (12), estados em andamento e o **08b**, a direção vigente |
 | `prototypes/menu/08b-fluxo-otimizado.html` | **Referência atual**: barra de status, Plano e Execução otimizados |
+| `prototypes/menu/13-funcionalidades.html` | Proposta: as 10 novas funcionalidades encaixadas nas telas do 08b (setas ← → trocam a proposta) |
 
 Abrir no navegador (funciona via `file://`, sem servidor). Dados de exemplo.
 

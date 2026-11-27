@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>13 · Novas funcionalidades — Disk Cleanup</title>
+<script>(function(){var m;try{m=localStorage.getItem('dc-theme-mode')}catch(e){}if(!m||m==='system')m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',m)})();</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../../apps/desktop/src/styles/app.css">
+<link rel="stylesheet" href="menu-kit.css">
+<link rel="stylesheet" href="menu-v2.css">
+<style>
+  /* Só o que estas propostas acrescentam. Tokens, cartões, abas, pílulas e grupos vêm do app.css. */
+  .sidebar { gap: 24px; }
+  .proto-bar { bottom: calc(var(--sb-h) + 12px + env(safe-area-inset-bottom, 0px)); }
+  .proto-toast { bottom: calc(var(--sb-h) + 64px); }
+
+  /* Seletor das propostas (moldura do protótipo, não faz parte do app). */
+  .feat-pick { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; gap: 4px; padding: 4px; border-radius: 10px; border: 1px dashed var(--border-strong); }
+  .feat-pick button { flex: none; white-space: nowrap; min-height: 30px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .feat-pick button:hover { color: var(--text); background: var(--hover); }
+  .feat-pick button[aria-pressed="true"] { background: var(--surface-2); color: var(--text); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
+  .feat-pick .n { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .flow-step { cursor: default; }
+  .tag-new { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--info); border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; }
+  .is-new { box-shadow: 0 0 0 1px var(--info), 0 0 0 4px color-mix(in srgb, var(--info) 14%, transparent); border-radius: var(--radius); }
+  .fx-in { animation: rise 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+  /* 1 · Destino por tier (segmentado) */
+  .dest { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); }
+  .dest button { min-height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+  .dest button[aria-pressed="true"] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 0 0 1px var(--border-strong); }
+  .dest-rows { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+  .dest-row { display: flex; align-items: center; gap: 8px; }
+
+  /* 3 · Treemap */
+  .tm-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 13px; }
+  .tm-crumbs button { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 2px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 12px; }
+  .tm-crumbs button:hover { background: var(--hover); color: var(--text); }
+  .tm-crumbs button:last-child { color: var(--text); font-weight: 600; }
+  .tm { position: relative; height: 300px; border-radius: var(--radius-sm); overflow: hidden; background: var(--track); }
+  .tm-cell { position: absolute; border: 0; padding: 8px; text-align: left; overflow: hidden; color: var(--text); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border-strong); cursor: pointer; display: flex; flex-direction: column; gap: 2px; font-size: 12px; transition: filter 0.15s ease; animation: tm-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .tm-cell:hover, .tm-cell:focus-visible { filter: brightness(0.94); outline: none; box-shadow: inset 0 0 0 2px var(--text); }
+  [data-theme="dark"] .tm-cell:hover { filter: brightness(1.25); }
+  .tm-cell.leaf { cursor: default; }
+  .tm-cell b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tm-cell .num { color: var(--muted); font-size: 11px; }
+  .tm-cell.cand { background: color-mix(in srgb, var(--tc) 16%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tc) 55%, transparent); }
+  .tm-cell.cand::after { content: attr(data-tier); position: absolute; top: 6px; right: 6px; font: 600 10px var(--font-mono); color: var(--tc); }
+  .tm-strip { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; display: flex; }
+  .tm-cell.cloud { background-image: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--muted) 12%, transparent) 6px 7px); }
+  @keyframes tm-in { from { opacity: 0; transform: scale(0.97); } }
+  .legend-row { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); align-items: center; }
+  .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 6px; vertical-align: -1px; }
+
+  /* 5 · Duplicados: etapas da comparação */
+  .pipe { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .pipe-st { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+  .pipe-st .v { font-family: var(--font-mono); font-size: 15px; }
+  .pipe-st.on { border-color: var(--info); }
+  .pipe-st.ok { border-color: color-mix(in srgb, var(--ok) 50%, transparent); }
+  .pipe-st .indet { margin-top: 4px; }
+  @media (max-width: 720px) { .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .keep { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .grp-items li.kept .gi-name { font-weight: 600; }
+
+  /* 6/7/10 · Configurações */
+  .set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .set-row:last-child { border-bottom: 0; }
+  .set-row .gi-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .switch { position: relative; width: 34px; height: 20px; flex: none; }
+  .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+  .switch i { position: absolute; inset: 0; border-radius: 999px; background: var(--border-strong); transition: background 0.2s ease; pointer-events: none; }
+  .switch i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--surface); transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .switch input:checked + i { background: var(--ok); }
+  .switch input:checked + i::after { transform: translateX(14px); }
+  .switch input:focus-visible + i { outline: 2px solid var(--info); outline-offset: 2px; }
+  .term { font-family: var(--font-mono); font-size: 12px; line-height: 1.65; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; overflow-x: auto; white-space: pre; margin: 0; }
+  .term .p { color: var(--muted); user-select: none; }
+  .term .c { color: var(--muted); }
+  .term .ok { color: var(--ok); } .term .warn { color: var(--warn); } .term .err { color: var(--err); }
+  .term .tA { color: var(--tA); } .term .tC { color: var(--tC); }
+  .err-line { color: var(--err); display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; }
+  .err-line svg { flex: none; margin-top: 2px; }
+  .os-notif { display: flex; gap: 12px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14); max-width: 360px; animation: rise 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .os-notif .ico { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: var(--surface-2); flex: none; }
+  .tray-menu { width: 260px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14); padding: 6px; font-size: 13px; }
+  .tray-menu .h { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+  .tray-menu button { width: 100%; text-align: left; border: 0; background: transparent; color: var(--text); padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .tray-menu button:hover { background: var(--hover); }
+  .previews { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+  .conf { display: inline-flex; gap: 2px; vertical-align: middle; }
+  .conf i { width: 5px; height: 10px; border-radius: 1px; background: var(--border-strong); }
+  .conf.h i:nth-child(-n+3), .conf.m i:nth-child(-n+2), .conf.l i:nth-child(1) { background: var(--text); }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark"><span data-icon="diskdot" data-size="18"></span></span>
+      <div class="brand-text"><span class="brand-name">Disk Cleanup</span><span class="small muted">Limpeza com aprovação</span></div>
+    </div>
+    <nav class="nav" id="nav" aria-label="Seções">
+      <a href="#" data-sec="cleanup"><span data-icon="disk"></span>Limpeza</a>
+      <a href="#" data-sec="history"><span data-icon="history"></span>Histórico</a>
+      <a href="#" data-sec="settings"><span data-icon="gear"></span>Configurações</a>
+    </nav>
+  </aside>
+  <main class="main"><div class="container">
+    <div class="feat-pick" id="pick" role="group" aria-label="Propostas (moldura do protótipo)"></div>
+    <nav class="flow" id="flow" aria-label="Etapas da limpeza"></nav>
+    <div id="page" style="display:flex;flex-direction:column;gap:20px"></div>
+  </div></main>
+</div>
+
+<footer class="statusbar" id="sb" aria-label="Barra de status">
+  <span class="sb-item" role="status" aria-live="polite"><span class="sb-dot" aria-hidden="true"></span><span id="sb-state">Pronto</span></span>
+  <span class="indet sb-bar" id="sb-bar" aria-hidden="true" hidden></span>
+  <span class="sb-sep"></span>
+  <span class="sb-item" title="Volume"><span data-icon="disk" data-size="13"></span><span class="mono">C:\</span></span>
+  <span class="sb-item" title="Sistema e catálogo"><span data-icon="cpu" data-size="13"></span>windows</span>
+  <span class="sb-item" title="Modo de execução"><span data-icon="shield" data-size="13" style="color:var(--ok)"></span>Aprovação explícita</span>
+  <span class="sb-item" id="sb-extra" hidden></span>
+  <span class="sb-right"><span class="sb-item"><span class="mono">v0.1.0-beta.5</span></span></span>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+  var root = document.documentElement;
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- Ícones (mesmo traçado do menu-kit.js) ---------- */
+  var P = {
+    disk: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 14h18"/>',
+    diskdot: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 14h18"/><circle cx="17" cy="17" r="0.8"/>',
+    history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+    chevron: '<path d="M9 6l6 6-6 6"/>', chevdown: '<path d="M6 9l6 6 6-6"/>', left: '<path d="M15 6l-6 6 6 6"/>',
+    shield: '<path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/>',
+    warn: '<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+    check: '<path d="M5 12l5 5L20 7"/>', lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>', download: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>',
+    cpu: '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',
+    grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+    trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+    file: '<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/>',
+    upload: '<path d="M12 20V9M7 14l5-5 5 5"/><path d="M5 4h14"/>',
+    term: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/>',
+    bell: '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+    box: '<path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/>',
+    folder: '<path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
+  };
+  function icon(n, s, w) { return '<svg width="' + (s || 16) + '" height="' + (s || 16) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (w || 1.8) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || '') + '</svg>'; }
+  function hydrate(s) { (s || document).querySelectorAll('[data-icon]:empty').forEach(function (el) { el.innerHTML = icon(el.getAttribute('data-icon'), +el.getAttribute('data-size') || 16); }); }
+  var ARROW = icon('arrow', 16, 2);
+
+  function fmt(v, d) { return v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }); }
+  function gb(v) { return fmt(v, 1) + ' GB'; }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function sum(l, k) { return l.reduce(function (a, c) { return a + c[k || 'gb']; }, 0); }
+  var TIERS = { A: 'Cache', B: 'Desinstalar', C: 'Regeneráveis', D: 'Sistema' };
+  function tier(t, long) { return '<span class="tier t' + t + '"><span class="sq"></span>' + t + (long ? ' · ' + TIERS[t] : '') + '</span>'; }
+  function head(eyebrow, title, actions) { return '<header class="page-head"><div class="titles"><span class="label-caps">' + eyebrow + '</span><h1>' + title + '</h1></div><div class="actions">' + (actions || '') + '</div></header>'; }
+  function spec(html) { return '<details class="proto-spec"><summary>Sobre esta proposta</summary>' + html + '</details>'; }
+  function pill(tone, txt, dot) { return '<span class="pill ' + tone + '">' + (dot === false ? '' : '<span class="dot"></span>') + txt + '</span>'; }
+  function toast(msg) {
+    var old = document.querySelector('.proto-toast'); if (old) old.remove();
+    var t = document.createElement('div'); t.className = 'proto-toast'; t.textContent = msg; document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 2300);
+  }
+  function sw(on) { return '<span class="switch"><input type="checkbox"' + (on ? ' checked' : '') + '><i></i></span>'; }
+
+  /* ================= Estado ================= */
+  var S = {
+    f: 1,
+    dest: { A: 'perm', C: 'trash', D: 'trash' }, ack: false,
+    age: 90, projTier: 'C',
+    tm: [],
+    big: 1, bigSel: {},
+    dup: 'idle', dupOpen: {}, keep: {},
+    rules: { r1: true, r2: true, r3: false }, ruleErr: false, prof: { node: true, rust: true, games: false, media: false },
+    cli: true,
+    mon: { tray: true, thr: 15, sched: 'weekly' }
+  };
+
+  /* ================= Dados de exemplo ================= */
+  var PLAN = [
+    { t: 'A', label: 'npm cache', target: '%LOCALAPPDATA%\\npm-cache', gb: 6.4, kind: 'command' },
+    { t: 'A', label: 'Chrome · modelo on-device', target: '%LOCALAPPDATA%\\Google\\Chrome\\User Data\\OptGuideOnDeviceModel', gb: 4.0, kind: 'path' },
+    { t: 'A', label: 'Windows Update · downloads', target: 'C:\\Windows\\SoftwareDistribution\\Download', gb: 2.7, kind: 'path' },
+    { t: 'C', label: 'Gradle caches', target: '%USERPROFILE%\\.gradle\\caches', gb: 9.8, kind: 'path' },
+    { t: 'C', label: 'node_modules · 7 projetos inativos', target: 'D:\\dev\\**\\node_modules', gb: 11.2, kind: 'project' },
+    { t: 'D', label: 'ISO · Ubuntu 22.04', target: '%USERPROFILE%\\Downloads\\ubuntu-22.04.4-desktop-amd64.iso', gb: 4.9, kind: 'file' }
+  ];
+  var PROJ = [
+    { name: 'loja-vue', marker: 'package.json', art: 'node_modules', gb: 1.9, days: 412, git: 'main · sem alterações' },
+    { name: 'api-pagamentos', marker: 'Cargo.toml', art: 'target', gb: 6.8, days: 203, git: 'feat/pix · sem alterações' },
+    { name: 'landing-2024', marker: 'package.json', art: 'node_modules · .next', gb: 1.2, days: 288, git: 'main · sem alterações' },
+    { name: 'ml-notebook', marker: 'pyproject.toml', art: '.venv', gb: 3.4, days: 131, git: 'sem git' },
+    { name: 'app-android', marker: 'settings.gradle', art: 'build · .gradle', gb: 2.6, days: 96, git: 'main · 3 arquivos alterados', warn: true },
+    { name: 'disk-cleanup-app', marker: 'Cargo.toml', art: 'target', gb: 8.1, days: 0, git: 'docs/readme · em uso', active: true },
+    { name: 'site-pessoal', marker: 'package.json', art: 'node_modules', gb: 0.6, days: 44, git: 'main · sem alterações' }
+  ];
+  var BIG = [
+    { name: 'ubuntu-22.04.4-desktop-amd64.iso', path: '%USERPROFILE%\\Downloads', gb: 4.9, acc: 'há 14 meses', kind: 'Imagem de disco' },
+    { name: 'gravacao-reuniao-2025-03.mp4', path: '%USERPROFILE%\\Videos', gb: 3.6, acc: 'há 8 meses', kind: 'Vídeo' },
+    { name: 'VisualStudioSetup-offline.zip', path: '%USERPROFILE%\\Downloads', gb: 2.9, acc: 'há 2 anos', kind: 'Compactado' },
+    { name: 'backup-celular-2024.tar', path: 'D:\\backups', gb: 2.2, acc: 'há 11 meses', kind: 'Compactado' },
+    { name: 'pagefile.sys', path: 'C:\\', gb: 6.0, acc: 'em uso', kind: 'Sistema', blocked: 'arquivo do sistema' },
+    { name: 'Win11_24H2_x64.iso', path: '%USERPROFILE%\\Downloads', gb: 5.8, acc: 'há 5 meses', kind: 'Imagem de disco' },
+    { name: 'dataset-imagens.parquet', path: 'D:\\dev\\ml-notebook\\data', gb: 1.4, acc: 'há 4 meses', kind: 'Dados' }
+  ];
+  var DUPS = [
+    { id: 'g1', name: 'Win11_24H2_x64.iso', gb: 5.8, files: ['%USERPROFILE%\\Downloads\\Win11_24H2_x64.iso', 'D:\\isos\\Win11_24H2_x64.iso'] },
+    { id: 'g2', name: 'fotos-viagem-2024.zip', gb: 1.7, files: ['%USERPROFILE%\\Desktop\\fotos-viagem-2024.zip', '%USERPROFILE%\\Documents\\fotos-viagem-2024.zip', '%USERPROFILE%\\OneDrive\\Fotos\\fotos-viagem-2024.zip'], cloud: 2 },
+    { id: 'g3', name: 'dataset-imagens.parquet', gb: 1.4, files: ['D:\\dev\\ml-notebook\\data\\dataset-imagens.parquet', '%USERPROFILE%\\Downloads\\dataset-imagens.parquet'] }
+  ];
+  var CONT = [
+    { t: 'A', label: 'Docker · cache de build', target: 'docker builder prune', gb: 7.3, kind: 'command', ev: 'docker system df: 7,3 GB recuperáveis' },
+    { t: 'C', label: 'Docker · imagens sem contêiner', target: 'docker image prune -a', gb: 12.6, kind: 'command', ev: '9 imagens sem contêiner associado' },
+    { t: 'C', label: 'Docker · volumes', target: 'docker volume ls', gb: 4.1, kind: 'command', blocked: 'pode conter dados (bancos, uploads)' },
+    { t: 'D', label: 'WSL · Ubuntu · compactar ext4.vhdx', target: '%LOCALAPPDATA%\\Packages\\CanonicalGroupLimited…\\LocalState\\ext4.vhdx', gb: 41.5, kind: 'command', ev: 'arquivo 118,0 GB · uso interno 76,5 GB', elev: true },
+    { t: 'D', label: 'Docker Desktop · compactar docker_data.vhdx', target: '%LOCALAPPDATA%\\Docker\\wsl\\disk\\docker_data.vhdx', gb: 18.2, kind: 'command', ev: 'arquivo 64,0 GB · uso interno 45,8 GB', elev: true }
+  ];
+  var ORPH = [
+    { label: 'Slack', path: '%APPDATA%\\Slack', gb: 2.3, conf: 'h', ev: ['Nenhum programa registrado com este nome', 'Sem modificação há 19 meses'] },
+    { label: 'Postman', path: '%LOCALAPPDATA%\\Postman', gb: 1.1, conf: 'h', ev: ['Desinstalado em 2025-06-02 (registro do Windows Installer)', 'Sem modificação há 17 meses'] },
+    { label: 'JetBrains · IntelliJIdea2023.2', path: '%LOCALAPPDATA%\\JetBrains\\IntelliJIdea2023.2', gb: 3.0, conf: 'm', ev: ['Versão instalada hoje: 2025.2', 'Pasta de versão antiga'] },
+    { label: 'Zoom', path: '%APPDATA%\\Zoom', gb: 0.4, conf: 'l', ev: ['Nome genérico; pode ser de outro app'] },
+    { label: 'Discord', path: '%APPDATA%\\discord', gb: 0.9, blocked: 'app instalado: Discord 1.0.9213' }
+  ];
+  /* Árvore do volume para o treemap (GB). cand = tier sugerido; cloud = placeholders de nuvem. */
+  var TREE = { name: 'C:\\', gb: 412, kids: [
+    { name: 'Users', gb: 214, kids: [
+      { name: 'edils', gb: 206, kids: [
+        { name: 'AppData', gb: 84, kids: [
+          { name: 'Local\\Docker', gb: 64, cand: 'D' }, { name: 'Local\\npm-cache', gb: 6.4, cand: 'A' }, { name: 'Local\\Google', gb: 7.6, cand: 'A' }, { name: 'Roaming', gb: 6 }] },
+        { name: 'OneDrive', gb: 52, cloud: true },
+        { name: 'Downloads', gb: 31, cand: 'D' }, { name: '.gradle', gb: 9.8, cand: 'C' }, { name: 'Videos', gb: 18 }, { name: 'Documents', gb: 11.2 }] },
+      { name: 'Public', gb: 8 }] },
+    { name: 'Windows', gb: 96, kids: [{ name: 'WinSxS', gb: 38 }, { name: 'System32', gb: 31 }, { name: 'Installer', gb: 14 }, { name: 'SoftwareDistribution', gb: 4.7, cand: 'A' }, { name: 'Outros', gb: 8.3 }] },
+    { name: 'Program Files', gb: 48 }, { name: 'Program Files (x86)', gb: 22 }, { name: 'ProgramData', gb: 19, kids: [{ name: 'Package Cache', gb: 9 }, { name: 'Microsoft', gb: 6 }, { name: 'NVIDIA', gb: 4, cand: 'C' }] },
+    { name: 'pagefile.sys', gb: 6 }, { name: 'hiberfil.sys', gb: 6.4 }] };
+
+  /* ================= Propostas ================= */
+  var F = [
+    { n: 1, short: 'Lixeira', sec: 'cleanup', step: 3, render: fTrash },
+    { n: 2, short: 'Projetos', sec: 'cleanup', step: 2, render: fProjects },
+    { n: 3, short: 'Treemap', sec: 'cleanup', step: 1, render: fTreemap },
+    { n: 4, short: 'Arquivos grandes', sec: 'cleanup', step: 2, render: fBig },
+    { n: 5, short: 'Duplicados', sec: 'cleanup', step: 2, render: fDups },
+    { n: 6, short: 'Regras', sec: 'settings', render: fRules },
+    { n: 7, short: 'CLI', sec: 'settings', render: fCli },
+    { n: 8, short: 'Docker e WSL', sec: 'cleanup', step: 2, render: fContainers },
+    { n: 9, short: 'Sobras de apps', sec: 'cleanup', step: 2, render: fOrphans },
+    { n: 10, short: 'Monitor', sec: 'settings', render: fMonitor }
+  ];
+  var STEPS = ['Varredura', 'Classificação', 'Plano', 'Execução', 'Relatório'];
+
+  /* ---------- 1 · Lixeira ---------- */
+  function fTrash() {
+    var tiers = ['A', 'C', 'D'];
+    var trashGb = sum(PLAN.filter(function (c) { return S.dest[c.t] === 'trash'; }));
+    var permGb = sum(PLAN) - trashGb;
+    var chips = tiers.map(function (t) {
+      var its = PLAN.filter(function (c) { return c.t === t; });
+      return '<label class="chip-tier on" style="--tc:var(--t' + t + ')"><input type="checkbox" checked><span class="chip-box" aria-hidden="true">' + icon('check', 11, 3) + '</span><span class="chip-txt"><b>' + t + ' · ' + TIERS[t] + '</b><span class="small muted">' + its.length + (its.length === 1 ? ' item' : ' itens') + ' · ' + gb(sum(its)) + '</span></span></label>';
+    }).join('');
+    var dests = tiers.map(function (t) {
+      return '<div class="dest-row">' + tier(t, true) + '<div class="dest" role="group" aria-label="Destino do tier ' + t + '">' +
+        '<button type="button" data-dest="' + t + ':trash" aria-pressed="' + (S.dest[t] === 'trash') + '">' + icon('trash', 13) + 'Lixeira</button>' +
+        '<button type="button" data-dest="' + t + ':perm" aria-pressed="' + (S.dest[t] === 'perm') + '">Definitivo</button></div></div>';
+    }).join('');
+    var maxT = Math.max.apply(null, tiers.map(function (t) { return sum(PLAN.filter(function (c) { return c.t === t; })); }));
+    var groups = tiers.map(function (t) {
+      var its = PLAN.filter(function (c) { return c.t === t; }), s = sum(its);
+      return '<div class="grp" data-open="false"><button type="button" class="grp-head" data-grp aria-expanded="false">' + tier(t, true) +
+        '<span class="small muted">' + its.length + (its.length === 1 ? ' item' : ' itens') + '</span>' +
+        (S.dest[t] === 'trash' ? pill('info', 'vai para a Lixeira') : pill('neutral', 'remoção definitiva')) +
+        '<span class="grp-bar"><i style="width:' + (s / maxT * 100).toFixed(1) + '%;background:var(--t' + t + ')"></i></span><span class="num">' + gb(s) + '</span><span class="chev">' + icon('chevdown', 14) + '</span></button>' +
+        '<div class="grp-body"><div><ul class="grp-items">' + its.map(function (c) {
+          return '<li><span class="gi-name">' + esc(c.label) + '<span class="gi-path">' + esc(c.target) + '</span></span><span class="mono small muted">' + c.kind + '</span><span class="small muted">' + (S.dest[t] === 'trash' ? 'Lixeira' : 'definitivo') + '</span><span class="num">' + fmt(c.gb, 1) + '</span></li>';
+        }).join('') + '</ul></div></div></div>';
+    }).join('');
+    var reason = S.ack ? '' : 'Confirme a revisão do plano para aprovar.';
+    return head('Etapa 3 de 5 · revisão', 'Plano de limpeza',
+      '<button type="button" class="btn">Voltar à seleção</button><button type="button" class="btn">' + icon('file') + 'plan.json</button>' +
+      '<button type="button" class="btn btn-primary' + (S.ack ? ' ready' : '') + '" data-act="approve" aria-disabled="' + !S.ack + '">Aprovar plano</button>') +
+      spec('<b>1 · Lixeira em vez de remoção definitiva</b><ul><li>Referência: Mole e Skiff mandam para a Lixeira por padrão. Hoje o <span class="mono">runner.rs</span> apaga direto, sem volta.</li><li>Novo requisito <b>3 · Destino</b>, colado em Aprovar: cache (A) continua definitivo por padrão; C e D vão para a Lixeira.</li><li>O resumo separa o que <b>libera agora</b> do que <b>só libera ao esvaziar a Lixeira</b>, para o relatório não prometer espaço que ainda está ocupado.</li><li>Implementação: crate <span class="mono">trash</span> (MIT) atrás de um método novo na porta de execução; o <span class="mono">SafetyGuard</span> continua rechecando antes de mover.</li></ul>') +
+      '<section class="card approve-card is-new" aria-label="Aprovação">' +
+      '<div class="ap-sum">' +
+      '<div class="ap-kpi"><span class="small muted">Itens que vão rodar</span><span class="ap-v">' + PLAN.length + '</span></div>' +
+      '<div class="ap-kpi"><span class="small muted">Libera agora</span><span class="ap-v">' + gb(permGb) + '</span></div>' +
+      '<div class="ap-kpi"><span class="small muted">Recuperável pela Lixeira</span><span class="ap-v" style="color:var(--info)">' + gb(trashGb) + '</span><span class="small muted">libera ao esvaziar</span></div>' +
+      '</div>' +
+      '<div class="ap-ctrl">' +
+      '<div class="ap-step"><span class="label-caps"><span class="ap-n">1</span>Tiers que vão rodar</span><div class="chips">' + chips + '</div></div>' +
+      '<div class="ap-step"><span class="label-caps"><span class="ap-n">2</span>Destino <span class="tag-new">novo</span></span><div class="dest-rows">' + dests + '</div></div>' +
+      '<div class="ap-step"><span class="label-caps"><span class="ap-n">3</span>Confirmação</span>' +
+      '<label class="ack' + (S.ack ? ' on' : '') + '" data-need="ack"><input type="checkbox" data-ack' + (S.ack ? ' checked' : '') + '><span>Revisei itens, riscos e destino. O que for <b>Definitivo</b> não pode ser desfeito.</span></label></div>' +
+      '<p class="small muted ap-msg" aria-live="polite">' + (reason ? icon('info', 14) + ' ' + reason : icon('check', 14, 2.4) + ' Pronto para aprovar.') + '</p>' +
+      '</div></section>' +
+      '<section class="card"><div class="card-head"><h2>Itens por tier</h2><div class="actions"><span class="small muted">ordem de execução: A → C → D</span></div></div><div class="grps">' + groups + '</div></section>';
+  }
+
+  /* ---------- 2 · Artefatos de projeto ---------- */
+  function fProjects() {
+    var rows = PROJ.map(function (p) {
+      var stale = p.days >= S.age && !p.active && !p.warn;
+      var blocked = p.active ? 'projeto aberto hoje' : p.warn ? 'alterações não commitadas' : '';
+      var cls = blocked ? 'blocked' : stale ? 'sel' : '';
+      return '<tr class="' + cls + '"><td><input type="checkbox"' + (blocked ? ' disabled' : stale ? ' checked' : '') + ' aria-label="' + esc(p.name) + '"></td>' +
+        '<td>' + esc(p.name) + '<span class="path">' + esc(p.art) + '</span></td>' +
+        '<td class="num">' + fmt(p.gb, 1) + '</td>' +
+        '<td class="small">' + (p.days ? 'há ' + p.days + ' dias' : 'hoje') + '</td>' +
+        '<td>' + (blocked ? pill('warn', 'bloqueado: ' + blocked) : '<span class="small muted">' + esc(p.git) + '</span>') + '</td></tr>';
+    }).join('');
+    var sel = PROJ.filter(function (p) { return p.days >= S.age && !p.active && !p.warn; });
+    var opts = [30, 90, 180, 365].map(function (d) { return '<option value="' + d + '"' + (S.age === d ? ' selected' : '') + '>Inativos há ≥ ' + d + ' dias</option>'; }).join('');
+    return head('Etapa 2 de 5 · somente leitura', 'Classificação dos candidatos', '<button type="button" class="btn">Reclassificar</button><button type="button" class="btn btn-primary ready">Montar plano ' + ARROW + '</button>') +
+      spec('<b>2 · Artefatos de projeto por idade</b><ul><li>Referência: npkill (9,7k ★) e kondo (2,6k ★). Hoje o tier C só cobre caches globais (Gradle, Maven, Hugging Face).</li><li>Regra nova no catálogo: <span class="mono">kind = "project"</span> com marcadores (<span class="mono">package.json</span>, <span class="mono">Cargo.toml</span>, <span class="mono">pyproject.toml</span>…) e <span class="mono">min_age_days</span>.</li><li>A idade é a modificação mais recente fora do artefato. Projeto com alterações não commitadas ou aberto hoje fica <b>bloqueado</b>, não só desmarcado.</li><li>O filtro de idade fica no cabeçalho da tabela que ele filtra.</li></ul>') +
+      '<div class="grid-aside fx-in">' +
+      '<section class="card is-new" aria-label="Candidatos por tier"><div class="tabs" role="tablist">' +
+      '<button type="button" class="tab" role="tab" aria-selected="false">' + tier('A') + 'Cache<span class="count">9</span></button>' +
+      '<button type="button" class="tab" role="tab" aria-selected="false">' + tier('B') + 'Desinstalar<span class="count">2</span></button>' +
+      '<button type="button" class="tab" role="tab" aria-selected="true">' + tier('C') + 'Regeneráveis<span class="count">' + (PROJ.length + 4) + '</span></button>' +
+      '<button type="button" class="tab" role="tab" aria-selected="false">' + tier('D') + 'Sistema<span class="count">1</span></button>' +
+      '<button type="button" class="tab" role="tab" aria-selected="false">Exclusões<span class="count">14</span></button></div>' +
+      '<div class="tab-panel"><div class="card-head"><p class="small muted"><b style="color:var(--text)">Projetos</b> <span class="tag-new">novo</span> · ' + PROJ.length + ' encontrados em <span class="mono">D:\\dev</span>. Custo: reinstalar dependências no próximo build.</p>' +
+      '<div class="field"><select class="select" data-age aria-label="Idade mínima">' + opts + '</select></div></div>' +
+      '<div class="table-wrap"><table><thead><tr><th><span class="sr-only">Selecionar</span></th><th>Projeto</th><th class="num">GB</th><th>Última atividade</th><th>Observação</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<details><summary>Caches globais do tier C (4)</summary><ul class="checklist small"><li><span class="mono">gradle-caches</span><span class="muted">9,8 GB</span></li><li><span class="mono">maven-repository</span><span class="muted">3,1 GB</span></li><li><span class="mono">huggingface-cache</span><span class="muted">12,4 GB</span></li><li><span class="mono">nvidia-ngx-models</span><span class="muted">2,2 GB</span></li></ul></details></div></section>' +
+      '<aside><section class="card"><h2>Seleção</h2><div class="kv">' + tier('C', true) + '<span><span class="small muted">' + sel.length + ' projetos</span> · <span class="num">' + gb(sum(sel)) + '</span></span></div>' +
+      '<div class="divider"></div><p class="small muted">Inativos há menos de ' + S.age + ' dias aparecem, mas começam desmarcados.</p></section></aside></div>';
+  }
+
+  /* ---------- 3 · Treemap ---------- */
+  function node() { var n = TREE; S.tm.forEach(function (i) { n = n.kids[i]; }); return n; }
+  function squarify(items, x, y, w, h) {
+    var out = [], rest = items.slice(), total = sum(rest);
+    var scale = (w * h) / total;
+    rest = rest.map(function (it, i) { return { it: it, i: it._i, a: it.gb * scale }; });
+    function worst(row, side) {
+      var s = row.reduce(function (a, r) { return a + r.a; }, 0), mx = 0, mn = Infinity;
+      row.forEach(function (r) { mx = Math.max(mx, r.a); mn = Math.min(mn, r.a); });
+      return Math.max(side * side * mx / (s * s), (s * s) / (side * side * mn));
+    }
+    var row = [];
+    while (rest.length) {
+      var side = Math.min(w, h), c = rest[0];
+      if (!row.length || worst(row.concat([c]), side) <= worst(row, side)) { row.push(rest.shift()); continue; }
+      lay();
+    }
+    if (row.length) lay();
+    function lay() {
+      var s = row.reduce(function (a, r) { return a + r.a; }, 0);
+      if (w >= h) { var cw = s / h, cy = y; row.forEach(function (r) { var ch = r.a / cw; out.push({ it: r.it, x: x, y: cy, w: cw, h: ch }); cy += ch; }); x += cw; w -= cw; }
+      else { var rh = s / w, cx = x; row.forEach(function (r) { var rw = r.a / rh; out.push({ it: r.it, x: cx, y: y, w: rw, h: rh }); cx += rw; }); y += rh; h -= rh; }
+      row = [];
+    }
+    return out;
+  }
+  function candSum(n) {
+    var o = { A: 0, C: 0, D: 0, total: 0 };
+    (function walk(x) { if (x.cand) { o[x.cand] += x.gb; o.total += x.gb; } else if (x.kids) x.kids.forEach(walk); })(n);
+    return o;
+  }
+  function fTreemap() {
+    var n = node(), path = [TREE.name], cur = TREE;
+    S.tm.forEach(function (i) { cur = cur.kids[i]; path.push(cur.name); });
+    var kids = n.kids.map(function (k, i) { k._i = i; return k; }).slice().sort(function (a, b) { return b.gb - a.gb; });
+    var cells = squarify(kids, 0, 0, 100, 100).map(function (r, j) {
+      var k = r.it, small = r.w < 8 || r.h < 14, cs = candSum(k), cls = 'tm-cell' + (k.kids ? '' : ' leaf') + (k.cand ? ' cand' : '') + (k.cloud ? ' cloud' : '');
+      return '<button type="button" class="' + cls + '" ' + (k.kids ? 'data-tm="' + k._i + '"' : 'tabindex="-1"') + (k.cand ? ' data-tier="' + k.cand + '" style="--tc:var(--t' + k.cand + ');' : ' style="') +
+        'left:' + r.x + '%;top:' + r.y + '%;width:' + r.w + '%;height:' + r.h + '%;animation-delay:' + (j * 0.025) + 's" title="' + esc(k.name) + ' · ' + gb(k.gb) + (k.cloud ? ' lógicos (placeholders)' : '') + '">' +
+        (small ? '' : '<b>' + esc(k.name) + '</b><span class="num">' + gb(k.gb) + (k.cloud ? ' lógicos' : '') + '</span>' + (k.kids && cs.total ? '<span class="small muted">' + gb(cs.total) + ' em candidatos</span>' : '')) +
+        (k.kids && cs.total ? '<span class="tm-strip" aria-hidden="true">' + ['A', 'C', 'D'].filter(function (t) { return cs[t]; }).map(function (t) { return '<i style="flex:' + cs[t] + ';background:var(--t' + t + ')"></i>'; }).join('') + '<i style="flex:' + (k.gb - cs.total) + ';background:transparent"></i></span>' : '') + '</button>';
+    }).join('');
+    var crumbs = path.map(function (p, i) { return (i ? icon('chevron', 12) : '') + '<button type="button" data-crumb="' + i + '">' + esc(p) + '</button>'; }).join('');
+    return head('Etapa 1 de 5 · somente leitura', 'Varredura do volume', '<button type="button" class="btn">Nova varredura</button><button type="button" class="btn btn-primary ready">Classificar candidatos ' + ARROW + '</button>') +
+      spec('<b>3 · Treemap da varredura</b><ul><li>Referência: WinDirStat (4,6k ★), SquirrelDisk (2,4k ★, também Tauri) e dust (12,8k ★).</li><li>Área proporcional ao tamanho; clique entra na pasta, a trilha volta. Neutro por padrão: cor só onde há candidato, na cor do tier (o system design reserva cor para estado e categoria).</li><li>Nuvem aparece hachurada com o tamanho <b>lógico</b>, para 52 GB de placeholders não parecerem 52 GB no disco.</li><li>Custo: hoje a agregação para no segundo nível. A árvore precisa guardar só os N maiores filhos por nó para não estourar memória.</li></ul>') +
+      '<section class="kpis">' +
+      '<div class="kpi"><span class="small muted">Usado</span><span class="value">412,0 GB</span><span class="small muted">de 476,0 GB</span></div>' +
+      '<div class="kpi"><span class="small muted">Livre</span><span class="value">64,0 GB</span><span class="small muted">13%</span></div>' +
+      '<div class="kpi"><span class="small muted">Candidatos no mapa</span><span class="value">7</span><span class="small muted">classificar para detalhar</span></div>' +
+      '<div class="kpi"><span class="small muted">Nuvem (lógico × real)</span><span class="value">52,0 GB</span><span class="small muted">3,4 GB no disco</span></div></section>' +
+      '<section class="card is-new"><div class="card-head"><div class="tm-crumbs" aria-label="Caminho">' + crumbs + '</div><span class="small muted mono">' + gb(n.gb) + ' · ' + n.kids.length + ' itens</span></div>' +
+      '<div class="tm" id="tm">' + cells + '</div>' +
+      '<div class="legend-row"><span><i class="sw" style="background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--border-strong)"></i>pasta</span>' +
+      ['A', 'C', 'D'].map(function (t) { return '<span><i class="sw" style="background:var(--t' + t + ')"></i>candidato ' + t + ' · ' + TIERS[t] + '</span>'; }).join('') +
+      '<span><i class="sw" style="background:repeating-linear-gradient(135deg,var(--surface-2) 0 3px,var(--muted) 3px 4px)"></i>nuvem (lógico)</span></div></section>';
+  }
+
+  /* ---------- 4 · Arquivos grandes ---------- */
+  function fBig() {
+    var list = BIG.filter(function (b) { return b.gb >= S.big; }).sort(function (a, b) { return b.gb - a.gb; });
+    var rows = list.map(function (b, i) {
+      var on = !!S.bigSel[b.name];
+      return '<tr class="' + (b.blocked ? 'blocked' : on ? 'sel' : '') + '"><td><input type="checkbox" data-big="' + esc(b.name) + '"' + (b.blocked ? ' disabled' : on ? ' checked' : '') + ' aria-label="' + esc(b.name) + '"></td>' +
+        '<td>' + esc(b.name) + '<span class="path">' + esc(b.path) + '</span></td><td class="num">' + fmt(b.gb, 1) + '</td><td class="small">' + b.kind + '</td><td class="small">' + b.acc + '</td>' +
+        '<td>' + (b.blocked ? pill('warn', 'bloqueado: ' + b.blocked) : pill('info', 'Lixeira')) + '</td></tr>';
+    }).join('');
+    var picked = BIG.filter(function (b) { return S.bigSel[b.name] && !b.blocked; });
+    var opts = [0.5, 1, 2, 5].map(function (v) { return '<option value="' + v + '"' + (S.big === v ? ' selected' : '') + '>≥ ' + fmt(v, v < 1 ? 1 : 0) + ' GB</option>'; }).join('');
+    return head('Etapa 2 de 5 · somente leitura', 'Classificação dos candidatos', '<button type="button" class="btn">Reclassificar</button><button type="button" class="btn btn-primary' + (picked.length ? ' ready' : '') + '">Montar plano ' + ARROW + '</button>') +
+      spec('<b>4 · Arquivos grandes e antigos</b><ul><li>Referência: Skiff, Mole analyze, WinDirStat. O walker já passa por todos os arquivos: basta um heap limitado com os N maiores.</li><li>Entra como <b>tier D</b> e é dado do usuário: <b>nunca vem marcado</b>, sempre vai para a Lixeira e não aceita "marcar tier inteiro".</li><li>Arquivos do sistema (<span class="mono">pagefile.sys</span>, <span class="mono">hiberfil.sys</span>) aparecem para explicar o espaço, mas bloqueados.</li></ul>') +
+            '<div class="grid-aside fx-in"><section class="card is-new"><div class="tabs" role="tablist">' +
+      '<button type="button" class="tab" role="tab" aria-selected="false">' + tier('A') + 'Cache<span class="count">9</span></button>' +
+      '<button type="button" class="tab" role="tab" aria-selected="false">' + tier('C') + 'Regeneráveis<span class="count">11</span></button>' +
+      '<button type="button" class="tab" role="tab" aria-selected="true">' + tier('D') + 'Arquivos grandes <span class="tag-new">novo</span><span class="count">' + list.length + '</span></button>' +
+      '<button type="button" class="tab" role="tab" aria-selected="false">Exclusões<span class="count">14</span></button></div>' +
+      '<div class="tab-panel"><div class="card-head"><p class="small muted">Os maiores arquivos do volume. Grande e antigo não quer dizer descartável: nada vem marcado e o destino é sempre a Lixeira.</p><div class="field"><label class="small muted" for="big-min">Tamanho mínimo</label><select id="big-min" class="select" data-bigmin>' + opts + '</select></div></div>' +
+      '<div class="table-wrap"><table><thead><tr><th><span class="sr-only">Selecionar</span></th><th>Arquivo</th><th class="num">GB</th><th>Tipo</th><th>Último acesso</th><th>Destino</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></section>' +
+      '<aside><section class="card"><h2>Seleção</h2><div class="kv"><span>' + tier('D') + ' Arquivos grandes</span><span><span class="small muted">' + picked.length + (picked.length === 1 ? ' arquivo' : ' arquivos') + '</span> · <span class="num">' + gb(sum(picked)) + '</span></span></div><div class="divider"></div>' +
+      (picked.length ? '<p class="small muted">' + icon('trash', 13) + ' Vão para a Lixeira: libera ao esvaziar.</p>' : '<p class="small muted">Marque o que reconhece e não precisa mais.</p>') + '</section></aside></div>';
+  }
+
+  /* ---------- 5 · Duplicados ---------- */
+  var dupTimer = null;
+  function fDups() {
+    var stages = [['Tamanho igual', '1.284 grupos', '18.402 arquivos'], ['Hash parcial (4 KB)', '96 grupos', 'início + fim'], ['BLAKE3 completo', '31 grupos', '42,6 GB lidos'], ['Byte a byte', '3 grupos', 'confirmados']];
+    var step = { idle: -1, s0: 0, s1: 1, s2: 2, s3: 3, done: 4 }[S.dup];
+    var pipe = '<div class="pipe">' + stages.map(function (s, i) {
+      var st = step > i ? 'ok' : step === i ? 'on' : '';
+      return '<div class="pipe-st ' + st + '"><span class="label-caps">' + (i + 1) + ' · ' + s[0] + '</span>' +
+        (step > i ? '<span class="v">' + s[1] + '</span><span class="small muted">' + s[2] + '</span>' : step === i ? '<span class="v muted">…</span><div class="indet"></div>' : '<span class="v muted">—</span><span class="small muted">aguardando</span>') + '</div>';
+    }).join('') + '</div>';
+    var groups = '';
+    if (S.dup === 'done') {
+      groups = '<div class="grps fx-in">' + DUPS.map(function (g) {
+        var open = !!S.dupOpen[g.id], keep = S.keep[g.id] == null ? 0 : S.keep[g.id], rec = g.gb * (g.files.length - 1);
+        return '<div class="grp" data-open="' + open + '"><button type="button" class="grp-head" data-dupg="' + g.id + '" aria-expanded="' + open + '">' + icon('copy', 15) +
+          '<span class="gi-name" style="font-weight:600">' + esc(g.name) + '</span><span class="small muted">' + g.files.length + ' cópias · ' + gb(g.gb) + ' cada</span>' +
+          (g.cloud != null ? pill('neutral', '1 cópia na nuvem') : '') + '<span style="flex:1"></span>' +
+          '<span class="num">' + gb(rec) + ' recuperáveis</span><span class="chev">' + icon('chevdown', 14) + '</span></button>' +
+          '<div class="grp-body"><div><ul class="grp-items">' + g.files.map(function (f, i) {
+            return '<li class="' + (keep === i ? 'kept' : '') + '"><span class="gi-name">' + esc(f.split('\\').slice(-2).join('\\')) + '<span class="gi-path">' + esc(f) + '</span></span>' +
+              '<label class="keep"><input type="radio" name="k-' + g.id + '" data-keep="' + g.id + ':' + i + '"' + (keep === i ? ' checked' : '') + '>manter esta</label>' +
+              (keep === i ? pill('ok', 'fica') : pill('info', 'Lixeira')) + '<span class="num">' + fmt(g.gb, 2) + '</span></li>';
+          }).join('') + '</ul></div></div></div>';
+      }).join('') + '</div>';
+    }
+    var action = S.dup === 'idle' ? '<button type="button" class="btn btn-primary ready" data-act="dup-run">Procurar duplicados</button>'
+      : S.dup === 'done' ? '<button type="button" class="btn" data-act="dup-reset">Refazer</button><button type="button" class="btn btn-primary ready">Adicionar ao plano ' + ARROW + '</button>'
+      : '<button type="button" class="btn btn-primary" disabled><span class="spin-ring" aria-hidden="true"></span>Comparando…</button>';
+    var total = DUPS.reduce(function (a, g) { return a + g.gb * (g.files.length - 1); }, 0);
+    return head('Etapa 2 de 5 · leitura de conteúdo', 'Duplicados', action) +
+      spec('<b>5 · Duplicados</b><ul><li>Referência: czkawka (35,6k ★), Skiff, WinDirStat.</li><li>Opcional e separado da varredura, porque lê o conteúdo dos arquivos (I/O alto). As 4 etapas mostram o que já foi medido; sem percentual inventado.</li><li>Cada grupo mantém uma cópia (a mais antiga, ou a que está fora de pasta de nuvem); as demais vão para a Lixeira, nunca definitivo.</li><li>Só arquivos comuns dentro do perfil e das pastas escolhidas; links e junções são ignorados.</li></ul>') +
+      '<section class="card is-new" aria-live="polite"><div class="card-head"><h2>Comparação em 4 etapas</h2><span class="small muted">' +
+      (S.dup === 'done' ? '3 grupos confirmados · ' + gb(total) + ' recuperáveis' : 'Perfil do usuário e D:\\ · arquivos ≥ 1 MB') + '</span></div>' + pipe + '</section>' +
+      (S.dup === 'done' ? '<section class="card"><div class="card-head"><h2>Grupos confirmados</h2><span class="small muted">escolha qual cópia fica</span></div>' + groups + '</section>'
+        : S.dup === 'idle' ? '<div class="card empty"><span class="empty-ico" aria-hidden="true">' + icon('copy', 28, 1.5) + '</span><h2>Nenhuma comparação ainda</h2><p class="muted">Agrupa por tamanho, confere um trecho, calcula o hash completo e confirma byte a byte. Só lê: nada muda no disco até o plano ser aprovado.</p></div>' : '');
+  }
+  function runDups() {
+    var order = ['s0', 's1', 's2', 's3', 'done'], i = 0;
+    S.dup = order[0]; render(true); busy('Comparando duplicados…');
+    clearInterval(dupTimer);
+    dupTimer = setInterval(function () {
+      i++; S.dup = order[i]; render(true);
+      if (S.dup === 'done') { clearInterval(dupTimer); busy(null); toast('3 grupos de duplicados confirmados'); }
+    }, reduce ? 200 : 900);
+  }
+
+  /* ---------- 6 · Regras e perfis ---------- */
+  function fRules() {
+    var profs = [['node', 'Node.js', 'node_modules, .next, .turbo'], ['rust', 'Rust', 'target, ~/.cargo/registry/cache'], ['games', 'Jogos', 'shader caches, logs de launcher'], ['media', 'Vídeo e foto', 'proxies, caches de render']];
+    var rules = [['r1', 'Downloads do Teams antigos', '%APPDATA%\\Microsoft\\Teams\\Service Worker\\CacheStorage', 'A', '1,2 GB'], ['r2', 'Builds do Unity', 'D:\\unity\\**\\Library', 'C', '6,8 GB'], ['r3', 'Logs do servidor local', 'D:\\srv\\logs', 'A', '0,4 GB']];
+    return head('Configurações', 'Regras e perfis', '<button type="button" class="btn">' + icon('upload', 15) + 'Importar</button><button type="button" class="btn">' + icon('download', 15) + 'Exportar</button>') +
+      spec('<b>6 · Perfis e regras do usuário</b><ul><li>Referência: perfis e <span class="mono">.npkillrc</span> do npkill; definições de limpeza do BleachBit (CleanerML).</li><li>Perfis ligam conjuntos prontos de regras do catálogo. Regras próprias ficam em <span class="mono">user-rules.toml</span> e passam pelo mesmo parser do catálogo.</li><li>A invariante continua: regra do usuário pode <b>ampliar</b> as exclusões, nunca reduzir a base. A tentativa vira erro na própria linha, antes de salvar.</li></ul>') +
+      '<div class="grid-2 fx-in">' +
+      '<section class="card is-new"><div class="card-head"><h2>Perfis</h2><span class="small muted">o que você costuma ter no disco</span></div>' +
+      profs.map(function (p) { return '<div class="set-row"><span class="gi-name">' + p[1] + '<span class="gi-path">' + p[2] + '</span></span>' + sw(S.prof[p[0]]) + '</div>'; }).join('') + '</section>' +
+      '<section class="card is-new"><div class="card-head"><h2>Regras próprias</h2><span class="mono small muted">user-rules.toml</span></div>' +
+      rules.map(function (r) { return '<div class="set-row"><span class="gi-name">' + r[1] + '<span class="gi-path">' + esc(r[2]) + '</span></span>' + tier(r[3]) + '<span class="num small">' + r[4] + '</span>' + sw(S.rules[r[0]]) + '</div>'; }).join('') +
+      '<div class="divider"></div><label class="small muted" for="nr">Nova regra · caminho</label>' +
+      '<div class="field"><input id="nr" class="select mono" style="flex:1;min-width:0" value="' + (S.ruleErr ? 'C:\\Windows\\Installer' : '') + '" placeholder="%LOCALAPPDATA%\\MeuApp\\Cache"><select class="select" aria-label="Tier"><option>A · Cache</option><option>C · Regeneráveis</option></select><button type="button" class="btn" data-act="rule-add">Adicionar</button></div>' +
+      (S.ruleErr ? '<p class="err-line fx-in">' + icon('warn', 14) + '<span><span class="mono">C:\\Windows\\Installer</span> é exclusão obrigatória do sistema. Regras próprias só podem ampliar as exclusões.</span></p>' : '<p class="small muted">Teste: tente adicionar uma pasta protegida.</p>') +
+      '</section></div>';
+  }
+
+  /* ---------- 7 · Linha de comando ---------- */
+  function fCli() {
+    var t = '<span class="p">PS&gt; </span>disk-cleanup survey C:\\ --depth 2\n' +
+      '<span class="c">  412,0 GB usados · 64,0 GB livres · 1.284.402 arquivos em 38 s</span>\n' +
+      '<span class="p">PS&gt; </span>disk-cleanup classify --out plan.json\n' +
+      '<span class="c">  </span><span class="tA">A</span><span class="c"> Cache        9 itens   26,3 GB</span>\n' +
+      '<span class="c">  </span><span class="tC">C</span><span class="c"> Regeneráveis 11 itens  41,9 GB   (3 bloqueados)</span>\n' +
+      '<span class="c">  plan.json gravado · nada foi alterado</span>\n' +
+      '<span class="p">PS&gt; </span>disk-cleanup execute --plan plan.json\n' +
+      '<span class="err">  erro: plano não aprovado. Use --approve &lt;tiers&gt; e --yes.</span>\n' +
+      '<span class="p">PS&gt; </span>disk-cleanup execute --plan plan.json --approve A --yes\n' +
+      '<span class="c">  tier A · 9/9 · </span><span class="ok">+25,8 GB</span><span class="c"> medidos (26,3 estimados) · 1 pendente: arquivo em uso</span>\n' +
+      '<span class="p">PS&gt; </span>disk-cleanup report --last --format md &gt; limpeza.md';
+    return head('Configurações', 'Linha de comando', '') +
+      spec('<b>7 · CLI sem interface</b><ul><li>Referência: Mole e Skiff têm CLI; kondo, npkill, dua e gdu são só CLI.</li><li>Novo ponto de montagem que reusa <span class="mono">application</span>, sem duplicar regra. <span class="mono">ExecuteService</span> continua aceitando só <span class="mono">ApprovedPlan</span>: a aprovação vira <span class="mono">--approve &lt;tiers&gt; --yes</span>, sem nenhum padrão implícito.</li><li>Saída com <span class="mono">--json</span> para scripts e CI; o <span class="mono">plan.json</span> é o mesmo do app.</li></ul>') +
+      '<div class="grid-aside fx-in"><section class="card is-new"><div class="card-head"><h2>Exemplo de sessão</h2><button type="button" class="btn" data-toast="Copiado (simulado)">' + icon('copy', 14) + 'Copiar</button></div><pre class="term" aria-label="Exemplo de sessão no terminal">' + t + '</pre></section>' +
+      '<aside><section class="card"><h2>Instalação</h2>' +
+      '<div class="set-row"><span class="gi-name">Adicionar <span class="mono">disk-cleanup</span> ao PATH<span class="gi-path">%LOCALAPPDATA%\\Programs\\disk-cleanup\\bin</span></span>' + sw(S.cli) + '</div>' +
+      '<div class="set-row"><span class="gi-name">Mesmo catálogo e exclusões do app<span class="gi-path">inclui as pastas protegidas destas Configurações</span></span>' + pill('ok', 'sempre') + '</div>' +
+      '<p class="small muted">Sem <span class="mono">--approve</span> nada é removido; <span class="mono">--dry-run</span> mostra o que rodaria.</p></section></aside></div>';
+  }
+
+  /* ---------- 8 · Docker e WSL ---------- */
+  function fContainers() {
+    var rows = CONT.map(function (c) {
+      return '<tr class="' + (c.blocked ? 'blocked' : '') + '"><td><input type="checkbox"' + (c.blocked ? ' disabled' : c.t === 'A' ? ' checked' : '') + ' aria-label="' + esc(c.label) + '"></td>' +
+        '<td>' + esc(c.label) + '<span class="path">' + esc(c.target) + '</span></td><td>' + tier(c.t) + '</td><td class="num">' + fmt(c.gb, 1) + '</td>' +
+        '<td>' + (c.blocked ? pill('warn', 'bloqueado: ' + c.blocked) : '<span class="small muted">' + esc(c.ev) + '</span>' + (c.elev ? '<div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">' + pill('warn', 'requer elevação') + pill('neutral', 'para o WSL antes') + '</div>' : '')) + '</td></tr>';
+    }).join('');
+    return head('Etapa 2 de 5 · somente leitura', 'Classificação dos candidatos', '<button type="button" class="btn">Reclassificar</button><button type="button" class="btn btn-primary ready">Montar plano ' + ARROW + '</button>') +
+      spec('<b>8 · Docker, WSL2 e máquinas virtuais</b><ul><li>Nenhum dos três catálogos tem regra para Docker ou WSL hoje.</li><li>Docker: regras <span class="mono">kind = "command"</span> estimadas pelo próprio <span class="mono">docker system df</span>. Volumes ficam <b>bloqueados</b>: podem guardar bancos e uploads.</li><li>WSL: o <span class="mono">ext4.vhdx</span> não encolhe sozinho. A estimativa é tamanho do arquivo menos o uso interno. Compactar exige desligar o WSL e elevação, então depende do helper elevado que já está no roadmap.</li><li>Se o Docker não estiver instalado ou rodando, a regra aparece em "Regras sem candidato" com o motivo.</li></ul>') +
+      '<section class="card is-new fx-in"><div class="card-head"><h2>' + icon('box', 16) + ' Contêineres e VMs <span class="tag-new">novo</span></h2><span class="small muted">Docker 28.5 · WSL 2.6 · 1 distribuição</span></div>' +
+      '<div class="table-wrap"><table><thead><tr><th><span class="sr-only">Selecionar</span></th><th>Item</th><th>Tier</th><th class="num">GB</th><th>Evidência</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<p class="small warn-line">' + icon('warn', 14) + ' Compactar disco virtual é operação longa; o app fecha as distribuições do WSL e o Docker Desktop antes, com aviso no passo da Execução.</p></section>';
+  }
+
+  /* ---------- 9 · Sobras de apps ---------- */
+  function fOrphans() {
+    var CONF = { h: 'alta', m: 'média', l: 'baixa' };
+    var rows = ORPH.map(function (o) {
+      return '<tr class="' + (o.blocked ? 'blocked' : '') + '"><td><input type="checkbox"' + (o.blocked ? ' disabled' : '') + ' aria-label="' + esc(o.label) + '"></td>' +
+        '<td>' + esc(o.label) + '<span class="path">' + esc(o.path) + '</span></td><td class="num">' + fmt(o.gb, 1) + '</td>' +
+        '<td class="small">' + (o.blocked ? '—' : '<span class="conf ' + o.conf + '" aria-hidden="true"><i></i><i></i><i></i></span> ' + CONF[o.conf]) + '</td>' +
+        '<td>' + (o.blocked ? pill('warn', 'bloqueado: ' + o.blocked) : '<ul class="checklist small" style="margin:0">' + o.ev.map(function (e) { return '<li><span class="muted">' + esc(e) + '</span></li>'; }).join('') + '</ul>') + '</td></tr>';
+    }).join('');
+    var ok = ORPH.filter(function (o) { return !o.blocked; });
+    return head('Etapa 2 de 5 · somente leitura', 'Classificação dos candidatos', '<button type="button" class="btn">Reclassificar</button><button type="button" class="btn btn-primary">Montar plano ' + ARROW + '</button>') +
+      spec('<b>9 · Sobras de apps desinstalados</b><ul><li>Referência: Pearcleaner (15,2k ★) e o uninstall do Mole (76,4k ★). Diferente do tier B, que desinstala o que <b>está</b> instalado.</li><li>Pasta em <span class="mono">AppData</span> / <span class="mono">~/Library</span> sem programa registrado correspondente. O vínculo pasta ↔ app é heurístico: por isso cada linha mostra a <b>evidência</b> e a confiança, e nada vem marcado.</li><li>App ainda instalado bloqueia a pasta. Destino sempre Lixeira.</li></ul>') +
+      '<div class="grid-aside fx-in"><section class="card is-new"><div class="tabs" role="tablist">' +
+      '<button type="button" class="tab" role="tab" aria-selected="false">' + tier('A') + 'Cache<span class="count">9</span></button>' +
+      '<button type="button" class="tab" role="tab" aria-selected="false">' + tier('B') + 'Desinstalar<span class="count">2</span></button>' +
+      '<button type="button" class="tab" role="tab" aria-selected="true">' + tier('D') + 'Sobras de apps <span class="tag-new">novo</span><span class="count">' + ORPH.length + '</span></button>' +
+      '<button type="button" class="tab" role="tab" aria-selected="false">Exclusões<span class="count">14</span></button></div>' +
+      '<div class="tab-panel"><div class="card-head"><p class="small muted">Revisão manual. Confiança = quanto a evidência sustenta que o app não existe mais.</p></div>' +
+      '<div class="table-wrap"><table><thead><tr><th><span class="sr-only">Selecionar</span></th><th>Pasta</th><th class="num">GB</th><th>Confiança</th><th>Evidência</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></section>' +
+      '<aside><section class="card"><h2>Sobras encontradas</h2><div class="kv"><span class="small muted">Possíveis sobras</span><span class="num">' + gb(sum(ok)) + '</span></div><div class="kv"><span class="small muted">Confiança alta</span><span class="num">' + gb(sum(ok.filter(function (o) { return o.conf === 'h'; }))) + '</span></div><div class="divider"></div><p class="small muted">Nenhuma vem marcada. Destino: Lixeira.</p></section></aside></div>';
+  }
+
+  /* ---------- 10 · Monitoramento ---------- */
+  function fMonitor() {
+    var thr = [10, 15, 25, 50].map(function (v) { return '<option value="' + v + '"' + (S.mon.thr === v ? ' selected' : '') + '>abaixo de ' + v + ' GB</option>'; }).join('');
+    var sch = [['off', 'Desligado'], ['daily', 'Diária · 09:00'], ['weekly', 'Semanal · domingo 09:00'], ['monthly', 'Mensal · dia 1']].map(function (o) { return '<option value="' + o[0] + '"' + (S.mon.sched === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('');
+    return head('Configurações', 'Monitoramento', '') +
+      spec('<b>10 · Bandeja, alerta de pouco espaço e varredura agendada</b><ul><li>Referência: Skiff fica na bandeja; Mole tem status ao vivo.</li><li>A varredura agendada é <b>somente leitura</b> e vira um registro no Histórico; a comparação entre varreduras já existe (<span class="mono">compareSnapshots</span>).</li><li>Nada é executado sozinho: a notificação só abre o app na Classificação. A aprovação explícita continua obrigatória.</li><li>A barra de status mostra a próxima varredura agendada.</li></ul>') +
+      '<div class="grid-2 fx-in"><section class="card is-new"><h2>Em segundo plano</h2>' +
+      '<div class="set-row"><span class="gi-name">Ícone na bandeja<span class="gi-path">fechar a janela mantém o app na bandeja</span></span><span class="switch"><input type="checkbox" data-mon="tray"' + (S.mon.tray ? ' checked' : '') + '><i></i></span></div>' +
+      '<div class="set-row"><span class="gi-name">Avisar quando o espaço livre ficar<span class="gi-path">checado a cada 10 min, sem varrer</span></span><select class="select" data-thr>' + thr + '</select></div>' +
+      '<div class="set-row"><span class="gi-name">Varredura agendada<span class="gi-path">somente leitura · entra no Histórico</span></span><select class="select" data-sched>' + sch + '</select></div>' +
+      '<div class="set-row"><span class="gi-name">Executar limpeza automaticamente</span>' + pill('neutral', 'nunca · exige aprovação', false) + '</div></section>' +
+      '<section class="card"><h2>Como aparece</h2><div class="previews">' +
+      '<div class="os-notif" role="img" aria-label="Exemplo de notificação"><span class="ico">' + icon('bell', 16) + '</span><span style="display:flex;flex-direction:column;gap:2px"><b style="font-size:13px">Pouco espaço em C:\\</b><span class="small muted">' + fmt(S.mon.thr - 2.6, 1) + ' GB livres (limite ' + S.mon.thr + ' GB). Desde domingo: +6,2 GB em %LOCALAPPDATA%\\Docker.</span><span class="small" style="color:var(--info)">Abrir Classificação</span></span></div>' +
+      (S.mon.tray ? '<div class="tray-menu fx-in" role="img" aria-label="Exemplo do menu da bandeja"><div class="h"><span class="small muted">C:\\ · ' + fmt(S.mon.thr - 2.6, 1) + ' GB livres de 476,0 GB</span><div class="meter"><span style="width:' + (100 - (S.mon.thr - 2.6) / 4.76).toFixed(1) + '%;background:var(--warn)"></span></div></div><button type="button">Abrir Disk Cleanup</button><button type="button">Varrer agora (somente leitura)</button><button type="button">Última varredura: dom 09:00</button><button type="button">Sair</button></div>' : '') +
+      '</div></section></div>';
+  }
+
+  /* ================= Moldura e render ================= */
+  function busy(txt) {
+    var sb = document.getElementById('sb');
+    sb.classList.toggle('busy', !!txt);
+    document.getElementById('sb-bar').hidden = !txt;
+    document.getElementById('sb-state').textContent = txt || 'Pronto';
+  }
+  function renderFlow(f) {
+    var el = document.getElementById('flow');
+    el.hidden = f.sec !== 'cleanup';
+    if (el.hidden) return;
+    el.innerHTML = STEPS.map(function (s, i) {
+      var n = i + 1, cur = n === f.step, done = n < f.step;
+      return (i ? '<span class="flow-sep' + (n <= f.step ? ' on' : '') + '" aria-hidden="true"></span>' : '') +
+        '<span class="flow-step' + (done ? ' done' : '') + (n > f.step + 1 ? ' locked' : '') + '"' + (cur ? ' aria-current="page"' : '') + '><span class="step-num">' +
+        (done ? icon('check', 12, 3) : n > f.step + 1 ? icon('lock', 11, 2.2) : n) + '</span>' + s + '</span>';
+    }).join('');
+  }
+  function render(soft) {
+    var f = F[S.f - 1];
+    document.getElementById('pick').innerHTML = F.map(function (x) {
+      return '<button type="button" data-f="' + x.n + '" aria-pressed="' + (x.n === S.f) + '"><span class="n">' + String(x.n).padStart(2, '0') + '</span>' + x.short + '</button>';
+    }).join('');
+    document.querySelectorAll('#nav a').forEach(function (a) { if (a.getAttribute('data-sec') === f.sec) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    renderFlow(f);
+    var page = document.getElementById('page');
+    var y = window.scrollY;
+    page.innerHTML = f.render();
+    hydrate(page);
+    var ex = document.getElementById('sb-extra');
+    var nextScan = { daily: 'amanhã 09:00', weekly: 'dom 09:00', monthly: 'dia 1 09:00' }[S.mon.sched];
+    ex.hidden = !(S.f === 10 && nextScan);
+    ex.innerHTML = icon('history', 13) + 'Próxima varredura: ' + (nextScan || '');
+    var pt = document.getElementById('pt'); if (pt) pt.textContent = String(S.f).padStart(2, '0') + ' · ' + f.short;
+    if (soft) window.scrollTo(0, y);
+    try { history.replaceState(null, '', '#' + S.f); } catch (e) {}
+  }
+  function go(n) { clearInterval(dupTimer); if (S.dup !== 'done') S.dup = 'idle'; busy(null); S.f = ((n - 1 + F.length) % F.length) + 1; render(false); window.scrollTo(0, 0); }
+
+  document.addEventListener('click', function (e) {
+    var el;
+    if ((el = e.target.closest('[data-f]'))) return go(+el.getAttribute('data-f'));
+    if ((el = e.target.closest('#nav a'))) { e.preventDefault(); var sec = el.getAttribute('data-sec'); var f = F.filter(function (x) { return x.sec === sec; })[0]; if (f) go(f.n); else toast('Histórico sem mudança nestas propostas'); return; }
+    if ((el = e.target.closest('[data-dest]'))) { var p = el.getAttribute('data-dest').split(':'); S.dest[p[0]] = p[1]; return render(true); }
+    if ((el = e.target.closest('[data-grp]'))) { var g = el.parentNode, o = g.getAttribute('data-open') !== 'true'; g.setAttribute('data-open', String(o)); el.setAttribute('aria-expanded', String(o)); return; }
+    if ((el = e.target.closest('[data-dupg]'))) { var id = el.getAttribute('data-dupg'); S.dupOpen[id] = !S.dupOpen[id]; var b = el.parentNode; b.setAttribute('data-open', String(S.dupOpen[id])); el.setAttribute('aria-expanded', String(S.dupOpen[id])); return; }
+    if ((el = e.target.closest('[data-tm]'))) { S.tm.push(+el.getAttribute('data-tm')); return render(true); }
+    if ((el = e.target.closest('[data-crumb]'))) { S.tm = S.tm.slice(0, +el.getAttribute('data-crumb')); return render(true); }
+    if ((el = e.target.closest('[data-act]'))) {
+      var a = el.getAttribute('data-act');
+      if (a === 'approve') {
+        if (!S.ack) { var need = document.querySelector('[data-need="ack"]'); need.classList.remove('attn'); void need.offsetWidth; need.classList.add('attn'); need.querySelector('input').focus(); return; }
+        toast('Plano aprovado · destino: ' + ['A', 'C', 'D'].map(function (t) { return t + ' ' + (S.dest[t] === 'trash' ? 'Lixeira' : 'definitivo'); }).join(' · '));
+      } else if (a === 'dup-run') runDups();
+      else if (a === 'dup-reset') { S.dup = 'idle'; S.keep = {}; S.dupOpen = {}; render(true); }
+      else if (a === 'rule-add') { S.ruleErr = !S.ruleErr; render(true); }
+      return;
+    }
+    if ((el = e.target.closest('[data-toast]'))) toast(el.getAttribute('data-toast'));
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.hasAttribute('data-ack')) { S.ack = t.checked; render(true); }
+    else if (t.hasAttribute('data-age')) { S.age = +t.value; render(true); }
+    else if (t.hasAttribute('data-bigmin')) { S.big = +t.value; render(true); }
+    else if (t.hasAttribute('data-big')) { S.bigSel[t.getAttribute('data-big')] = t.checked; render(true); }
+    else if (t.hasAttribute('data-keep')) { var p = t.getAttribute('data-keep').split(':'); S.keep[p[0]] = +p[1]; render(true); }
+    else if (t.hasAttribute('data-mon')) { S.mon.tray = t.checked; render(true); }
+    else if (t.hasAttribute('data-thr')) { S.mon.thr = +t.value; render(true); }
+    else if (t.hasAttribute('data-sched')) { S.mon.sched = t.value; render(true); }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.target.closest('input,select,textarea')) return;
+    if (e.key === 'ArrowRight') go(S.f + 1); else if (e.key === 'ArrowLeft') go(S.f - 1);
+  });
+
+  /* Barra do protótipo: índice, anterior/próxima e tema (atalho; no app o tema fica em Configurações). */
+  function protoBar() {
+    var bar = document.createElement('div');
+    bar.className = 'proto-bar'; bar.setAttribute('aria-label', 'Controles do protótipo');
+    bar.innerHTML = '<a href="index.html" title="Todos os protótipos">' + icon('grid', 14) + '</a>' +
+      '<button type="button" id="pv" title="Proposta anterior (←)">' + icon('left', 14, 2) + '</button>' +
+      '<span class="t" id="pt"></span>' +
+      '<button type="button" id="pn" title="Próxima proposta (→)">' + icon('chevron', 14, 2) + '</button><span class="sep"></span>' +
+      '<button type="button" id="pth" title="Atalho do protótipo: no app o tema fica em Configurações"></button>';
+    document.body.appendChild(bar);
+    document.getElementById('pv').onclick = function () { go(S.f - 1); };
+    document.getElementById('pn').onclick = function () { go(S.f + 1); };
+    var th = document.getElementById('pth');
+    function syncTh() { var d = root.getAttribute('data-theme') === 'dark'; th.innerHTML = icon(d ? 'sun' : 'moon', 14) + '<span class="lbl">' + (d ? 'Claro' : 'Escuro') + '</span>'; }
+    th.onclick = function () { var m = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; root.setAttribute('data-theme', m); try { localStorage.setItem('dc-theme-mode', m); } catch (e) {} syncTh(); };
+    syncTh();
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    hydrate(document);
+    protoBar();
+    var h = +(location.hash || '').slice(1);
+    S.f = h >= 1 && h <= F.length ? h : 1;
+    render(false);
+  });
+})();
+</script>
+</body>
+</html>
