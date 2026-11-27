@@ -15,7 +15,7 @@ pub use classify::{
     ClassificationReport, ClassifyService, LargeFileInfo, ProjectInfo, SkipReason, SkippedRule,
 };
 pub use error::AppError;
-pub use execute::{ExecuteService, PlannedStep};
+pub use execute::{protected_paths_guard, ExecuteService, PlannedStep};
 pub use plan::export_plan;
 pub use ports::{
     ActionRunner, CatalogRepository, CommandOutcome, Environment, ExecutionProgress, FileRecord,

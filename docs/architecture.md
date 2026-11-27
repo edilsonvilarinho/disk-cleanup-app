@@ -22,6 +22,14 @@ apps/desktop/src (Vue)  ──IPC──▶  apps/desktop/src-tauri (comandos, DT
 | `infrastructure` | `JwalkFileWalker`, `allocated_size` (Win32/POSIX), `SysinfoVolumeInfo`, `SnapshotEnvironment`, `TomlCatalogRepository`, `SkillPlanJsonCodec`, `platform_exclusions`, `FsProjectFinder` (projetos por marcador, sem seguir link nem descer em artefato ou pasta oculta; idade pela atividade fora dos artefatos e pelo `.git/index`), `FsActionRunner` (remoção best-effort sem seguir link/junção, envio para a Lixeira via `Recycler`/`SystemRecycler` com o crate `trash`, comandos pelo shell da plataforma) | `application`, `domain` |
 | `src-tauri` | `service` (lógica dos comandos, testada) + `dto` (mapeamento camelCase) + `bootstrap` (raiz de composição) | todos |
 
+## Linha de comando (`apps/cli`)
+
+Segunda raiz de composição sobre a mesma `application`, sem regra nova: `survey`, `classify
+[--project-root] [--out plan.json]` e `execute --plan --approve <tiers> [--disposal A=trash] --yes
+[--dry-run]`. Sem `--approve` e `--yes` nada é removido (`approve` continua sendo o único caminho para
+`ApprovedPlan`). A guarda de pastas protegidas (`protected_paths_guard`) é a mesma do desktop. A lógica
+fica em `lib.rs` (testada com portas falsas); `main.rs` só liga os adaptadores e fica fora da cobertura.
+
 ## Frontend (Vue 3 + TypeScript)
 
 | Pasta | Responsabilidade |

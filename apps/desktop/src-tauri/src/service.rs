@@ -314,18 +314,5 @@ pub fn report(session: &Session, volumes: &dyn VolumeInfo) -> Result<ReportDto, 
 
 /// Pastas que nunca podem ser o alvo de uma remoção.
 pub fn safety_guard(env: &dyn Environment) -> SafetyGuard {
-    const PROTECTED_VARS: [&str; 11] = [
-        "USERPROFILE",
-        "HOME",
-        "LOCALAPPDATA",
-        "APPDATA",
-        "ProgramData",
-        "ProgramFiles",
-        "ProgramFiles(x86)",
-        "SystemRoot",
-        "TEMP",
-        "TMP",
-        "TMPDIR",
-    ];
-    SafetyGuard::new(PROTECTED_VARS.iter().filter_map(|v| env.var(v)).collect())
+    disk_cleanup_application::protected_paths_guard(env)
 }

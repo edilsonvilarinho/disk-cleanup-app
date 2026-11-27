@@ -171,6 +171,10 @@ pnpm test
 pnpm coverage                   # falha abaixo de 95%
 pnpm typecheck
 pnpm dev                        # interface no navegador com dados de demonstração
+
+# Linha de comando (mesmo núcleo, aprovação explícita)
+cargo run -p disk-cleanup-cli -- classify --out plan.json
+cargo run -p disk-cleanup-cli -- execute --plan plan.json --approve A --yes --dry-run
 ```
 
 Regenerar as mídias do README (dados de demonstração, gravados com o Edge instalado):

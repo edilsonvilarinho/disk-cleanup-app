@@ -5,7 +5,27 @@ use disk_cleanup_domain::{
     PlanItem, SafetyGuard, SkipCause, Tier, TierRun,
 };
 
-use crate::{ActionRunner, AppError, ExecutionProgress, PortError, VolumeInfo};
+use crate::{ActionRunner, AppError, Environment, ExecutionProgress, PortError, VolumeInfo};
+
+/// Guarda com as pastas que nunca podem ser alvo de remoção (perfil, AppData,
+/// ProgramData, Program Files, SystemRoot, TEMP...), lidas do ambiente.
+/// Usada pelo desktop e pela CLI: a lista mora num lugar só.
+pub fn protected_paths_guard(env: &dyn Environment) -> SafetyGuard {
+    const PROTECTED_VARS: [&str; 11] = [
+        "USERPROFILE",
+        "HOME",
+        "LOCALAPPDATA",
+        "APPDATA",
+        "ProgramData",
+        "ProgramFiles",
+        "ProgramFiles(x86)",
+        "SystemRoot",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+    ];
+    SafetyGuard::new(PROTECTED_VARS.iter().filter_map(|v| env.var(v)).collect())
+}
 
 /// O que um item vai fazer (dry-run): nenhuma ação é executada.
 #[derive(Debug, Clone, PartialEq, Eq)]

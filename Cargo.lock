@@ -755,6 +755,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "disk-cleanup-cli"
+version = "0.1.0"
+dependencies = [
+ "disk-cleanup-application",
+ "disk-cleanup-domain",
+ "disk-cleanup-infrastructure",
+ "tempfile",
+]
+
+[[package]]
 name = "disk-cleanup-desktop"
 version = "0.1.0"
 dependencies = [
