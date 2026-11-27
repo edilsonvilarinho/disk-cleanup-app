@@ -152,3 +152,18 @@ fn safety_guard_refuses_broad_and_protected_targets() {
     assert!(guard.check(r"C:\Users\u\AppData\Local\npm-cache").is_ok());
     assert!(guard.check("/home/u/.cache/pip").is_ok());
 }
+
+/// Alvo que CONTÉM uma pasta protegida também é recusado: remover
+/// `AppData` apagaria `AppData\Local` junto.
+#[test]
+fn safety_guard_refuses_a_target_that_contains_a_protected_folder() {
+    let guard = SafetyGuard::new(vec![r"C:\Users\u\AppData\Local".into()]);
+    assert_eq!(
+        guard.check(r"C:\Users\u\AppData"),
+        Err(disk_cleanup_domain::SafetyViolation::Protected {
+            path: r"C:\Users\u\AppData\Local".into()
+        })
+    );
+    assert!(guard.check(r"C:\Users\u\AppData\LocalLow").is_ok());
+    assert!(guard.check(r"C:\Users\u\AppData\Local\pip").is_ok());
+}

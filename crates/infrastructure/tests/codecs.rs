@@ -365,3 +365,52 @@ fn bundled_rules_never_touch_an_exclusion_after_expansion() {
         }
     }
 }
+
+/// Com a guarda mais estrita (alvo que contém pasta protegida), nenhuma regra
+/// de caminho embutida passa a ser recusada na execução.
+#[test]
+fn bundled_path_rules_pass_the_safety_guard() {
+    use disk_cleanup_application::{expand_template, protected_paths_guard, RuleTarget};
+    use disk_cleanup_infrastructure::SnapshotEnvironment;
+    let env = SnapshotEnvironment::from_pairs(
+        [
+            ("SystemDrive", "C:"),
+            ("SystemRoot", r"C:\Windows"),
+            ("USERPROFILE", r"C:\Users\u"),
+            ("LOCALAPPDATA", r"C:\Users\u\AppData\Local"),
+            ("APPDATA", r"C:\Users\u\AppData\Roaming"),
+            ("ProgramData", r"C:\ProgramData"),
+            ("ProgramFiles", r"C:\Program Files"),
+            ("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+            ("TEMP", r"C:\Users\u\AppData\Local\Temp"),
+            ("TMP", r"C:\Users\u\AppData\Local\Temp"),
+            ("HOME", "/home/u"),
+            ("TMPDIR", "/tmp"),
+        ]
+        .iter()
+        .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+        .collect(),
+    );
+    let guard = protected_paths_guard(&env);
+    for os in ["windows", "linux", "macos"] {
+        for rule in catalog_for(os).unwrap().load().unwrap().rules {
+            let RuleTarget::Path { path } = &rule.target else {
+                continue;
+            };
+            let Ok(path) = expand_template(path, &env) else {
+                continue;
+            };
+            // Conhecido e anterior: `C:\OneDriveTemp` tem 2 segmentos e a guarda
+            // exige 3 (`TooBroad`); o item aparece mas é pulado na execução.
+            if os == "windows" && rule.id == "onedrive-temp" {
+                assert!(guard.check(&path).is_err());
+                continue;
+            }
+            assert!(
+                guard.check(&path).is_ok(),
+                "{os}/{}: {path} recusado",
+                rule.id
+            );
+        }
+    }
+}
