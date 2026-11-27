@@ -1,7 +1,7 @@
 //! Lógica dos comandos, independente do Tauri: recebe as portas por parâmetro
 //! e devolve DTOs. Os `#[tauri::command]` em `bootstrap.rs` só fazem a ligação.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Instant;
 
@@ -11,8 +11,8 @@ use disk_cleanup_application::{
     ScanProgress, SurveyRequest, SurveyService, VolumeInfo,
 };
 use disk_cleanup_domain::{
-    approve, ApprovedPlan, ByteSize, CleanupReport, ExclusionList, ItemResult, Plan, SafetyGuard,
-    Tier, TierRun, VolumeUsage,
+    approve, ApprovedPlan, ByteSize, CleanupReport, Disposal, ExclusionList, ItemResult, Plan,
+    SafetyGuard, Tier, TierRun, VolumeUsage,
 };
 
 use crate::dto::{
@@ -175,10 +175,12 @@ pub fn build_plan(
     Ok(dto)
 }
 
-/// Aprovação explícita dos tiers. O catálogo ainda não declara decisões.
+/// Aprovação explícita dos tiers e do destino de cada um (`trash` | `permanent`;
+/// tier sem destino usa o padrão do domínio). O catálogo ainda não declara decisões.
 pub fn approve_plan(
     session: &Session,
     tiers: &[String],
+    disposals: &BTreeMap<String, String>,
     acknowledged: bool,
 ) -> Result<ApprovalDto, ErrorDto> {
     let mut state = session.lock();
@@ -190,7 +192,11 @@ pub fn approve_plan(
         .iter()
         .map(|t| parse_tier(t))
         .collect::<Result<_, _>>()?;
-    let approved = approve(plan, &[], &tiers, acknowledged)?;
+    let disposals: BTreeMap<Tier, Disposal> = disposals
+        .iter()
+        .map(|(t, d)| Ok((parse_tier(t)?, d.parse::<Disposal>()?)))
+        .collect::<Result<_, ErrorDto>>()?;
+    let approved = approve(plan, &[], &tiers, &disposals, acknowledged)?;
     let dto = ApprovalDto::from(&approved);
     state.approved = Some(approved);
     state.initial = None;

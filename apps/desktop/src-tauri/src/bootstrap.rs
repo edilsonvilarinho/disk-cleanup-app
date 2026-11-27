@@ -2,6 +2,7 @@
 //! comandos. Sem regra de negócio — tudo delega para `service`.
 //! Excluído da medição de cobertura (exige runtime Tauri/WebView).
 
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use serde::Serialize;
@@ -109,15 +110,22 @@ fn build_plan(
 fn approve_plan(
     session: State<'_, Session>,
     tiers: Vec<String>,
+    disposals: BTreeMap<String, String>,
     acknowledged: bool,
 ) -> Result<ApprovalDto, ErrorDto> {
-    service::approve_plan(&session, &tiers, acknowledged)
+    service::approve_plan(&session, &tiers, &disposals, acknowledged)
 }
 
 #[tauri::command]
 fn preview_tier(session: State<'_, Session>, tier: String) -> Result<Vec<StepDto>, ErrorDto> {
     let guard = service::safety_guard(&SnapshotEnvironment::from_process());
-    service::preview_tier(&session, &FsActionRunner, &SysinfoVolumeInfo, &guard, &tier)
+    service::preview_tier(
+        &session,
+        &FsActionRunner::default(),
+        &SysinfoVolumeInfo,
+        &guard,
+        &tier,
+    )
 }
 
 #[tauri::command]
@@ -130,7 +138,7 @@ async fn execute_tier(app: AppHandle, tier: String) -> Result<TierRunDto, ErrorD
         let session = app.state::<Session>();
         service::execute_tier(
             &session,
-            &FsActionRunner,
+            &FsActionRunner::default(),
             &SysinfoVolumeInfo,
             &guard,
             &progress,

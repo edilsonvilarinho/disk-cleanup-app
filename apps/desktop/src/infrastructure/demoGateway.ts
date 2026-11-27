@@ -2,11 +2,13 @@
 // sem o núcleo Rust. Dados baseados no caso documentado na skill; mesmo
 // contrato do núcleo (textos `{pt, en}`, motivos e erros como código).
 import type { DiskCleanupGateway, SurveyRequest } from '../application/gateway'
+import { defaultDisposal } from '../domain/disposal'
 import { GIB } from '../domain/format'
 import type {
   ApprovalDto,
   CandidateDto,
   ClassificationDto,
+  Disposal,
   ErrorDto,
   ExclusionDto,
   ExecutionEventDto,
@@ -106,6 +108,7 @@ export class DemoGateway implements DiskCleanupGateway {
   private planned: CandidateDto[] = []
   private extra: string[] = []
   private approved: Tier[] = []
+  private disposals: Partial<Record<Tier, Disposal>> = {}
   private runs: TierRunDto[] = []
   private free = INITIAL_FREE
 
@@ -192,14 +195,20 @@ export class DemoGateway implements DiskCleanupGateway {
     return { itemCount: items.length, estimatedBytes: items.reduce((s, c) => s + c.sizeBytes, 0), tiers, json }
   }
 
-  async approvePlan(tiers: Tier[], acknowledged: boolean): Promise<ApprovalDto> {
+  async approvePlan(tiers: Tier[], disposals: Partial<Record<Tier, Disposal>>, acknowledged: boolean): Promise<ApprovalDto> {
     if (this.planned.length === 0) throw fail('plan_required')
     if (tiers.length === 0) throw fail('approval_no_tier')
     if (!acknowledged) throw fail('approval_not_acknowledged')
     this.approved = [...tiers]
+    this.disposals = Object.fromEntries(tiers.map((t) => [t, disposals[t] ?? defaultDisposal(t)]))
     this.runs = []
     const items = this.planned.filter((c) => tiers.includes(c.tier))
-    return { tiers, itemCount: items.length, estimatedBytes: items.reduce((s, c) => s + c.sizeBytes, 0) }
+    return { tiers, itemCount: items.length, estimatedBytes: items.reduce((s, c) => s + c.sizeBytes, 0), disposals: { ...this.disposals } }
+  }
+
+  /** Destino de um caminho no tier; comando não tem como ir para a Lixeira. */
+  private disposalOf(c: CandidateDto): Disposal | null {
+    return c.kind === 'path' ? (this.disposals[c.tier] ?? defaultDisposal(c.tier)) : null
   }
 
   private itemsOf(tier: Tier): CandidateDto[] {
@@ -208,7 +217,15 @@ export class DemoGateway implements DiskCleanupGateway {
   }
 
   async previewTier(tier: Tier): Promise<StepDto[]> {
-    return this.itemsOf(tier).map((c) => ({ id: c.id, label: c.label, tier, kind: c.kind, target: c.target, estimatedBytes: c.sizeBytes }))
+    return this.itemsOf(tier).map((c) => ({
+      id: c.id,
+      label: c.label,
+      tier,
+      kind: c.kind,
+      target: c.target,
+      estimatedBytes: c.sizeBytes,
+      disposal: this.disposalOf(c),
+    }))
   }
 
   async executeTier(tier: Tier, onEvent: (event: ExecutionEventDto) => void): Promise<TierRunDto> {
@@ -221,7 +238,10 @@ export class DemoGateway implements DiskCleanupGateway {
       await this.wait()
       // DXCache: o driver segura parte dos arquivos, como no caso real da skill.
       const partial = c.id === 'nvidia-dxcache'
-      const freed = partial ? Math.round(c.sizeBytes * 0.88) : c.sizeBytes
+      const moved = partial ? Math.round(c.sizeBytes * 0.88) : c.sizeBytes
+      // Ir para a Lixeira tira do lugar, mas não libera espaço no volume.
+      const toTrash = this.disposalOf(c) === 'trash'
+      const freed = toTrash ? 0 : moved
       this.free += freed
       const result: ItemResultDto = {
         id: c.id,
@@ -231,6 +251,7 @@ export class DemoGateway implements DiskCleanupGateway {
         freedBytes: freed,
         status: partial ? 'partial' : 'ok',
         cause: partial ? { code: 'partial_locked', detail: null, exitCode: null } : null,
+        trashedBytes: toTrash ? moved : 0,
       }
       results.push(result)
       onEvent({ kind: 'finished', id: c.id, result })
@@ -241,6 +262,7 @@ export class DemoGateway implements DiskCleanupGateway {
       freeAfterBytes: this.free,
       freedBytes: this.free - before,
       estimatedBytes: items.reduce((s, c) => s + c.sizeBytes, 0),
+      trashedBytes: results.reduce((s, r) => s + r.trashedBytes, 0),
       items: results,
     }
     this.runs.push(run)
@@ -254,6 +276,7 @@ export class DemoGateway implements DiskCleanupGateway {
       last: volume(this.free),
       freedBytes: this.free - INITIAL_FREE,
       estimatedBytes: this.runs.reduce((s, r) => s + r.estimatedBytes, 0),
+      trashedBytes: this.runs.reduce((s, r) => s + r.trashedBytes, 0),
       itemCount: this.runs.reduce((s, r) => s + r.items.length, 0),
       runs: this.runs,
       pending: this.runs.flatMap((r) => r.items.filter((i) => i.status === 'partial' || i.status === 'failed')),

@@ -18,6 +18,15 @@ describe('reportMarkdown', () => {
     expect(md).toContain('- Rótulo cuda → mantido: variável CUDA_PATH aponta para este caminho')
     expect(md).toContain('- Rótulo nvidia-dxcache (parcial): dx.bin: em uso')
     expect(md).toContain('- `C:\\Windows\\Installer` — cache do MSI')
+    // Sem nada na Lixeira, a linha não aparece.
+    expect(md).not.toContain('Lixeira')
+  })
+
+  it('conta à parte o que foi para a Lixeira', () => {
+    const pt1 = reportMarkdown({ ...report, trashedBytes: 14.2 * 1024 ** 3 }, tPt, 'pt')
+    expect(pt1).toContain('Na Lixeira (libera ao esvaziar): 14,2 GB')
+    const en1 = reportMarkdown({ ...report, trashedBytes: 14.2 * 1024 ** 3 }, tEn, 'en')
+    expect(en1).toContain('In the Recycle Bin (freed when emptied): 14.2 GB')
   })
 
   it('em inglês usa números, rótulos e motivos em inglês', () => {

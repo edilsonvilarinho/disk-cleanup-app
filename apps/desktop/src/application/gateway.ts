@@ -2,6 +2,7 @@
 import type {
   ApprovalDto,
   ClassificationDto,
+  Disposal,
   ExecutionEventDto,
   PlanDto,
   ReportDto,
@@ -24,7 +25,8 @@ export interface DiskCleanupGateway {
   runSurvey(request: SurveyRequest, onProgress: (progress: ScanProgressDto) => void): Promise<SurveyDto>
   classify(extraExclusions: string[]): Promise<ClassificationDto>
   buildPlan(volume: string, selected: string[]): Promise<PlanDto>
-  approvePlan(tiers: Tier[], acknowledged: boolean): Promise<ApprovalDto>
+  /** `disposals`: destino de cada tier; tier ausente usa o padrão do núcleo. */
+  approvePlan(tiers: Tier[], disposals: Partial<Record<Tier, Disposal>>, acknowledged: boolean): Promise<ApprovalDto>
   previewTier(tier: Tier): Promise<StepDto[]>
   executeTier(tier: Tier, onEvent: (event: ExecutionEventDto) => void): Promise<TierRunDto>
   report(): Promise<ReportDto>

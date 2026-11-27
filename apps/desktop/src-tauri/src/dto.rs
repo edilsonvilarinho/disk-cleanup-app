@@ -2,6 +2,8 @@
 //! nenhuma regra de negócio e nenhuma frase pronta — textos vão em `{pt, en}`
 //! e motivos vão como código + detalhe, traduzidos pela interface.
 
+use std::collections::BTreeMap;
+
 use disk_cleanup_application::{
     ClassificationReport, PlannedStep, SkipReason, SkippedRule, SurveyReport,
 };
@@ -318,6 +320,8 @@ pub struct ApprovalDto {
     pub tiers: Vec<String>,
     pub item_count: usize,
     pub estimated_bytes: u64,
+    /// Destino de cada tier aprovado: `trash` | `permanent`.
+    pub disposals: BTreeMap<String, &'static str>,
 }
 
 impl From<&ApprovedPlan> for ApprovalDto {
@@ -327,6 +331,11 @@ impl From<&ApprovedPlan> for ApprovalDto {
             tiers: plan.tiers().iter().map(Tier::to_string).collect(),
             item_count: plan.item_count(),
             estimated_bytes: plan.estimated_total().bytes(),
+            disposals: a
+                .disposals()
+                .iter()
+                .map(|(t, d)| (t.to_string(), d.code()))
+                .collect(),
         }
     }
 }
@@ -340,6 +349,8 @@ pub struct StepDto {
     pub kind: &'static str,
     pub target: String,
     pub estimated_bytes: u64,
+    /// `trash` | `permanent` para caminho; ausente para comando e desinstalação.
+    pub disposal: Option<&'static str>,
 }
 
 impl From<&PlannedStep> for StepDto {
@@ -351,6 +362,7 @@ impl From<&PlannedStep> for StepDto {
             kind: s.kind,
             target: s.target.clone(),
             estimated_bytes: s.estimated.bytes(),
+            disposal: s.disposal.map(|d| d.code()),
         }
     }
 }
@@ -413,6 +425,8 @@ pub struct ItemResultDto {
     /// `ok` | `partial` | `skipped` | `failed`.
     pub status: &'static str,
     pub cause: Option<CauseDto>,
+    /// Movido para a Lixeira: não entra em `freed_bytes` até ser esvaziada.
+    pub trashed_bytes: u64,
 }
 
 impl From<&ItemResult> for ItemResultDto {
@@ -425,6 +439,7 @@ impl From<&ItemResult> for ItemResultDto {
             freed_bytes: r.freed(),
             status: r.status.code(),
             cause: CauseDto::of(&r.status),
+            trashed_bytes: r.trashed.bytes(),
         }
     }
 }
@@ -437,6 +452,7 @@ pub struct TierRunDto {
     pub free_after_bytes: u64,
     pub freed_bytes: i64,
     pub estimated_bytes: u64,
+    pub trashed_bytes: u64,
     pub items: Vec<ItemResultDto>,
 }
 
@@ -448,6 +464,7 @@ impl From<&TierRun> for TierRunDto {
             free_after_bytes: r.free_after.bytes(),
             freed_bytes: r.freed(),
             estimated_bytes: r.estimated().bytes(),
+            trashed_bytes: r.trashed().bytes(),
             items: r.items.iter().map(ItemResultDto::from).collect(),
         }
     }
@@ -469,6 +486,8 @@ pub struct ReportDto {
     pub last: VolumeDto,
     pub freed_bytes: i64,
     pub estimated_bytes: u64,
+    /// Total movido para a Lixeira na sessão.
+    pub trashed_bytes: u64,
     pub item_count: usize,
     pub runs: Vec<TierRunDto>,
     pub pending: Vec<ItemResultDto>,
@@ -503,6 +522,7 @@ impl ReportDto {
             last: VolumeDto::from(report.last()),
             freed_bytes: report.freed(),
             estimated_bytes: report.estimated().bytes(),
+            trashed_bytes: report.trashed().bytes(),
             item_count: report.item_count(),
             runs: report.runs().iter().map(TierRunDto::from).collect(),
             pending: report

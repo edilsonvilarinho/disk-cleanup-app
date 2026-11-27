@@ -62,6 +62,11 @@ fn every_core_error_becomes_a_stable_code_with_params() {
             p(&[("value", "Z")]),
         ),
         (
+            DomainError::UnknownDisposal("lixo".into()).into(),
+            "unknown_disposal",
+            p(&[("value", "lixo")]),
+        ),
+        (
             DomainError::InvalidVolume("v".into()).into(),
             "invalid_volume",
             p(&[("detail", "v")]),

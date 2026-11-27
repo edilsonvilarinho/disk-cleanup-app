@@ -87,10 +87,13 @@ pub struct CommandOutcome {
     pub output: String,
 }
 
-/// Executa as ações de um plano aprovado. `remove_path` devolve
+/// Executa as ações de um plano aprovado. `remove_path` e `trash_path` devolvem
 /// `PortError::NotFound` se o caminho não existe.
 pub trait ActionRunner {
     fn remove_path(&self, path: &str) -> Result<RemovalOutcome, PortError>;
+    /// Move para a Lixeira do sistema, best-effort como `remove_path`:
+    /// `removed` é o que foi para a Lixeira, `remaining` o que ficou no lugar.
+    fn trash_path(&self, path: &str) -> Result<RemovalOutcome, PortError>;
     fn run_command(&self, command: &str) -> Result<CommandOutcome, PortError>;
 }
 

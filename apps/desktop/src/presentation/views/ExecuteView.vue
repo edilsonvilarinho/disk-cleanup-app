@@ -64,10 +64,17 @@ function liveLabel(step: StepDto): string {
   return state === 'running' ? t('execute.liveRunning') : t(`status.${state}`)
 }
 
+/** Item que foi para a Lixeira mostra o que moveu; os demais, o espaço medido. */
+function resultValue(item: ItemResultDto): string {
+  return item.trashedBytes > 0 ? t('execute.trashed', { size: gb(item.trashedBytes) }) : signedGb(item.freedBytes)
+}
+
 function liveFreed(step: StepDto): string {
   const live = exec.live[step.id]
-  return live === undefined || live === 'running' ? `${num(step.estimatedBytes)} GB` : signedGb(live.freedBytes)
+  return live === undefined || live === 'running' ? `${num(step.estimatedBytes)} GB` : resultValue(live)
 }
+
+const toTrash = computed(() => steps.value.some((s) => s.disposal === 'trash'))
 
 const runningDone = computed(() => runningSteps.value.filter((s) => !['queued', 'running'].includes(liveState(s.id))).length)
 const runningFreed = computed(() =>
@@ -90,7 +97,13 @@ const stepIndex = computed(() => {
 })
 
 const guide = computed(() => {
-  if (exec.finished) return { title: t('execute.guideDone'), body: t('execute.guideDoneBody', { freed: signedGb(exec.totalFreed) }) }
+  if (exec.finished) {
+    const body =
+      exec.totalTrashed > 0
+        ? t('execute.guideDoneTrashBody', { freed: signedGb(exec.totalFreed), trashed: gb(exec.totalTrashed) })
+        : t('execute.guideDoneBody', { freed: signedGb(exec.totalFreed) })
+    return { title: t('execute.guideDone'), body }
+  }
   if (exec.running) {
     return {
       title: t('execute.running', { tier: exec.running, label: t(`tier.${exec.running}`) }),
@@ -140,6 +153,7 @@ onMounted(async () => {
     <div v-if="approval" class="actions">
       <template v-if="exec.finished">
         <span data-test="total-freed">{{ t('execute.total') }} <strong class="num">{{ signedGb(exec.totalFreed) }}</strong></span>
+        <span v-if="exec.totalTrashed > 0" class="muted" data-test="total-trashed">{{ t('execute.totalTrashed') }} <strong class="num">{{ gb(exec.totalTrashed) }}</strong></span>
         <RouterLink class="btn btn-primary ready" to="/relatorio" data-test="to-report">{{ t('execute.toReport') }}</RouterLink>
       </template>
       <button v-else-if="exec.running" type="button" class="btn btn-primary" disabled data-test="executing">
@@ -190,7 +204,7 @@ onMounted(async () => {
       </div>
       <Transition name="fade">
         <div v-if="current && exec.confirming === current && !exec.running" class="inset confirm" data-test="confirm" style="flex-wrap: wrap">
-          <span>{{ t('execute.confirm', { tier: current, n: steps.length, size: gb(estimate) }) }}</span>
+          <span>{{ t(toTrash ? 'execute.confirmTrash' : 'execute.confirm', { tier: current, n: steps.length, size: gb(estimate) }) }}</span>
           <div class="actions">
             <button type="button" class="btn" data-test="cancel" @click="exec.cancel()">{{ t('execute.cancel') }}</button>
             <button type="button" class="btn btn-danger-solid" data-test="confirm-execute" @click="run(current)">{{ t('execute.confirmRun') }}</button>
@@ -229,6 +243,7 @@ onMounted(async () => {
           </span>
           <span v-if="exec.runs[tier]" class="num">{{ signedGb(exec.runs[tier]!.freedBytes) }} <span class="muted">/ {{ num(exec.runs[tier]!.estimatedBytes) }}</span></span>
           <span v-else-if="tierFacts(tier).bytes !== null" class="num muted">{{ t('execute.estimated', { size: gb(tierFacts(tier).bytes!) }) }}</span>
+          <span v-if="exec.runs[tier]?.trashedBytes" class="small muted">{{ t('execute.trashed', { size: gb(exec.runs[tier]!.trashedBytes) }) }}</span>
           <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
         </button>
         <div class="grp-body" :inert="!isOpen(tier)">
@@ -250,7 +265,7 @@ onMounted(async () => {
                   <li v-for="item in exec.runs[tier]!.items" :key="item.id" data-test="result">
                     <span class="pill" :class="TONE[item.status]"><span class="dot" />{{ t(`status.${item.status}`) }}</span>
                     <span class="gi-name">{{ txt(item.label) }}<span v-if="item.cause" class="gi-path">{{ causeText(item) }}</span></span>
-                    <span class="num">{{ signedGb(item.freedBytes) }}</span>
+                    <span class="num">{{ resultValue(item) }}</span>
                   </li>
                 </ul>
               </template>
@@ -260,7 +275,7 @@ onMounted(async () => {
                   <li v-for="s in steps" :key="s.id" data-test="step">
                     <span class="gi-name">{{ txt(s.label) }}<span class="gi-path">{{ s.target }}</span></span>
                     <span class="mono small muted">{{ s.kind }}</span>
-                    <span />
+                    <span class="small muted">{{ s.disposal ? t(s.disposal === 'trash' ? 'execute.disposalTrash' : 'execute.disposalPermanent') : '' }}</span>
                     <span class="num">{{ num(s.estimatedBytes) }}</span>
                   </li>
                 </ul>

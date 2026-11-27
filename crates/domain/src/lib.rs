@@ -3,6 +3,7 @@
 
 mod aggregation;
 mod candidate;
+mod disposal;
 mod error;
 mod exclusion;
 mod execution;
@@ -18,6 +19,7 @@ mod volume;
 
 pub use aggregation::{AggregateEntry, FocusRoot, SizeAggregator};
 pub use candidate::{Action, Availability, BlockReason, Candidate, Risk};
+pub use disposal::Disposal;
 pub use error::DomainError;
 pub use exclusion::{Exclusion, ExclusionList};
 pub use execution::{signed_delta, FailCause, ItemResult, ItemStatus, SkipCause, TierRun};

@@ -23,6 +23,7 @@ fn item(
         free_before: b(before),
         free_after: b(after),
         status,
+        trashed: ByteSize::ZERO,
     }
 }
 
@@ -100,6 +101,35 @@ fn report_compares_before_and_after_and_aggregates_tiers() {
             .collect::<Vec<_>>(),
         ["gradle"]
     );
+}
+
+#[test]
+fn trashed_bytes_are_counted_apart_from_freed_space() {
+    // Ir para a Lixeira não libera espaço no volume: o relatório separa os dois.
+    let mut gradle = item("gradle", Tier::C, 300, 300, 80, ItemStatus::Done);
+    gradle.trashed = b(80);
+    let mut maven = item("maven", Tier::C, 300, 300, 30, ItemStatus::Done);
+    maven.trashed = b(25);
+    let run = TierRun {
+        tier: Tier::C,
+        free_before: b(300),
+        free_after: b(300),
+        items: vec![gradle, maven],
+    };
+    assert_eq!(run.items[0].trashed, b(80));
+    assert_eq!(run.trashed(), b(105));
+    assert_eq!(run.freed(), 0);
+    let a = TierRun {
+        tier: Tier::A,
+        free_before: b(100),
+        free_after: b(300),
+        items: vec![item("npm", Tier::A, 100, 300, 200, ItemStatus::Done)],
+    };
+    assert_eq!(a.trashed(), ByteSize::ZERO);
+    let initial = VolumeUsage::new(b(1_000), b(100)).unwrap();
+    let report = CleanupReport::new(initial, vec![a, run], initial.with_free(b(300)));
+    assert_eq!(report.trashed(), b(105));
+    assert_eq!(report.freed(), 200);
 }
 
 #[test]

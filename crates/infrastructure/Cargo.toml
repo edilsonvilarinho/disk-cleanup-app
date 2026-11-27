@@ -14,6 +14,8 @@ serde_json.workspace = true
 toml.workspace = true
 jwalk.workspace = true
 sysinfo.workspace = true
+# Lixeira do sistema. 5.3.0: a 5.4.0 tem menos de 2 semanas.
+trash = { version = "=5.3.0", default-features = false, features = ["coinit_apartmentthreaded", "freedesktop"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }

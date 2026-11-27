@@ -25,6 +25,8 @@ describe('aprovação (plan store)', () => {
     const store = usePlanStore()
     await store.build('C:', ['npm-cache'])
     expect(store.approvedTiers).toEqual(['A', 'C'])
+    // Destino padrão por tier: cache sai de vez; o resto vai para a Lixeira.
+    expect(store.disposals).toEqual({ A: 'permanent', C: 'trash' })
     expect(store.canApprove).toBe(false)
     store.setAcknowledged(true)
     expect(store.canApprove).toBe(true)
@@ -33,9 +35,26 @@ describe('aprovação (plan store)', () => {
     expect(store.canApprove).toBe(false)
     store.toggleTier('C')
     await store.approve()
-    expect(gateway.approvePlan).toHaveBeenCalledWith(['C'], true)
+    expect(gateway.approvePlan).toHaveBeenCalledWith(['C'], { C: 'trash' }, true)
     expect(store.approval).toEqual(approval)
     expect(store.approveError).toBeNull()
+  })
+
+  it('o destino escolhido vai na aprovação e trocá-lo descarta a aprovação', async () => {
+    const gateway = setup()
+    const store = usePlanStore()
+    await store.build('C:', ['npm-cache'])
+    store.setAcknowledged(true)
+    store.setDisposal('A', 'trash')
+    store.setDisposal('C', 'permanent')
+    await store.approve()
+    expect(gateway.approvePlan).toHaveBeenCalledWith(['A', 'C'], { A: 'trash', C: 'permanent' }, true)
+    expect(store.approval).not.toBeNull()
+    store.setDisposal('A', 'permanent')
+    expect(store.approval).toBeNull()
+    // Plano novo volta aos padrões.
+    await store.build('C:', ['npm-cache'])
+    expect(store.disposals).toEqual({ A: 'permanent', C: 'trash' })
   })
 
   it('não aprova sem plano e mostra erro do núcleo', async () => {

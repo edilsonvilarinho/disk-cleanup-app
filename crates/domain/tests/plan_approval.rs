@@ -1,8 +1,8 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use disk_cleanup_domain::{
-    approve, Action, ApprovalError, Availability, ByteSize, Candidate, Decision, DomainError,
-    ExclusionList, Plan, PlanError, Risk, Tier,
+    approve, Action, ApprovalError, Availability, ByteSize, Candidate, Decision, Disposal,
+    DomainError, ExclusionList, Plan, PlanError, Risk, Tier,
 };
 
 fn candidate(id: &str, tier: Tier, action: Action, gb_bytes: u64) -> Candidate {
@@ -183,7 +183,7 @@ fn approval_requires_decisions_tiers_and_acknowledgement() {
     let tiers: BTreeSet<_> = [Tier::A].into();
 
     assert_eq!(
-        approve(&plan, &ds, &tiers, true),
+        approve(&plan, &ds, &tiers, &BTreeMap::new(), true),
         Err(ApprovalError::PendingDecisions(vec![
             "as".into(),
             "games".into()
@@ -192,19 +192,19 @@ fn approval_requires_decisions_tiers_and_acknowledgement() {
     ds[0].choose(0).unwrap();
     ds[1].choose(0).unwrap();
     assert_eq!(
-        approve(&plan, &ds, &BTreeSet::new(), true),
+        approve(&plan, &ds, &BTreeSet::new(), &BTreeMap::new(), true),
         Err(ApprovalError::NoTierApproved)
     );
     assert_eq!(
-        approve(&plan, &ds, &tiers, false),
+        approve(&plan, &ds, &tiers, &BTreeMap::new(), false),
         Err(ApprovalError::NotAcknowledged)
     );
     assert_eq!(
-        approve(&plan, &ds, &[Tier::C].into(), true),
+        approve(&plan, &ds, &[Tier::C].into(), &BTreeMap::new(), true),
         Err(ApprovalError::TierNotInPlan(Tier::C))
     );
 
-    let approved = approve(&plan, &ds, &tiers, true).unwrap();
+    let approved = approve(&plan, &ds, &tiers, &BTreeMap::new(), true).unwrap();
     assert_eq!(approved.plan().tiers(), vec![Tier::A]);
     assert_eq!(approved.plan().item_count(), 1);
 }
@@ -232,4 +232,47 @@ fn plan_from_parts_rebuilds_a_plan_and_drops_empty_tiers() {
     let plan = Plan::from_parts("C:", [(Tier::A, vec![item]), (Tier::B, vec![])].into());
     assert_eq!(plan.tiers(), vec![Tier::A]);
     assert_eq!(plan.estimated_total(), ByteSize::from_bytes(4));
+}
+
+#[test]
+fn approval_fixes_the_disposal_of_each_approved_tier() {
+    let plan = Plan::from_selection("C:", &sample(), &["npm"], &exclusions()).unwrap();
+    let mut ds = decisions();
+    ds[0].choose(0).unwrap();
+    ds[1].choose(0).unwrap();
+    let tiers: BTreeSet<_> = [Tier::A].into();
+
+    // Sem escolha explícita vale o padrão do tier: cache (A) sai de vez.
+    let approved = approve(&plan, &ds, &tiers, &BTreeMap::new(), true).unwrap();
+    assert_eq!(approved.disposal(Tier::A), Disposal::Permanent);
+
+    // A escolha do usuário vale; escolha para tier fora da aprovação é ignorada.
+    let chosen = [(Tier::A, Disposal::Trash), (Tier::C, Disposal::Permanent)].into();
+    let approved = approve(&plan, &ds, &tiers, &chosen, true).unwrap();
+    assert_eq!(approved.disposal(Tier::A), Disposal::Trash);
+    assert_eq!(
+        approved.disposals(),
+        &BTreeMap::from([(Tier::A, Disposal::Trash)])
+    );
+    // Tier não aprovado não tem destino: cai no padrão, mas nunca executa.
+    assert_eq!(approved.disposal(Tier::C), Disposal::Trash);
+}
+
+#[test]
+fn disposal_defaults_codes_and_parsing() {
+    assert_eq!(Disposal::default_for(Tier::A), Disposal::Permanent);
+    for t in [Tier::B, Tier::C, Tier::D] {
+        assert_eq!(Disposal::default_for(t), Disposal::Trash);
+    }
+    assert_eq!(Disposal::Trash.code(), "trash");
+    assert_eq!(Disposal::Permanent.code(), "permanent");
+    assert_eq!(" Trash ".parse::<Disposal>(), Ok(Disposal::Trash));
+    assert_eq!("permanent".parse::<Disposal>(), Ok(Disposal::Permanent));
+    assert_eq!(
+        "lixo".parse::<Disposal>(),
+        Err(DomainError::UnknownDisposal("lixo".into()))
+    );
+    assert!(DomainError::UnknownDisposal("x".into())
+        .to_string()
+        .contains('x'));
 }
