@@ -8,13 +8,14 @@ import { exporterPlugin, type ReportExporter } from '../application/exporter'
 import { gatewayPlugin } from '../application/gatewayPlugin'
 import { historyPlugin, memoryHistoryStorage, type HistoryStorage } from '../application/history'
 import { settingsPlugin, type Settings } from '../application/settings'
+import { useClassificationStore } from '../application/stores/classification'
 import { usePlanStore } from '../application/stores/plan'
 import { useSettingsStore } from '../application/stores/settings'
 import { ThemeController } from '../application/theme'
 import { updaterPlugin, type UpdaterPort } from '../application/updater'
 import { fakeGateway } from '../test/fakeGateway'
 import { fakeUpdater, updateInfo } from '../test/fakeUpdater'
-import { approval, classification, report, runA, survey } from '../test/fixtures'
+import { approval, classification, report, runA, runCTrash, stepsA, survey } from '../test/fixtures'
 import { GIB } from '../domain/format'
 import { toSnapshot, type ScanSnapshot } from '../domain/history'
 import App from './App.vue'
@@ -391,7 +392,7 @@ describe('Aprovação no Plano', () => {
     await wrapper.get('[data-test="approve-tier-A"]').setValue(true)
     await approve.trigger('click')
     await flushPromises()
-    expect(gateway.approvePlan).toHaveBeenCalledWith(['A'], true)
+    expect(gateway.approvePlan).toHaveBeenCalledWith(['A'], { A: 'permanent' }, true)
     // A Execução é carregada sob demanda: a navegação termina depois do import.
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/execucao'))
   })
@@ -404,10 +405,43 @@ describe('Aprovação no Plano', () => {
     await flushPromises()
     await router.push('/plano')
     await flushPromises()
+    // Só o que libera agora entra no livre depois: C vai para a Lixeira por padrão.
     const before = wrapper.get('[data-test="free-after"]').text()
     await wrapper.get('[data-test="approve-tier-C"]').setValue(false)
-    expect(wrapper.get('[data-test="free-after"]').text()).not.toBe(before)
+    expect(wrapper.get('[data-test="free-after"]').text()).toBe(before)
     expect(wrapper.get('[data-test="run-count"]').text()).toBe('2')
+    await wrapper.get('[data-test="approve-tier-A"]').setValue(false)
+    expect(wrapper.get('[data-test="free-after"]').text()).not.toBe(before)
+  })
+
+  it('escolhe o destino de cada tier e separa o que libera agora do que vai para a Lixeira', async () => {
+    const { wrapper, gateway } = await planScreen()
+    // Padrões: A definitivo; C (gradle, caminho de 14,2 GB) para a Lixeira.
+    expect(wrapper.get('[data-test="dest-A-permanent"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-test="dest-C-trash"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-test="run-bytes"]').text()).toBe('11,2 GB')
+    expect(wrapper.get('[data-test="trash-bytes"]').text()).toBe('14,2 GB')
+    expect(wrapper.get('[data-test="plan-items"]').text()).toContain('vai para a Lixeira')
+    expect(wrapper.get('[data-test="plan-items"]').text()).toContain('remoção definitiva')
+    await wrapper.get('[data-test="dest-C-permanent"]').trigger('click')
+    expect(wrapper.find('[data-test="trash-bytes"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="run-bytes"]').text()).toBe('25,4 GB')
+    // Comando não vai para a Lixeira: em A só o caminho (4,8 GB) muda de destino.
+    await wrapper.get('[data-test="dest-A-trash"]').trigger('click')
+    expect(wrapper.get('[data-test="trash-bytes"]').text()).toBe('4,8 GB')
+    await wrapper.get('[data-test="ack"]').setValue(true)
+    await wrapper.get('[data-test="approve"]').trigger('click')
+    await flushPromises()
+    expect(gateway.approvePlan).toHaveBeenCalledWith(['A', 'C'], { A: 'trash', C: 'permanent' }, true)
+  })
+
+  it('tier só com comandos não tem destino a escolher', async () => {
+    const { wrapper, pinia } = await planScreen()
+    useClassificationStore(pinia).selected = ['npm-cache', 'gradle-caches']
+    await flushPromises()
+    expect(wrapper.find('[data-test="dest-A-trash"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="dest-A-none"]').text()).toContain('só comandos')
+    expect(wrapper.find('[data-test="dest-C-trash"]').exists()).toBe(true)
   })
 
   it('mostra a recusa do núcleo e fica no Plano', async () => {
@@ -502,6 +536,41 @@ describe('Execução', () => {
   })
 })
 
+describe('Execução com Lixeira', () => {
+  it('mostra o destino no dry-run, avisa na confirmação e conta o que foi para a Lixeira', async () => {
+    const stepC = { ...stepsA[1]!, id: 'gradle-caches', tier: 'C' as const, target: 'C:\\x\\gradle-caches', disposal: 'trash' as const }
+    const previewTier = vi.fn(async (tier: string) => (tier === 'A' ? stepsA : [stepC]))
+    const executeTier = vi.fn(async (tier: string, onEvent: (e: never) => void) => {
+      const run = tier === 'A' ? runA : runCTrash
+      for (const item of run.items) onEvent({ kind: 'finished', id: item.id, result: item } as never)
+      return run
+    })
+    const ctx = await mountApp('/', fakeGateway({ previewTier, executeTier } as never))
+    usePlanStore(ctx.pinia).approval = { ...approval, disposals: { A: 'permanent', C: 'trash' } }
+    await ctx.router.push('/execucao')
+    await flushPromises()
+    const w = ctx.wrapper
+    expect(w.findAll('[data-test="step"]')[1]!.text()).toContain('definitivo')
+    await w.get('[data-test="execute"]').trigger('click')
+    expect(w.get('[data-test="confirm"]').text()).toContain('não pode ser desfeita')
+    await w.get('[data-test="confirm-execute"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-test="step"]').text()).toContain('Lixeira')
+    await w.get('[data-test="execute"]').trigger('click')
+    expect(w.get('[data-test="confirm"]').text()).toContain('Lixeira')
+    await w.get('[data-test="confirm-execute"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-test="total-trashed"]').text()).toContain('14,2 GB')
+    expect(w.get('[data-test="guide"]').text()).toContain('na Lixeira')
+    const stages = w.findAll('[data-test="stage"]')
+    await stages[1]!.get('button').trigger('click')
+    expect(stages[1]!.text()).toContain('14,2 GB na Lixeira')
+    // Tier concluído mostra o medido, não mais o previsto.
+    expect(stages[0]!.text()).not.toContain('previsto')
+    expect(stages[1]!.text()).not.toContain('previsto')
+  })
+})
+
 describe('Barra de status na Execução', () => {
   it('conta os itens já concluídos do tier em execução', async () => {
     const executeTier = vi.fn((_tier, onEvent) => {
@@ -532,6 +601,7 @@ describe('Relatório', () => {
     const { wrapper, gateway } = await mountApp('/relatorio')
     expect(gateway.report).toHaveBeenCalled()
     expect(wrapper.get('[data-test="report-freed"]').text()).toContain('+24,8 GB')
+    expect(wrapper.find('[data-test="report-trashed"]').exists()).toBe(false)
     expect(wrapper.get('[data-test="report-tiers"]').text()).toContain('Regeneráveis')
     expect(wrapper.get('[data-test="report-pending"]').text()).toContain('dx.bin: em uso')
     expect(wrapper.get('[data-test="report-blocked"]').text()).toContain('CUDA_PATH')
@@ -546,6 +616,13 @@ describe('Relatório', () => {
     await flushPromises()
     expect(wrapper.get('[data-test="copy-report-status"]').text()).toContain('negado')
     vi.unstubAllGlobals()
+  })
+
+  it('separa o que foi para a Lixeira do que foi liberado', async () => {
+    const withTrash = { ...report, trashedBytes: 14.2 * GIB, runs: [runA, runCTrash] }
+    const { wrapper } = await mountApp('/relatorio', fakeGateway({ report: vi.fn(async () => withTrash) }))
+    expect(wrapper.get('[data-test="report-trashed"]').text()).toContain('14,2 GB')
+    expect(wrapper.get('[data-test="report-tiers"]').text()).toContain('14,2 GB na Lixeira')
   })
 
   it('sem execução, explica e aponta para a Execução', async () => {

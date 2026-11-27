@@ -43,6 +43,7 @@ impl From<DomainError> for ErrorDto {
         match e {
             DomainError::InvalidVolume(d) => Self::new("invalid_volume").with("detail", d),
             DomainError::UnknownTier(v) => Self::new("unknown_tier").with("value", v),
+            DomainError::UnknownDisposal(v) => Self::new("unknown_disposal").with("value", v),
             DomainError::InvalidChoice { decision, index } => Self::new("invalid_choice")
                 .with("decision", decision)
                 .with("index", index),

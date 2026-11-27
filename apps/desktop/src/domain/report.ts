@@ -26,6 +26,8 @@ export function reportMarkdown(report: ReportDto, t: Translate, locale: Locale):
     '|---|---|---|---|',
     `| ${t('markdown.free')} | ${gb(initial.freeBytes)} | ${gb(last.freeBytes)} | ${signed(report.freedBytes)} |`,
     `| ${t('markdown.occupancy')} | ${percent(initial.usedPercent)} | ${percent(last.usedPercent)} | ${points(last.usedPercent - initial.usedPercent)} |`,
+    // Lixeira não libera espaço no volume: aparece à parte, só quando houver.
+    ...(report.trashedBytes > 0 ? ['', `${t('markdown.trashed')}: ${gb(report.trashedBytes)}`] : []),
     '',
     `## ${t('markdown.byTier')}`,
     '',

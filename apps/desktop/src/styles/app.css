@@ -476,6 +476,15 @@ details[open] summary { margin-bottom: 10px; }
   border: 1px dashed var(--border-strong); transition: border-color 0.2s ease, background 0.2s ease;
 }
 .ack input { margin-top: 2px; }
+/* Destino por tier: segmentado Lixeira | Definitivo, ao lado do tier. */
+.dest-rows { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.dest-row { display: flex; align-items: center; gap: 8px; }
+.dest { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); }
+.dest button { min-height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+.dest button:hover { color: var(--text); }
+.dest button[aria-pressed="true"] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 0 0 1px var(--border-strong); }
+.dest button:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
+.ap-v.info { color: var(--info); }
 .ack.on { border-style: solid; border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); background: color-mix(in srgb, var(--ok) 6%, transparent); }
 /* Clique em Aprovar sem requisito: o requisito que falta treme e ganha contorno. */
 .attn { animation: attn 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) both, attn-ring 1.8s ease both; }

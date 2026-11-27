@@ -19,6 +19,8 @@ export const useExecutionStore = defineStore('execution', {
       return this.tiers.length > 0 && this.nextTier === null
     },
     totalFreed: (state): number => Object.values(state.runs).reduce((sum, r) => sum + (r?.freedBytes ?? 0), 0),
+    /** Movido para a Lixeira: não libera espaço até ela ser esvaziada. */
+    totalTrashed: (state): number => Object.values(state.runs).reduce((sum, r) => sum + (r?.trashedBytes ?? 0), 0),
   },
   actions: {
     reset(tiers: Tier[]) {

@@ -3,7 +3,8 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use thiserror::Error;
 
 use crate::{
-    Action, BlockReason, ByteSize, Candidate, DomainError, ExclusionList, LocalizedText, Tier,
+    Action, BlockReason, ByteSize, Candidate, Disposal, DomainError, ExclusionList, LocalizedText,
+    Tier,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -205,23 +206,39 @@ pub enum ApprovalError {
     TierNotInPlan(Tier),
 }
 
-/// Plano aprovado explicitamente, restrito aos tiers autorizados.
+/// Plano aprovado explicitamente, restrito aos tiers autorizados, com o destino
+/// de cada tier fixado na aprovação (trocar o destino exige aprovar de novo).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApprovedPlan {
     plan: Plan,
+    disposals: BTreeMap<Tier, Disposal>,
 }
 
 impl ApprovedPlan {
     pub fn plan(&self) -> &Plan {
         &self.plan
     }
+
+    /// Destino de cada tier aprovado.
+    pub fn disposals(&self) -> &BTreeMap<Tier, Disposal> {
+        &self.disposals
+    }
+
+    pub fn disposal(&self, tier: Tier) -> Disposal {
+        self.disposals
+            .get(&tier)
+            .copied()
+            .unwrap_or_else(|| Disposal::default_for(tier))
+    }
 }
 
 /// Único caminho para obter um `ApprovedPlan`: nada executa sem aprovação.
+/// Tier aprovado sem destino em `disposals` recebe `Disposal::default_for`.
 pub fn approve(
     plan: &Plan,
     decisions: &[Decision],
     tiers: &BTreeSet<Tier>,
+    disposals: &BTreeMap<Tier, Disposal>,
     acknowledged: bool,
 ) -> Result<ApprovedPlan, ApprovalError> {
     let pending: Vec<String> = decisions
@@ -241,7 +258,18 @@ pub fn approve(
     if !acknowledged {
         return Err(ApprovalError::NotAcknowledged);
     }
+    let disposals = tiers
+        .iter()
+        .map(|t| {
+            let d = disposals
+                .get(t)
+                .copied()
+                .unwrap_or_else(|| Disposal::default_for(*t));
+            (*t, d)
+        })
+        .collect();
     Ok(ApprovedPlan {
         plan: plan.restricted_to(tiers),
+        disposals,
     })
 }

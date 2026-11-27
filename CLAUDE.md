@@ -93,7 +93,9 @@ test fake.
 - Safety invariants (see `docs/architecture.md`) must not be weakened: `Plan::from_selection` rejects
   blocked/excluded/duplicate items; `approve` is the only way to get an `ApprovedPlan`;
   `ExecuteService` only accepts `ApprovedPlan`; item failures become a status and never abort a tier;
-  `SafetyGuard` re-checks right before removal; `FsActionRunner` never follows symlinks/junctions;
+  `SafetyGuard` re-checks right before removal (both for permanent removal and Recycle Bin);
+  `FsActionRunner` never follows symlinks/junctions; the per-tier `Disposal` is fixed by `approve` and
+  trashed bytes are reported apart from freed space;
   each tier runs once per approval and rebuilding the plan discards approval.
 - Scan history and preferences persist in the WebView `localStorage` (`dc-history`), not in Rust.
 - Vue: no `v-html`, user paths rendered as text only, CSP with no external domains; non-initial

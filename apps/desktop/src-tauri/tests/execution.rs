@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 
 use disk_cleanup_application::{
     ActionRunner, Catalog, CatalogExclusion, CatalogRepository, CatalogRule, CommandOutcome,
@@ -42,6 +43,14 @@ impl ActionRunner for Runner<'_> {
             errors: vec![],
         })
     }
+    /// Lixeira não libera espaço no volume.
+    fn trash_path(&self, _: &str) -> Result<RemovalOutcome, PortError> {
+        Ok(RemovalOutcome {
+            removed: ByteSize::from_bytes(400),
+            remaining: ByteSize::ZERO,
+            errors: vec![],
+        })
+    }
     fn run_command(&self, _: &str) -> Result<CommandOutcome, PortError> {
         *self.0 .0.borrow_mut() += 100;
         Ok(CommandOutcome {
@@ -50,6 +59,10 @@ impl ActionRunner for Runner<'_> {
             output: String::new(),
         })
     }
+}
+
+fn none() -> BTreeMap<String, String> {
+    BTreeMap::new()
 }
 
 struct Inspector;
@@ -122,28 +135,28 @@ fn prepared() -> Session {
 #[test]
 fn approval_requires_a_plan_tiers_and_acknowledgement() {
     assert_eq!(
-        approve_plan(&Session::default(), &["A".into()], true)
+        approve_plan(&Session::default(), &["A".into()], &none(), true)
             .unwrap_err()
             .code,
         "plan_required"
     );
     let session = prepared();
-    let err = approve_plan(&session, &["Z".into()], true).unwrap_err();
+    let err = approve_plan(&session, &["Z".into()], &none(), true).unwrap_err();
     assert_eq!(
         (err.code.as_str(), err.params["value"].as_str()),
         ("unknown_tier", "Z")
     );
     assert_eq!(
-        approve_plan(&session, &["A".into()], false)
+        approve_plan(&session, &["A".into()], &none(), false)
             .unwrap_err()
             .code,
         "approval_not_acknowledged"
     );
     assert_eq!(
-        approve_plan(&session, &[], true).unwrap_err().code,
+        approve_plan(&session, &[], &none(), true).unwrap_err().code,
         "approval_no_tier"
     );
-    let dto = approve_plan(&session, &["A".into(), "C".into()], true).unwrap();
+    let dto = approve_plan(&session, &["A".into(), "C".into()], &none(), true).unwrap();
     assert_eq!(
         (dto.tiers.clone(), dto.item_count),
         (vec!["A".to_string(), "C".to_string()], 3)
@@ -173,7 +186,7 @@ fn preview_and_execute_only_after_approval_and_once_per_tier() {
     );
     assert_eq!(report(&session, &volume).unwrap_err().code, "no_execution");
 
-    approve_plan(&session, &["A".into(), "C".into()], true).unwrap();
+    approve_plan(&session, &["A".into(), "C".into()], &none(), true).unwrap();
     let steps = preview_tier(&session, &runner, &volume, &guard, "A").unwrap();
     assert_eq!(
         steps.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
@@ -247,7 +260,7 @@ fn rebuilding_the_plan_resets_the_approval_and_the_runs() {
     let runner = Runner(&volume);
     let guard = SafetyGuard::default();
     let progress = CallbackExecution::new(|_| {});
-    approve_plan(&session, &["A".into()], true).unwrap();
+    approve_plan(&session, &["A".into()], &none(), true).unwrap();
     execute_tier(&session, &runner, &volume, &guard, &progress, "A").unwrap();
     build_plan(&session, "C:", &["npm".into()], &SkillPlanJsonCodec).unwrap();
     assert_eq!(
@@ -270,7 +283,7 @@ fn volume_failure_is_reported_as_code() {
     let session = prepared();
     let volume = Volume(RefCell::new(1_000));
     let progress = CallbackExecution::new(|_| {});
-    approve_plan(&session, &["A".into()], true).unwrap();
+    approve_plan(&session, &["A".into()], &none(), true).unwrap();
     let err = execute_tier(
         &session,
         &Runner(&volume),
@@ -296,6 +309,7 @@ fn every_item_cause_has_a_code() {
         free_before: ByteSize::from_bytes(10),
         free_after: ByteSize::from_bytes(10),
         status,
+        trashed: ByteSize::ZERO,
     };
     let cases = [
         (
@@ -397,4 +411,60 @@ fn safety_guard_protects_the_folders_named_by_the_environment() {
     assert!(guard.check(r"C:\Users\u\AppData\Local").is_err());
     assert!(guard.check(r"C:\Users\u\AppData\Local\Temp").is_err());
     assert!(guard.check(r"C:\Users\u\AppData\Local\npm-cache").is_ok());
+}
+
+#[test]
+fn approval_fixes_the_disposal_and_trash_is_reported_apart() {
+    let session = prepared();
+    let volume = Volume(RefCell::new(1_000));
+    let runner = Runner(&volume);
+    let guard = SafetyGuard::default();
+    let progress = CallbackExecution::new(|_| {});
+    let trash_a: BTreeMap<String, String> = [("a".into(), "Trash".into())].into();
+
+    let err = approve_plan(
+        &session,
+        &["A".into()],
+        &[("A".into(), "lixo".into())].into(),
+        true,
+    )
+    .unwrap_err();
+    assert_eq!(
+        (err.code.as_str(), err.params["value"].as_str()),
+        ("unknown_disposal", "lixo")
+    );
+    let err = approve_plan(
+        &session,
+        &["A".into()],
+        &[("Q".into(), "trash".into())].into(),
+        true,
+    )
+    .unwrap_err();
+    assert_eq!(err.code, "unknown_tier");
+
+    let dto = approve_plan(&session, &["A".into(), "C".into()], &trash_a, true).unwrap();
+    assert_eq!(
+        dto.disposals,
+        BTreeMap::from([("A".to_string(), "trash"), ("C".to_string(), "trash")])
+    );
+    let steps = preview_tier(&session, &runner, &volume, &guard, "A").unwrap();
+    assert_eq!(steps[0].disposal, Some("trash"));
+    let steps = preview_tier(&session, &runner, &volume, &guard, "C").unwrap();
+    assert_eq!(steps[0].disposal, None);
+
+    let run = execute_tier(&session, &runner, &volume, &guard, &progress, "A").unwrap();
+    assert_eq!((run.freed_bytes, run.trashed_bytes), (0, 800));
+    assert_eq!(
+        (run.items[0].status, run.items[0].trashed_bytes),
+        ("ok", 400)
+    );
+    let r = report(&session, &volume).unwrap();
+    assert_eq!((r.freed_bytes, r.trashed_bytes), (0, 800));
+
+    // padrão sem escolha: A definitivo
+    let dto = approve_plan(&session, &["A".into()], &none(), true).unwrap();
+    assert_eq!(
+        dto.disposals,
+        BTreeMap::from([("A".to_string(), "permanent")])
+    );
 }

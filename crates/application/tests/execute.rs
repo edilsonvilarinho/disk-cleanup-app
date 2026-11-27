@@ -1,14 +1,14 @@
 use std::cell::RefCell;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use disk_cleanup_application::{
     ActionRunner, AppError, CommandOutcome, ExecuteService, ExecutionProgress, PortError,
     RemovalOutcome, VolumeInfo,
 };
 use disk_cleanup_domain::{
-    approve, signed_delta, Action, ApprovedPlan, Availability, ByteSize, Candidate, ExclusionList,
-    FailCause, ItemResult, ItemStatus, LocalizedText, Plan, Risk, SafetyGuard, SafetyViolation,
-    SkipCause, Tier, VolumeUsage,
+    approve, signed_delta, Action, ApprovedPlan, Availability, ByteSize, Candidate, Disposal,
+    ExclusionList, FailCause, ItemResult, ItemStatus, LocalizedText, Plan, Risk, SafetyGuard,
+    SafetyViolation, SkipCause, Tier, VolumeUsage,
 };
 
 fn b(n: u64) -> ByteSize {
@@ -67,6 +67,25 @@ impl ActionRunner for FakeRunner<'_> {
         }
     }
 
+    /// Ir para a Lixeira não muda o espaço livre do volume.
+    fn trash_path(&self, path: &str) -> Result<RemovalOutcome, PortError> {
+        self.calls.borrow_mut().push(format!("trash {path}"));
+        match path {
+            p if p.ends_with("npm-cache") => Ok(RemovalOutcome {
+                removed: b(600),
+                remaining: ByteSize::ZERO,
+                errors: vec![],
+            }),
+            p if p.ends_with("DXCache") => Ok(RemovalOutcome {
+                removed: b(250),
+                remaining: b(50),
+                errors: vec!["dx.bin: em uso".into()],
+            }),
+            p if p.ends_with("sumiu") => Err(PortError::NotFound(p.into())),
+            p => Err(PortError::Io(format!("lixeira indisponível: {p}"))),
+        }
+    }
+
     fn run_command(&self, command: &str) -> Result<CommandOutcome, PortError> {
         self.calls.borrow_mut().push(format!("cmd {command}"));
         match command {
@@ -120,6 +139,10 @@ fn rm(p: &str) -> Action {
 }
 
 fn approved(tiers: &[Tier]) -> ApprovedPlan {
+    approved_with(tiers, &BTreeMap::new())
+}
+
+fn approved_with(tiers: &[Tier], disposals: &BTreeMap<Tier, Disposal>) -> ApprovedPlan {
     let candidates = vec![
         candidate("npm", Tier::A, rm(r"C:\Users\u\AppData\Local\npm-cache")),
         candidate(
@@ -167,6 +190,7 @@ fn approved(tiers: &[Tier]) -> ApprovedPlan {
         &plan,
         &[],
         &tiers.iter().copied().collect::<BTreeSet<_>>(),
+        disposals,
         true,
     )
     .unwrap()
@@ -342,4 +366,79 @@ fn execute_refuses_unapproved_tier_and_reports_volume_failure() {
 #[test]
 fn signed_delta_saturates_in_both_directions() {
     assert_eq!(signed_delta(b(u64::MAX), b(0)), i64::MIN);
+}
+
+#[test]
+fn trash_disposal_moves_paths_to_the_trash_and_counts_them_apart() {
+    let volume = SharedVolume(RefCell::new(1_000));
+    let runner = FakeRunner {
+        volume: &volume,
+        calls: RefCell::default(),
+    };
+    let events = Events::default();
+    let guard = SafetyGuard::new(vec![]);
+    let plan = approved_with(&[Tier::A], &[(Tier::A, Disposal::Trash)].into());
+    let run = ExecuteService::new(&runner, &volume, &guard, &events)
+        .execute(&plan, Tier::A)
+        .unwrap();
+
+    let got: Vec<_> = run
+        .items
+        .iter()
+        .map(|i| (i.id.as_str(), i.status.code(), i.trashed))
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            ("npm", "ok", b(600)),
+            // comando não tem como ir para a Lixeira: roda normalmente
+            ("pip", "ok", ByteSize::ZERO),
+            ("dx", "partial", b(250)),
+            ("locked", "failed", ByteSize::ZERO),
+            ("sumiu", "skipped", ByteSize::ZERO),
+            ("negado", "failed", ByteSize::ZERO),
+            ("amplo", "skipped", ByteSize::ZERO),
+        ]
+    );
+    assert_eq!(
+        run.items[2].status,
+        ItemStatus::Partial {
+            remaining: b(50),
+            detail: Some("dx.bin: em uso".into()),
+        }
+    );
+    assert_eq!(
+        run.items[3].status,
+        ItemStatus::Failed {
+            cause: FailCause::Io(r"lixeira indisponível: C:\Users\u\AppData\Local\Locked".into()),
+        }
+    );
+    // só o comando liberou espaço; o resto está na Lixeira
+    assert_eq!(run.freed(), 100);
+    assert_eq!(run.trashed(), b(850));
+    let calls = runner.calls.borrow();
+    assert!(calls.iter().all(|c| !c.starts_with("rm ")));
+    assert!(calls.contains(&r"trash C:\Users\u\AppData\Local\npm-cache".to_string()));
+    // a guarda continua valendo antes da Lixeira
+    assert!(!calls.iter().any(|c| c == r"trash C:\Users"));
+}
+
+#[test]
+fn preview_shows_the_disposal_of_paths_only() {
+    let volume = SharedVolume(RefCell::new(1_000));
+    let runner = FakeRunner {
+        volume: &volume,
+        calls: RefCell::default(),
+    };
+    let events = Events::default();
+    let guard = SafetyGuard::new(vec![]);
+    let service = ExecuteService::new(&runner, &volume, &guard, &events);
+    let plan = approved_with(&[Tier::A, Tier::C], &[(Tier::A, Disposal::Trash)].into());
+    let a = service.preview(&plan, Tier::A).unwrap();
+    assert_eq!(a[0].disposal, Some(Disposal::Trash));
+    assert_eq!(a[1].disposal, None);
+    let c = service.preview(&plan, Tier::C).unwrap();
+    assert!(c.iter().all(|s| s.disposal.is_none()));
+    let default = service.preview(&approved(&[Tier::A]), Tier::A).unwrap();
+    assert_eq!(default[0].disposal, Some(Disposal::Permanent));
 }

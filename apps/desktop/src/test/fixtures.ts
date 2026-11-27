@@ -96,12 +96,39 @@ export const plan: PlanDto = {
   json: '{\n  "volume": "C:",\n  "tiers": {}\n}',
 }
 
-export const approval: ApprovalDto = { tiers: ['A', 'C'], itemCount: 3, estimatedBytes: 25.4 * GIB }
+export const approval: ApprovalDto = {
+  tiers: ['A', 'C'],
+  itemCount: 3,
+  estimatedBytes: 25.4 * GIB,
+  disposals: { A: 'permanent', C: 'permanent' },
+}
 
 export const stepsA: StepDto[] = [
-  { id: 'npm-cache', label: text('Rótulo npm-cache', 'Label npm-cache'), tier: 'A', kind: 'command', target: 'npm cache clean --force', estimatedBytes: 6.4 * GIB },
-  { id: 'nvidia-dxcache', label: text('Rótulo nvidia-dxcache', 'Label nvidia-dxcache'), tier: 'A', kind: 'path', target: 'C:\\x\\nvidia-dxcache', estimatedBytes: 4.8 * GIB },
+  { id: 'npm-cache', label: text('Rótulo npm-cache', 'Label npm-cache'), tier: 'A', kind: 'command', target: 'npm cache clean --force', estimatedBytes: 6.4 * GIB, disposal: null },
+  { id: 'nvidia-dxcache', label: text('Rótulo nvidia-dxcache', 'Label nvidia-dxcache'), tier: 'A', kind: 'path', target: 'C:\\x\\nvidia-dxcache', estimatedBytes: 4.8 * GIB, disposal: 'permanent' },
 ]
+
+/** Tier C indo para a Lixeira: nada liberado no volume, tudo contado à parte. */
+export const runCTrash: TierRunDto = {
+  tier: 'C',
+  freeBeforeBytes: 72.2 * GIB,
+  freeAfterBytes: 72.2 * GIB,
+  freedBytes: 0,
+  estimatedBytes: 14.2 * GIB,
+  trashedBytes: 14.2 * GIB,
+  items: [
+    {
+      id: 'gradle-caches',
+      label: text('Rótulo gradle-caches', 'Label gradle-caches'),
+      tier: 'C',
+      estimatedBytes: 14.2 * GIB,
+      freedBytes: 0,
+      status: 'ok',
+      cause: null,
+      trashedBytes: 14.2 * GIB,
+    },
+  ],
+}
 
 const result = (id: string, tier: ItemResultDto['tier'], gb: number, freedGb: number, extra: Partial<ItemResultDto> = {}): ItemResultDto => ({
   id,
@@ -111,6 +138,7 @@ const result = (id: string, tier: ItemResultDto['tier'], gb: number, freedGb: nu
   freedBytes: freedGb * GIB,
   status: 'ok',
   cause: null,
+  trashedBytes: 0,
   ...extra,
 })
 
@@ -120,6 +148,7 @@ export const runA: TierRunDto = {
   freeAfterBytes: 72.2 * GIB,
   freedBytes: 10.6 * GIB,
   estimatedBytes: 11.2 * GIB,
+  trashedBytes: 0,
   items: [
     result('npm-cache', 'A', 6.4, 6.4),
     result('nvidia-dxcache', 'A', 4.8, 4.2, { status: 'partial', cause: { code: 'partial_os', detail: 'dx.bin: em uso', exitCode: null } }),
@@ -132,6 +161,7 @@ export const runC: TierRunDto = {
   freeAfterBytes: 86.4 * GIB,
   freedBytes: 14.2 * GIB,
   estimatedBytes: 14.2 * GIB,
+  trashedBytes: 0,
   items: [result('gradle-caches', 'C', 14.2, 14.2)],
 }
 
@@ -140,6 +170,7 @@ export const report: ReportDto = {
   last: { ...survey.volume, freeBytes: 86.4 * GIB, usedBytes: 866.6 * GIB, usedPercent: 90.9, freePercent: 9.1 },
   freedBytes: 24.8 * GIB,
   estimatedBytes: 25.4 * GIB,
+  trashedBytes: 0,
   itemCount: 3,
   runs: [runA, runC],
   pending: [runA.items[1]!],

@@ -37,6 +37,11 @@ impl CleanupReport {
         self.runs.iter().map(TierRun::estimated).sum()
     }
 
+    /// Total movido para a Lixeira na sessão (não entra em `freed`).
+    pub fn trashed(&self) -> ByteSize {
+        self.runs.iter().map(TierRun::trashed).sum()
+    }
+
     pub fn item_count(&self) -> usize {
         self.runs.iter().map(|r| r.items.len()).sum()
     }

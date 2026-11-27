@@ -4,6 +4,7 @@ import type { DiskCleanupGateway, SurveyRequest } from '../application/gateway'
 import type {
   ApprovalDto,
   ClassificationDto,
+  Disposal,
   ExecutionEventDto,
   PlanDto,
   ReportDto,
@@ -46,8 +47,8 @@ export class TauriGateway implements DiskCleanupGateway {
     return this.call<PlanDto>('build_plan', { volume, selected })
   }
 
-  approvePlan(tiers: Tier[], acknowledged: boolean): Promise<ApprovalDto> {
-    return this.call<ApprovalDto>('approve_plan', { tiers, acknowledged })
+  approvePlan(tiers: Tier[], disposals: Partial<Record<Tier, Disposal>>, acknowledged: boolean): Promise<ApprovalDto> {
+    return this.call<ApprovalDto>('approve_plan', { tiers, disposals, acknowledged })
   }
 
   previewTier(tier: Tier): Promise<StepDto[]> {

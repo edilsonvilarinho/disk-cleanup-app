@@ -6,7 +6,8 @@ import { useClassificationStore } from '../../application/stores/classification'
 import { usePlanStore } from '../../application/stores/plan'
 import { useSurveyStore } from '../../application/stores/survey'
 import { useSystemStore } from '../../application/stores/system'
-import type { Tier } from '../../domain/models'
+import { splitByDisposal } from '../../domain/disposal'
+import type { Disposal, Tier } from '../../domain/models'
 import TierBadge from '../components/TierBadge.vue'
 import { useI18n } from '../i18n'
 import { volumeLabel } from '../labels'
@@ -28,17 +29,25 @@ const ackInput = ref<HTMLInputElement | null>(null)
 const ready = computed(() => classification.status === 'done' && system.info !== null)
 const items = computed(() => classification.candidates.filter((c) => classification.selected.includes(c.id) && !c.blocked))
 const groups = computed(() =>
-  (planStore.plan?.tiers ?? []).map((pt) => ({
-    tier: pt.tier,
-    bytes: pt.estimatedBytes,
-    items: items.value.filter((c) => c.tier === pt.tier),
-    approved: planStore.approvedTiers.includes(pt.tier),
-  })),
+  (planStore.plan?.tiers ?? []).map((pt) => {
+    const tierItems = items.value.filter((c) => c.tier === pt.tier)
+    return {
+      tier: pt.tier,
+      bytes: pt.estimatedBytes,
+      items: tierItems,
+      approved: planStore.approvedTiers.includes(pt.tier),
+      /** Só caminho vai para a Lixeira; tier só de comandos não tem destino. */
+      hasPaths: tierItems.some((c) => c.kind === 'path'),
+      disposal: planStore.disposals[pt.tier],
+    }
+  }),
 )
 const maxBytes = computed(() => Math.max(1, ...groups.value.map((g) => g.bytes)))
 const running = computed(() => groups.value.filter((g) => g.approved))
 const runCount = computed(() => running.value.reduce((n, g) => n + g.items.length, 0))
-const runBytes = computed(() => running.value.reduce((n, g) => n + g.bytes, 0))
+/** O que libera agora × o que vai para a Lixeira (só libera ao esvaziar). */
+const split = computed(() => splitByDisposal(running.value.flatMap((g) => g.items), planStore.disposals))
+const DISPOSALS: Disposal[] = ['trash', 'permanent']
 const allOpen = computed(() => groups.value.length > 0 && groups.value.every((g) => open.value[g.tier]))
 const missing = computed(() => (planStore.approvedTiers.length === 0 ? t('plan.missingTier') : t('plan.missingAck')))
 
@@ -135,10 +144,15 @@ async function copy(text: string) {
     <section class="card approve-card" data-test="approval" :aria-label="t('plan.approval')">
       <div class="ap-sum">
         <div class="ap-kpi"><span class="small muted">{{ t('plan.runItems') }}</span><span class="ap-v" data-test="run-count">{{ count(runCount) }}</span></div>
-        <div class="ap-kpi"><span class="small muted">{{ t('plan.estimate') }}</span><span class="ap-v" data-test="run-bytes">{{ gb(runBytes) }}</span></div>
+        <div class="ap-kpi"><span class="small muted">{{ t('plan.freeNow') }}</span><span class="ap-v" data-test="run-bytes">{{ gb(split.now) }}</span></div>
+        <div v-if="split.trash > 0" class="ap-kpi">
+          <span class="small muted">{{ t('plan.toTrash') }}</span>
+          <span class="ap-v info" data-test="trash-bytes">{{ gb(split.trash) }}</span>
+          <span class="small muted">{{ t('plan.toTrashHint') }}</span>
+        </div>
         <div v-if="survey.report" class="ap-kpi">
           <span class="small muted">{{ t('plan.freeAfter') }}</span>
-          <span class="ap-v" data-test="free-after">{{ gb(survey.report.volume.freeBytes + runBytes) }}</span>
+          <span class="ap-v" data-test="free-after">{{ gb(survey.report.volume.freeBytes + split.now) }}</span>
         </div>
       </div>
       <div class="ap-ctrl">
@@ -157,8 +171,30 @@ async function copy(text: string) {
             </label>
           </div>
         </div>
+        <div v-if="running.length" class="ap-step">
+          <span class="label-caps"><span class="ap-n">2</span>{{ t('plan.disposal') }}</span>
+          <div class="dest-rows" data-test="plan-disposals">
+            <div v-for="g in running" :key="g.tier" class="dest-row">
+              <TierBadge :tier="g.tier" />
+              <div v-if="g.hasPaths" class="dest" role="group" :aria-label="`${t('plan.disposal')} · ${g.tier}`">
+                <button
+                  v-for="d in DISPOSALS"
+                  :key="d"
+                  type="button"
+                  :data-test="`dest-${g.tier}-${d}`"
+                  :aria-pressed="g.disposal === d"
+                  @click="planStore.setDisposal(g.tier, d)"
+                >
+                  <svg v-if="d === 'trash'" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
+                  {{ t(d === 'trash' ? 'plan.disposalTrash' : 'plan.disposalPermanent') }}
+                </button>
+              </div>
+              <span v-else class="small muted" :data-test="`dest-${g.tier}-none`">{{ t('plan.disposalCommands') }}</span>
+            </div>
+          </div>
+        </div>
         <div class="ap-step">
-          <span class="label-caps"><span class="ap-n">2</span>{{ t('plan.confirm') }}</span>
+          <span class="label-caps"><span class="ap-n">{{ running.length ? 3 : 2 }}</span>{{ t('plan.confirm') }}</span>
           <label class="ack" :class="{ on: planStore.acknowledged, attn: attention === 'ack' }">
             <input ref="ackInput" type="checkbox" data-test="ack" :checked="planStore.acknowledged" @change="onAck" />
             <span>{{ t('plan.ack') }}</span>
@@ -185,6 +221,8 @@ async function copy(text: string) {
             <TierBadge :tier="g.tier" />
             <span class="small muted">{{ itemsLabel(g.items.length) }}</span>
             <span v-if="!g.approved" class="pill neutral">{{ t('plan.outOfRun') }}</span>
+            <span v-else-if="g.hasPaths && g.disposal === 'trash'" class="pill info"><span class="dot" />{{ t('plan.groupTrash') }}</span>
+            <span v-else-if="g.hasPaths" class="pill neutral"><span class="dot" />{{ t('plan.groupPermanent') }}</span>
             <span class="grp-bar" aria-hidden="true"><i :style="{ width: `${(g.bytes / maxBytes) * 100}%`, background: `var(--t${g.tier})` }" /></span>
             <span class="num">{{ gb(g.bytes) }}</span>
             <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>

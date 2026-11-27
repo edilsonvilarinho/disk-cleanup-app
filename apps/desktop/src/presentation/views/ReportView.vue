@@ -90,7 +90,7 @@ async function copy() {
 
   <template v-if="store.report">
     <section class="kpis" aria-label="KPIs">
-      <div class="kpi"><span class="small muted">{{ t('report.freed') }}</span><span class="value" data-test="report-freed">{{ signedGb(store.report.freedBytes) }}</span><span class="small muted">{{ t('report.estimated', { size: gb(store.report.estimatedBytes) }) }}</span></div>
+      <div class="kpi"><span class="small muted">{{ t('report.freed') }}</span><span class="value" data-test="report-freed">{{ signedGb(store.report.freedBytes) }}</span><span class="small muted">{{ t('report.estimated', { size: gb(store.report.estimatedBytes) }) }}</span><span v-if="store.report.trashedBytes > 0" class="small muted" data-test="report-trashed">{{ t('report.trashed', { size: gb(store.report.trashedBytes) }) }}</span></div>
       <div class="kpi"><span class="small muted">{{ t('report.free') }}</span><span class="value">{{ gb(store.report.last.freeBytes) }}</span><span class="small muted">{{ t('report.before', { value: gb(store.report.initial.freeBytes) }) }}</span></div>
       <div class="kpi"><span class="small muted">{{ t('report.occupancy') }}</span><span class="value">{{ pct(store.report.last.usedPercent) }}</span><span class="small muted">{{ t('report.before', { value: pct(store.report.initial.usedPercent) }) }}</span></div>
       <div class="kpi"><span class="small muted">{{ t('report.pending') }}</span><span class="value">{{ store.report.pending.length }}</span><span class="small muted">{{ t('report.executed', { n: store.report.itemCount }) }}</span></div>
@@ -100,7 +100,7 @@ async function copy() {
       <div class="card-head"><h2>{{ t('report.byTier') }}</h2><span class="small muted">{{ t('report.measured') }}</span></div>
       <div v-for="run in store.report.runs" :key="run.tier" class="kv">
         <TierBadge :tier="run.tier" />
-        <span class="num">{{ signedGb(run.freedBytes) }} <span class="muted">/ {{ gb(run.estimatedBytes) }}</span></span>
+        <span class="num">{{ signedGb(run.freedBytes) }} <span class="muted">/ {{ gb(run.estimatedBytes) }}</span><span v-if="run.trashedBytes > 0" class="muted"> · {{ t('report.tierTrashed', { size: gb(run.trashedBytes) }) }}</span></span>
       </div>
     </section>
 

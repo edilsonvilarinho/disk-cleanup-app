@@ -110,10 +110,15 @@ export interface PlanDto {
   json: string
 }
 
+/** Destino do que um tier remove: Lixeira (recuperável) ou definitivo. */
+export type Disposal = 'trash' | 'permanent'
+
 export interface ApprovalDto {
   tiers: Tier[]
   itemCount: number
   estimatedBytes: number
+  /** Destino de cada tier aprovado, fixado na aprovação. */
+  disposals: Partial<Record<Tier, Disposal>>
 }
 
 export interface StepDto {
@@ -123,6 +128,8 @@ export interface StepDto {
   kind: ActionKind
   target: string
   estimatedBytes: number
+  /** Destino do caminho; `null` para comando e desinstalação. */
+  disposal: Disposal | null
 }
 
 export type ItemStatus = 'ok' | 'partial' | 'skipped' | 'failed'
@@ -152,6 +159,8 @@ export interface ItemResultDto {
   freedBytes: number
   status: ItemStatus
   cause: CauseDto | null
+  /** Movido para a Lixeira: não entra em `freedBytes` até ela ser esvaziada. */
+  trashedBytes: number
 }
 
 export interface TierRunDto {
@@ -160,6 +169,7 @@ export interface TierRunDto {
   freeAfterBytes: number
   freedBytes: number
   estimatedBytes: number
+  trashedBytes: number
   items: ItemResultDto[]
 }
 
@@ -174,6 +184,8 @@ export interface ReportDto {
   last: VolumeDto
   freedBytes: number
   estimatedBytes: number
+  /** Total movido para a Lixeira na sessão. */
+  trashedBytes: number
   itemCount: number
   runs: TierRunDto[]
   pending: ItemResultDto[]

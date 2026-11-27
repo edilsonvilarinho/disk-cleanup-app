@@ -72,6 +72,9 @@ pub struct ItemResult {
     pub free_before: ByteSize,
     pub free_after: ByteSize,
     pub status: ItemStatus,
+    /// Bytes movidos para a Lixeira: saíram do lugar, mas não liberam espaço
+    /// no volume até a Lixeira ser esvaziada.
+    pub trashed: ByteSize,
 }
 
 impl ItemResult {
@@ -96,6 +99,10 @@ impl TierRun {
 
     pub fn estimated(&self) -> ByteSize {
         self.items.iter().map(|i| i.estimated).sum()
+    }
+
+    pub fn trashed(&self) -> ByteSize {
+        self.items.iter().map(|i| i.trashed).sum()
     }
 
     pub fn pending(&self) -> Vec<&ItemResult> {

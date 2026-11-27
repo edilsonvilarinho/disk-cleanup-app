@@ -1,8 +1,8 @@
 use std::fmt;
 
 use disk_cleanup_domain::{
-    Action, ApprovedPlan, ByteSize, FailCause, ItemResult, ItemStatus, LocalizedText, PlanItem,
-    SafetyGuard, SkipCause, Tier, TierRun,
+    Action, ApprovedPlan, ByteSize, Disposal, FailCause, ItemResult, ItemStatus, LocalizedText,
+    PlanItem, SafetyGuard, SkipCause, Tier, TierRun,
 };
 
 use crate::{ActionRunner, AppError, ExecutionProgress, PortError, VolumeInfo};
@@ -16,6 +16,8 @@ pub struct PlannedStep {
     pub kind: &'static str,
     pub target: String,
     pub estimated: ByteSize,
+    /// Destino do caminho; `None` para comando e desinstalação.
+    pub disposal: Option<Disposal>,
 }
 
 /// Executa um tier de um plano **aprovado**, medindo o espaço livre a cada
@@ -47,6 +49,7 @@ impl<'a> ExecuteService<'a> {
         approved: &ApprovedPlan,
         tier: Tier,
     ) -> Result<Vec<PlannedStep>, AppError> {
+        let disposal = approved.disposal(tier);
         Ok(Self::items(approved, tier)?
             .iter()
             .map(|item| PlannedStep {
@@ -56,19 +59,21 @@ impl<'a> ExecuteService<'a> {
                 kind: item.action.kind(),
                 target: target_of(&item.action),
                 estimated: item.estimated,
+                disposal: matches!(item.action, Action::RemovePath { .. }).then_some(disposal),
             })
             .collect())
     }
 
     pub fn execute(&self, approved: &ApprovedPlan, tier: Tier) -> Result<TierRun, AppError> {
         let items = Self::items(approved, tier)?;
+        let disposal = approved.disposal(tier);
         let volume = approved.plan().volume();
         let free_before = self.volumes.usage(volume)?.free();
         let mut current = free_before;
         let mut results = Vec::with_capacity(items.len());
         for item in items {
             self.progress.item_started(&item.id);
-            let status = self.run(&item.action);
+            let (status, trashed) = self.run(&item.action, disposal);
             let after = self
                 .volumes
                 .usage(volume)
@@ -82,6 +87,7 @@ impl<'a> ExecuteService<'a> {
                 free_before: current,
                 free_after: after,
                 status,
+                trashed,
             };
             self.progress.item_finished(&result);
             current = after;
@@ -103,23 +109,37 @@ impl<'a> ExecuteService<'a> {
         Ok(items)
     }
 
-    fn run(&self, action: &Action) -> ItemStatus {
+    /// Status do item e bytes movidos para a Lixeira.
+    fn run(&self, action: &Action, disposal: Disposal) -> (ItemStatus, ByteSize) {
         match action {
-            Action::RemovePath { path } => self.remove(path),
-            Action::Command { command } => self.command(command),
-            Action::Uninstall { .. } => ItemStatus::Skipped {
-                cause: SkipCause::UninstallUnsupported,
-            },
+            Action::RemovePath { path } => self.remove(path, disposal),
+            Action::Command { command } => (self.command(command), ByteSize::ZERO),
+            Action::Uninstall { .. } => (
+                ItemStatus::Skipped {
+                    cause: SkipCause::UninstallUnsupported,
+                },
+                ByteSize::ZERO,
+            ),
         }
     }
 
-    fn remove(&self, path: &str) -> ItemStatus {
+    fn remove(&self, path: &str, disposal: Disposal) -> (ItemStatus, ByteSize) {
+        // A guarda vale para os dois destinos: Lixeira também tira do lugar.
         if let Err(violation) = self.guard.check(path) {
-            return ItemStatus::Skipped {
+            let status = ItemStatus::Skipped {
                 cause: SkipCause::Unsafe(violation),
             };
+            return (status, ByteSize::ZERO);
         }
-        match self.runner.remove_path(path) {
+        let outcome = match disposal {
+            Disposal::Permanent => self.runner.remove_path(path),
+            Disposal::Trash => self.runner.trash_path(path),
+        };
+        let trashed = match (&outcome, disposal) {
+            (Ok(o), Disposal::Trash) => o.removed,
+            _ => ByteSize::ZERO,
+        };
+        let status = match outcome {
             Ok(outcome) if outcome.remaining == ByteSize::ZERO && outcome.errors.is_empty() => {
                 ItemStatus::Done
             }
@@ -133,7 +153,8 @@ impl<'a> ExecuteService<'a> {
             Err(e) => ItemStatus::Failed {
                 cause: FailCause::Io(port_message(e)),
             },
-        }
+        };
+        (status, trashed)
     }
 
     fn command(&self, command: &str) -> ItemStatus {
