@@ -5,6 +5,7 @@ import type {
   ApprovalDto,
   ClassificationDto,
   Disposal,
+  DuplicatesDto,
   RuleCheckDto,
   ExecutionEventDto,
   PlanDto,
@@ -43,6 +44,10 @@ export class TauriGateway implements DiskCleanupGateway {
   classify(request: ClassifyRequest): Promise<ClassificationDto> {
     const { extraExclusions, projectRoots, userRules, disabledProfiles } = request
     return this.call<ClassificationDto>('classify', { extraExclusions, projectRoots, customization: { userRules, disabledProfiles } })
+  }
+
+  findDuplicates(): Promise<DuplicatesDto> {
+    return this.call<DuplicatesDto>('find_duplicates')
   }
 
   checkRule(extraExclusions: string[], path: string): Promise<RuleCheckDto> {

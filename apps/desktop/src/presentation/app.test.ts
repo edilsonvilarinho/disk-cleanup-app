@@ -380,6 +380,49 @@ describe('Projetos na Classificação', () => {
   })
 })
 
+describe('Duplicados na Classificação', () => {
+  it('procura sob demanda, mostra as etapas e oferece a cópia sem marcar', async () => {
+    const dup = candidate('dup:C:\\Users\\u\\b.zip', 'D', 2, {
+      origin: 'duplicate',
+      label: { pt: 'b.zip', en: 'b.zip' },
+      note: { pt: 'cópia de C:\\Users\\u\\a.zip', en: 'copy of C:\\Users\\u\\a.zip' },
+    })
+    const classify = vi
+      .fn()
+      .mockResolvedValueOnce(classification)
+      .mockResolvedValueOnce({ ...classification, candidates: [...classification.candidates, dup] })
+    const { wrapper, gateway } = await mountApp('/classificacao', fakeGateway({ classify }))
+    await wrapper.get('[data-test="tab-A"]').trigger('click')
+    expect(wrapper.find('[data-test="find-duplicates"]').exists()).toBe(false)
+    await wrapper.get('[data-test="tab-D"]').trigger('click')
+    expect(wrapper.find('[data-test="duplicates-summary"]').exists()).toBe(false)
+    // seleção manual anterior sobrevive à reclassificação
+    await wrapper.get('[data-test="tab-A"]').trigger('click')
+    await wrapper.findAll('[data-test="row"]')[0]!.get('input').trigger('change')
+    await wrapper.get('[data-test="tab-D"]').trigger('click')
+    await wrapper.get('[data-test="find-duplicates"]').trigger('click')
+    await flushPromises()
+    expect(gateway.findDuplicates).toHaveBeenCalledTimes(1)
+    expect(classify).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-test="duplicates-summary"]').text()).toContain('2 confirmados byte a byte (1 grupos)')
+    const row = wrapper.findAll('[data-test="row"]').find((r) => r.text().includes('b.zip'))!
+    expect(row.text()).toContain('cópia de C:\\Users\\u\\a.zip')
+    expect((row.get('input').element as HTMLInputElement).checked).toBe(false)
+    await wrapper.get('[data-test="tab-A"]').trigger('click')
+    expect((wrapper.findAll('[data-test="row"]')[0]!.get('input').element as HTMLInputElement).checked).toBe(false)
+  })
+
+  it('erro na busca aparece sem perder a classificação', async () => {
+    const findDuplicates = vi.fn(async () => Promise.reject(new Error('sem acesso ao perfil')))
+    const { wrapper } = await mountApp('/classificacao', fakeGateway({ findDuplicates }))
+    await wrapper.get('[data-test="tab-D"]').trigger('click')
+    await wrapper.get('[data-test="find-duplicates"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="classify-error"]').text()).toContain('sem acesso ao perfil')
+    expect(wrapper.findAll('[data-test="tab-A"]')).toHaveLength(1)
+  })
+})
+
 describe('Mapa do volume', () => {
   it('entra na pasta, volta pela trilha e não abre "outros" nem folha', async () => {
     const { wrapper } = await mountApp('/')

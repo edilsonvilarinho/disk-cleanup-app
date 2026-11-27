@@ -4,6 +4,7 @@ import type {
   ClassificationDto,
   Disposal,
   ExecutionEventDto,
+  DuplicatesDto,
   RuleCheckDto,
   UserRule,
   PlanDto,
@@ -36,6 +37,8 @@ export interface DiskCleanupGateway {
   systemInfo(): Promise<SystemInfoDto>
   runSurvey(request: SurveyRequest, onProgress: (progress: ScanProgressDto) => void): Promise<SurveyDto>
   classify(request: ClassifyRequest): Promise<ClassificationDto>
+  /** Busca duplicados no perfil (só leitura); a próxima classificação inclui as cópias. */
+  findDuplicates(): Promise<DuplicatesDto>
   /** Valida a pasta de uma regra própria antes de salvar. */
   checkRule(extraExclusions: string[], path: string): Promise<RuleCheckDto>
   buildPlan(volume: string, selected: string[]): Promise<PlanDto>

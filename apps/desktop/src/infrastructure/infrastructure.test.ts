@@ -17,6 +17,7 @@ describe('TauriGateway', () => {
       disabledProfiles: ['node'],
     })
     await gateway.checkRule(['C:\\Projetos'], 'C:\\x')
+    await gateway.findDuplicates()
     await gateway.buildPlan('C:', ['a'])
     expect(invoke).toHaveBeenCalledWith('classify', {
       extraExclusions: ['C:\\Projetos'],
@@ -24,6 +25,7 @@ describe('TauriGateway', () => {
       customization: { userRules: [{ label: 'T', path: 'C:\\t', tier: 'A' }], disabledProfiles: ['node'] },
     })
     expect(invoke).toHaveBeenCalledWith('check_rule', { extraExclusions: ['C:\\Projetos'], path: 'C:\\x' })
+    expect(invoke).toHaveBeenCalledWith('find_duplicates')
     expect(invoke).toHaveBeenCalledWith('build_plan', { volume: 'C:', selected: ['a'] })
   })
 
@@ -173,6 +175,14 @@ describe('DemoGateway · regras próprias e perfis', () => {
     expect(all.candidates.filter((c) => c.origin === 'project').length).toBeGreaterThan(0)
     const plan = await gateway.buildPlan('C:', ['user:D:\\unity\\Library'])
     expect(plan.itemCount).toBe(1)
+    const dups = await gateway.findDuplicates()
+    expect(dups.groups.length).toBe(2)
+    const after = await gateway.classify(EMPTY_CLASSIFY_REQUEST)
+    const copies = after.candidates.filter((c) => c.origin === 'duplicate')
+    expect(copies).toHaveLength(3)
+    expect(copies.some((c) => c.target.includes('Win11') && c.target.startsWith('D:'))).toBe(true)
+    // a cópia mantida nunca vira candidata a duplicado (pode aparecer como arquivo grande)
+    expect(copies.some((c) => dups.groups.some((g) => g.keep === c.target))).toBe(false)
   })
 })
 

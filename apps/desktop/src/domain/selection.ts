@@ -13,6 +13,11 @@ export function isSelectable(candidate: CandidateDto): boolean {
   return candidate.blocked === null
 }
 
+/** Arquivo grande e cópia duplicada são dados do usuário: só entram marcados um a um. */
+export function isUserData(c: CandidateDto): boolean {
+  return c.origin === 'file' || c.origin === 'duplicate'
+}
+
 /** Artefato de projeto só conta como parado com idade conhecida ≥ `minIdleDays`. */
 export function isIdleEnough(c: CandidateDto, minIdleDays: number): boolean {
   return c.idleDays !== null && c.idleDays >= minIdleDays
@@ -22,7 +27,7 @@ export function isIdleEnough(c: CandidateDto, minIdleDays: number): boolean {
  *  arquivo grande (dado do usuário: só entra marcado um a um). */
 export function defaultSelection(candidates: readonly CandidateDto[], minIdleDays = 0): string[] {
   return candidates
-    .filter((c) => isSelectable(c) && c.origin !== 'file' && (c.project === null || isIdleEnough(c, minIdleDays)))
+    .filter((c) => isSelectable(c) && !isUserData(c) && (c.project === null || isIdleEnough(c, minIdleDays)))
     .map((c) => c.id)
 }
 
@@ -33,7 +38,7 @@ export function toggle(selected: readonly string[], id: string): string[] {
 /** Marca o tier inteiro; se já estiver todo marcado, desmarca. Bloqueados nunca entram. */
 export function toggleTier(selected: readonly string[], candidates: readonly CandidateDto[], tier: Tier): string[] {
   // Arquivo grande fica fora do "marcar tier inteiro".
-  const ids = candidates.filter((c) => c.tier === tier && isSelectable(c) && c.origin !== 'file').map((c) => c.id)
+  const ids = candidates.filter((c) => c.tier === tier && isSelectable(c) && !isUserData(c)).map((c) => c.id)
   const allOn = ids.every((id) => selected.includes(id))
   if (allOn) return selected.filter((s) => !ids.includes(s))
   return [...selected, ...ids.filter((id) => !selected.includes(id))]

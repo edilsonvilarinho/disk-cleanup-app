@@ -3,6 +3,7 @@
 
 mod catalog;
 mod classify;
+mod duplicates;
 mod error;
 mod execute;
 mod plan;
@@ -12,8 +13,11 @@ mod template;
 
 pub use catalog::{Catalog, CatalogExclusion, CatalogRule, ProjectProfile, RuleTarget};
 pub use classify::{
-    effective_exclusions, ClassificationReport, ClassifyService, LargeFileInfo, ProjectInfo,
-    SkipReason, SkippedRule,
+    effective_exclusions, ClassificationReport, ClassifyService, DuplicateInfo, LargeFileInfo,
+    ProjectInfo, SkipReason, SkippedRule,
+};
+pub use duplicates::{
+    ContentHasher, DuplicateGroup, DuplicateReport, DuplicateService, DuplicateStats,
 };
 pub use error::AppError;
 pub use execute::{protected_paths_guard, ExecuteService, PlannedStep};

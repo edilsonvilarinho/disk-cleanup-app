@@ -108,7 +108,13 @@ export interface CandidateDto {
   idleDays: number | null
 }
 
-export type CandidateOrigin = 'rule' | 'project' | 'file'
+export type CandidateOrigin = 'rule' | 'project' | 'file' | 'duplicate'
+
+/** Resultado da busca de duplicados (só leitura). `keep` nunca vira candidato. */
+export interface DuplicatesDto {
+  groups: { sizeBytes: number; keep: string; copies: string[] }[]
+  stats: { files: number; sameSize: number; samePartial: number; sameFull: number; confirmed: number }
+}
 
 export type SkipCode = 'not_found' | 'empty' | 'unresolved_variable' | 'excluded' | 'unmeasurable'
 

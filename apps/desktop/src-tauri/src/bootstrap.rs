@@ -11,15 +11,16 @@ use tauri::{AppHandle, Emitter, Manager, State, Url, Webview};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_updater::{Update, UpdaterExt};
 
+use disk_cleanup_application::Environment;
 use disk_cleanup_infrastructure::{
     catalog_for, exclusions_for, FsActionRunner, FsProjectFinder, JwalkFileWalker,
-    SkillPlanJsonCodec, SnapshotEnvironment, SysinfoVolumeInfo, TomlCatalogRepository,
-    WalkerPathInspector,
+    SkillPlanJsonCodec, SnapshotEnvironment, StdContentHasher, SysinfoVolumeInfo,
+    TomlCatalogRepository, WalkerPathInspector,
 };
 
 use crate::dto::{
-    ApprovalDto, ClassificationDto, PlanDto, ReportDto, RuleCheckDto, StepDto, SurveyDto,
-    SurveyRequestDto, SystemInfoDto, TierRunDto, UserCustomizationDto,
+    ApprovalDto, ClassificationDto, DuplicatesDto, PlanDto, ReportDto, RuleCheckDto, StepDto,
+    SurveyDto, SurveyRequestDto, SystemInfoDto, TierRunDto, UserCustomizationDto,
 };
 use crate::error::ErrorDto;
 use crate::export;
@@ -83,6 +84,24 @@ async fn run_survey(app: AppHandle, request: SurveyRequestDto) -> Result<SurveyD
             &progress,
             &request,
         )
+    })
+    .await
+    .map_err(join_error)?
+}
+
+/// Duplicados no perfil do usuário (fora dele, só sistema e programas).
+#[tauri::command]
+async fn find_duplicates(app: AppHandle) -> Result<DuplicatesDto, ErrorDto> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let env = SnapshotEnvironment::from_process();
+        let profile = env.var(if OS == "windows" {
+            "USERPROFILE"
+        } else {
+            "HOME"
+        });
+        let roots: Vec<String> = profile.into_iter().collect();
+        let session = app.state::<Session>();
+        service::find_duplicates(&session, &JwalkFileWalker, &StdContentHasher, &roots)
     })
     .await
     .map_err(join_error)?
@@ -343,6 +362,7 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
             run_survey,
             classify,
             check_rule,
+            find_duplicates,
             build_plan,
             approve_plan,
             preview_tier,

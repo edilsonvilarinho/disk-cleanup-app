@@ -86,6 +86,9 @@ ele é substituído por um fake.
    recusam alvo dentro **ou contendo** o que é protegido (remover a pasta pai apagaria a filha).
 11. Regra própria (Configurações) é só caminho, tier A ou C, e passa pelas mesmas exclusões e guardas do
    catálogo; o comando `check_rule` explica a recusa antes de salvar. Perfis de projeto podem ser desligados.
+12. Duplicados (`DuplicateService`, sob demanda e só no perfil): tamanho → hash parcial → hash completo →
+   byte a byte. Placeholder de nuvem (alocado 0 ou pasta de nuvem) nunca é lido. A cópia mais antiga de
+   cada grupo nunca vira candidata; as demais entram no tier D, nunca pré-marcadas.
 9. Arquivo grande (`TopFiles`, os 30 maiores ≥ 512 MiB da varredura) só é oferecido **dentro do perfil do
    usuário**, como tier D, nunca pré-marcado e fora do "marcar tier inteiro"; o destino padrão do tier D
    é a Lixeira.

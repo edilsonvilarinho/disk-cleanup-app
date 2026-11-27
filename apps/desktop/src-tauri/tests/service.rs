@@ -321,6 +321,7 @@ fn every_skip_and_block_code_is_mapped() {
     let report = ClassificationReport {
         projects: vec![],
         large_files: vec![],
+        duplicates: vec![],
         candidates: vec![],
         skipped: vec![
             SkippedRule {
@@ -602,4 +603,79 @@ fn user_rules_and_disabled_profiles_reach_the_classification() {
         ),
         ("node", "Node.js")
     );
+}
+
+#[test]
+fn duplicates_found_in_the_profile_become_duplicate_candidates() {
+    use disk_cleanup_application::ContentHasher;
+    use disk_cleanup_desktop_lib::find_duplicates;
+    struct Copies;
+    impl FileWalker for Copies {
+        fn walk(
+            &self,
+            root: &str,
+            sink: &mut dyn FnMut(FileRecord),
+        ) -> Result<WalkStats, PortError> {
+            assert_eq!(root, r"C:\Users\u");
+            for (p, m) in [(r"C:\Users\u\a\x.zip", 1), (r"C:\Users\u\b\x.zip", 2)] {
+                sink(FileRecord {
+                    components: path_components(p),
+                    logical: ByteSize::from_bytes(2 << 20),
+                    allocated: ByteSize::from_bytes(2 << 20),
+                    modified: Some(m),
+                });
+            }
+            Ok(WalkStats {
+                files: 2,
+                unreadable: 0,
+            })
+        }
+    }
+    struct Same;
+    impl ContentHasher for Same {
+        fn partial(&self, _: &str) -> Result<u64, PortError> {
+            Ok(1)
+        }
+        fn full(&self, _: &str) -> Result<u64, PortError> {
+            Ok(2)
+        }
+        fn equal(&self, _: &str, _: &str) -> Result<bool, PortError> {
+            Ok(true)
+        }
+    }
+    let session = Session::default();
+    let dto = find_duplicates(&session, &Copies, &Same, &[r"C:\Users\u".into()]).unwrap();
+    assert_eq!(dto.groups[0].keep, r"C:\Users\u\a\x.zip");
+    assert_eq!(
+        dto.groups[0].copies,
+        vec![r"C:\Users\u\b\x.zip".to_string()]
+    );
+    assert_eq!(
+        (
+            dto.stats.files,
+            dto.stats.confirmed,
+            dto.groups[0].size_bytes
+        ),
+        (2, 2, 2 << 20)
+    );
+    let classified = classify(
+        &session,
+        &Catalogue,
+        &env(),
+        &Inspector,
+        ExclusionList::default(),
+        &[],
+    )
+    .unwrap();
+    let dup = classified
+        .candidates
+        .iter()
+        .find(|c| c.origin == "duplicate")
+        .unwrap();
+    assert_eq!(dup.id, r"dup:C:\Users\u\b\x.zip");
+    assert!(dup.note.pt.contains(r"a\x.zip"));
+    assert!(!classified
+        .candidates
+        .iter()
+        .any(|c| c.id.contains(r"\a\x.zip")));
 }

@@ -7,9 +7,10 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use disk_cleanup_application::{
     effective_exclusions, expand_template, export_plan, protected_paths_guard, ActionRunner,
-    CatalogRepository, CatalogRule, ClassificationReport, ClassifyService, Environment,
-    ExecuteService, ExecutionProgress, FileWalker, PathInspector, PlanCodec, ProjectFinder,
-    RuleTarget, ScanProgress, SurveyRequest, SurveyService, VolumeInfo,
+    CatalogRepository, CatalogRule, ClassificationReport, ClassifyService, ContentHasher,
+    DuplicateGroup, DuplicateService, Environment, ExecuteService, ExecutionProgress, FileWalker,
+    PathInspector, PlanCodec, ProjectFinder, RuleTarget, ScanProgress, SurveyRequest,
+    SurveyService, VolumeInfo,
 };
 use disk_cleanup_domain::{
     approve, ApprovedPlan, ByteSize, CleanupReport, Disposal, ExclusionList, ItemResult, LargeFile,
@@ -17,9 +18,9 @@ use disk_cleanup_domain::{
 };
 
 use crate::dto::{
-    ApprovalDto, ClassificationDto, ExecutionEventDto, ItemResultDto, PlanDto, ProfileDto,
-    ReportDto, RuleCheckDto, StepDto, SurveyDto, SurveyRequestDto, SystemInfoDto, TextDto,
-    TierRunDto, UserCustomizationDto, UserRuleDto,
+    ApprovalDto, ClassificationDto, DuplicatesDto, ExecutionEventDto, ItemResultDto, PlanDto,
+    ProfileDto, ReportDto, RuleCheckDto, StepDto, SurveyDto, SurveyRequestDto, SystemInfoDto,
+    TextDto, TierRunDto, UserCustomizationDto, UserRuleDto,
 };
 use crate::error::ErrorDto;
 
@@ -32,6 +33,8 @@ struct SessionState {
     initial: Option<VolumeUsage>,
     /// Maiores arquivos do perfil na última varredura (viram candidatos do tier D).
     largest: Vec<LargeFile>,
+    /// Grupos da última busca de duplicados (cópias viram candidatos do tier D).
+    duplicates: Vec<DuplicateGroup>,
     runs: Vec<TierRun>,
 }
 
@@ -263,13 +266,17 @@ pub fn classify_custom(
         .iter()
         .map(user_rule)
         .collect::<Result<_, _>>()?;
-    let largest = session.lock().largest.clone();
+    let (largest, duplicates) = {
+        let state = session.lock();
+        (state.largest.clone(), state.duplicates.clone())
+    };
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
     let mut service = ClassifyService::new(catalog, env, inspector)
         .with_large_files(&largest, now)
-        .with_user_rules(&rules, &custom.disabled_profiles);
+        .with_user_rules(&rules, &custom.disabled_profiles)
+        .with_duplicates(&duplicates);
     if let Some(search) = projects {
         service = service.with_projects(search.finder, search.roots);
     }
@@ -317,6 +324,23 @@ pub fn check_rule(
             result("protected", Some(path), None)
         }
     })
+}
+
+/// Duplicados só a partir de 1 MiB: abaixo disso o ganho não paga a leitura.
+const DUPLICATE_MIN: ByteSize = ByteSize::from_bytes(1024 * 1024);
+
+/// Busca duplicados nas pastas dadas (o perfil, na interface) e guarda os
+/// grupos para a próxima classificação. Somente leitura.
+pub fn find_duplicates(
+    session: &Session,
+    walker: &dyn FileWalker,
+    hasher: &dyn ContentHasher,
+    roots: &[String],
+) -> Result<DuplicatesDto, ErrorDto> {
+    let report = DuplicateService::new(walker, hasher).run(roots, DUPLICATE_MIN)?;
+    let dto = DuplicatesDto::from(&report);
+    session.lock().duplicates = report.groups;
+    Ok(dto)
 }
 
 pub fn build_plan(

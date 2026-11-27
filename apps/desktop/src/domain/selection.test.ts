@@ -35,8 +35,9 @@ describe('selection', () => {
 
   it('arquivo grande nunca vem marcado nem entra no "marcar tier inteiro"', () => {
     const iso: CandidateDto = { ...candidates[0]!, id: 'file:iso', tier: 'D', origin: 'file' }
+    const dup: CandidateDto = { ...candidates[0]!, id: 'dup:x', tier: 'D', origin: 'duplicate' }
     const dump: CandidateDto = { ...candidates[0]!, id: 'dism', tier: 'D' }
-    const all = [...candidates, iso, dump]
+    const all = [...candidates, iso, dup, dump]
     expect(defaultSelection(all)).toEqual(['npm', 'pip', 'gradle', 'dism'])
     expect(toggleTier([], all, 'D')).toEqual(['dism'])
     expect(toggleTier(['dism', 'file:iso'], all, 'D')).toEqual(['file:iso'])

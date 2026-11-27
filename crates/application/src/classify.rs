@@ -6,8 +6,8 @@ use disk_cleanup_domain::{
 };
 
 use crate::{
-    expand_template, AppError, Catalog, CatalogRepository, CatalogRule, Environment, FoundArtifact,
-    PathInspector, ProjectFinder, ProjectProfile, RuleTarget,
+    expand_template, AppError, Catalog, CatalogRepository, CatalogRule, DuplicateGroup,
+    Environment, FoundArtifact, PathInspector, ProjectFinder, ProjectProfile, RuleTarget,
 };
 
 /// Por que uma regra do catálogo não virou candidato.
@@ -48,6 +48,14 @@ pub struct ProjectInfo {
     pub idle_days: Option<u32>,
 }
 
+/// Cópia duplicada oferecida como candidato; `keep` é a que fica.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DuplicateInfo {
+    /// `id` do candidato.
+    pub id: String,
+    pub keep: String,
+}
+
 /// Dados de um candidato que veio dos arquivos grandes da varredura.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LargeFileInfo {
@@ -65,6 +73,7 @@ pub struct ClassificationReport {
     pub exclusions: ExclusionList,
     pub projects: Vec<ProjectInfo>,
     pub large_files: Vec<LargeFileInfo>,
+    pub duplicates: Vec<DuplicateInfo>,
 }
 
 impl ClassificationReport {
@@ -87,6 +96,7 @@ pub struct ClassifyService<'a> {
     large_files: (&'a [LargeFile], u64),
     user_rules: &'a [CatalogRule],
     disabled_profiles: &'a [String],
+    duplicates: &'a [DuplicateGroup],
 }
 
 /// Exclusões efetivas: obrigatórias + pastas das Configurações + catálogo.
@@ -123,7 +133,14 @@ impl<'a> ClassifyService<'a> {
             large_files: (&[], 0),
             user_rules: &[],
             disabled_profiles: &[],
+            duplicates: &[],
         }
+    }
+
+    /// Cópias duplicadas (exceto a mantida) como candidatos do tier D.
+    pub fn with_duplicates(mut self, groups: &'a [DuplicateGroup]) -> Self {
+        self.duplicates = groups;
+        self
     }
 
     /// Regras próprias do usuário (somadas às do catálogo, com as mesmas
@@ -169,6 +186,7 @@ impl<'a> ClassifyService<'a> {
             exclusions,
             projects: Vec::new(),
             large_files: Vec::new(),
+            duplicates: Vec::new(),
         };
         for rule in catalog.rules.iter().chain(self.user_rules) {
             match self.evaluate(rule, &report.exclusions, &guard) {
@@ -196,6 +214,39 @@ impl<'a> ClassifyService<'a> {
                 // Artefato vazio não é notícia: some sem poluir "sem candidato".
                 Err(SkipReason::Empty) => {}
                 Err(reason) => report.skipped.push(SkippedRule { id, reason }),
+            }
+        }
+        for group in self.duplicates {
+            for copy in &group.copies {
+                let id = format!("dup:{copy}");
+                if let Some(ex) = report.exclusions.conflicting(copy) {
+                    report.skipped.push(SkippedRule {
+                        id,
+                        reason: SkipReason::Excluded(ex.reason.clone()),
+                    });
+                    continue;
+                }
+                let availability = match guard.blocking_reason(copy, &[]) {
+                    Some(reason) => Availability::Blocked { reason },
+                    None => Availability::Selectable,
+                };
+                report.duplicates.push(DuplicateInfo {
+                    id: id.clone(),
+                    keep: group.keep.clone(),
+                });
+                report.candidates.push(Candidate {
+                    id,
+                    label: LocalizedText::same(&path_components(copy).pop().unwrap_or_default()),
+                    tier: Tier::D,
+                    action: Action::RemovePath { path: copy.clone() },
+                    size: group.size,
+                    risk: Risk::Low,
+                    note: LocalizedText::new(
+                        &format!("cópia de {}", group.keep),
+                        &format!("copy of {}", group.keep),
+                    ),
+                    availability,
+                });
             }
         }
         let (files, now) = self.large_files;

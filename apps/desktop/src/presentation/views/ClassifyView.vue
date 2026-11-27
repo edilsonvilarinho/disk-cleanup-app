@@ -15,7 +15,8 @@ const { t, txt, err, gb, num } = useI18n()
 onMounted(() => store.ensureLoaded(settings.classifyRequest, settings.minIdleDays))
 const reload = () => store.load(settings.classifyRequest, settings.minIdleDays)
 const hasProjects = computed(() => store.visible.some((c) => c.project !== null))
-const hasFiles = computed(() => store.visible.some((c) => c.origin === 'file'))
+const hasFiles = computed(() => store.visible.some((c) => c.origin === 'file' || c.origin === 'duplicate'))
+const findDuplicates = () => store.findDuplicates(settings.classifyRequest, settings.minIdleDays)
 
 function onMinIdle(event: Event) {
   const days = Number((event.target as HTMLSelectElement).value) as MinIdleDays
@@ -117,9 +118,33 @@ function skipText(s: SkippedDto): string {
                 <option v-for="d in MIN_IDLE_OPTIONS" :key="d" :value="d">{{ t('classify.minIdle', { n: d }) }}</option>
               </select>
             </template>
+            <button
+              v-if="store.activeTab === 'D'"
+              type="button"
+              class="btn"
+              data-test="find-duplicates"
+              :disabled="store.duplicatesStatus === 'running'"
+              :title="t('classify.duplicatesHint')"
+              @click="findDuplicates"
+            >
+              <span v-if="store.duplicatesStatus === 'running'" class="spin-ring" aria-hidden="true" />
+              {{ store.duplicatesStatus === 'running' ? t('classify.findingDuplicates') : t('classify.findDuplicates') }}
+            </button>
             <button type="button" class="btn" data-test="toggle-tier" @click="store.toggleTier(store.activeTab)">{{ t('classify.toggleTier') }}</button>
           </div>
         </div>
+        <p v-if="store.activeTab === 'D' && store.duplicates" class="small muted" data-test="duplicates-summary">
+          {{
+            t('classify.duplicatesSummary', {
+              files: store.duplicates.stats.files,
+              size: store.duplicates.stats.sameSize,
+              partial: store.duplicates.stats.samePartial,
+              full: store.duplicates.stats.sameFull,
+              confirmed: store.duplicates.stats.confirmed,
+              groups: store.duplicates.groups.length,
+            })
+          }}
+        </p>
         <p v-if="store.visible.length === 0" class="muted" data-test="tier-empty">{{ t('classify.emptyTier') }}</p>
         <div v-else class="table-wrap">
           <table>

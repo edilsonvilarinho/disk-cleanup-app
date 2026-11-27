@@ -9,6 +9,7 @@ import type {
   CandidateDto,
   ClassificationDto,
   Disposal,
+  DuplicatesDto,
   ErrorDto,
   RuleCheckDto,
   ExclusionDto,
@@ -103,6 +104,19 @@ const PROJECTS: CandidateDto[] = [
   project('site-pessoal', 'node_modules', 0.6, 12, text('npm/pnpm/yarn install recria', 'npm/pnpm/yarn install recreates it')),
 ]
 
+const DEMO_DUPLICATES = [
+  {
+    size: 5.8,
+    keep: '%USERPROFILE%\\Downloads\\Win11_24H2_x64.iso',
+    copies: ['D:\\isos\\Win11_24H2_x64.iso'],
+  },
+  {
+    size: 1.7,
+    keep: '%USERPROFILE%\\Desktop\\fotos-viagem-2024.zip',
+    copies: ['%USERPROFILE%\\Documents\\fotos-viagem-2024.zip', '%USERPROFILE%\\Downloads\\fotos-viagem-2024 (1).zip'],
+  },
+]
+
 /** Arquivo grande do perfil (tier D), nunca pré-marcado. */
 const file = (path: string, size: number, idleDays: number): CandidateDto =>
   candidate(`file:${path}`, text(path.split('\\').pop()!), 'D', size, path, { origin: 'file', idleDays, risk: 'low' })
@@ -162,8 +176,9 @@ export class DemoGateway implements DiskCleanupGateway {
   private extra: string[] = []
   private approved: Tier[] = []
   private disposals: Partial<Record<Tier, Disposal>> = {}
-  /** Regras próprias e projetos dos perfis ligados, da última classificação. */
+  /** Regras próprias, projetos dos perfis ligados e duplicados, da última classificação. */
   private custom: CandidateDto[] = []
+  private dups: typeof DEMO_DUPLICATES = []
   private runs: TierRunDto[] = []
   private free = INITIAL_FREE
 
@@ -184,6 +199,16 @@ export class DemoGateway implements DiskCleanupGateway {
         { id: 'rust', label: text('Rust') },
         { id: 'python', label: text('Python') },
       ],
+    }
+  }
+
+  /** Duplicados de exemplo; a próxima classificação inclui as cópias (exceto a mantida). */
+  async findDuplicates(): Promise<DuplicatesDto> {
+    await this.wait()
+    this.dups = DEMO_DUPLICATES
+    return {
+      groups: DEMO_DUPLICATES.map((g) => ({ sizeBytes: gb(g.size), keep: g.keep, copies: g.copies })),
+      stats: { files: 18_402, sameSize: 1_284, samePartial: 96, sameFull: 7, confirmed: 7 },
     }
   }
 
@@ -237,7 +262,16 @@ export class DemoGateway implements DiskCleanupGateway {
     )
     const profileOf = (c: CandidateDto) => (c.target.endsWith('node_modules') ? 'node' : c.target.endsWith('target') ? 'rust' : 'python')
     const projects = PROJECTS.filter((c) => !request.disabledProfiles.includes(profileOf(c)))
-    this.custom = [...own, ...projects]
+    const dups = this.dups.flatMap((g) =>
+      g.copies.map((copy) =>
+        candidate(`dup:${copy}`, text(copy.split('\\').pop()!), 'D', g.size, copy, {
+          origin: 'duplicate',
+          risk: 'low',
+          note: text(`cópia de ${g.keep}`, `copy of ${g.keep}`),
+        }),
+      ),
+    )
+    this.custom = [...own, ...projects, ...dups]
     const extra = this.extra.map((pattern) => ({ pattern, reason: text('excluída nas Configurações', 'excluded in Settings') }))
     const isExcluded = (c: CandidateDto) => this.extra.some((p) => c.target.toLowerCase().startsWith(p.toLowerCase()))
     const candidates = [...CANDIDATES, ...this.custom, ...FILES].filter((c) => !isExcluded(c))

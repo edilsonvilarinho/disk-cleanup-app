@@ -62,6 +62,55 @@ pub struct UserCustomizationDto {
     pub disabled_profiles: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateGroupDto {
+    pub size_bytes: u64,
+    /// Cópia que fica (a mais antiga); nunca vira candidato.
+    pub keep: String,
+    pub copies: Vec<String>,
+}
+
+/// Quantos arquivos passaram por cada etapa da comparação.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateStatsDto {
+    pub files: u64,
+    pub same_size: u64,
+    pub same_partial: u64,
+    pub same_full: u64,
+    pub confirmed: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DuplicatesDto {
+    pub groups: Vec<DuplicateGroupDto>,
+    pub stats: DuplicateStatsDto,
+}
+
+impl From<&disk_cleanup_application::DuplicateReport> for DuplicatesDto {
+    fn from(r: &disk_cleanup_application::DuplicateReport) -> Self {
+        Self {
+            groups: r
+                .groups
+                .iter()
+                .map(|g| DuplicateGroupDto {
+                    size_bytes: g.size.bytes(),
+                    keep: g.keep.clone(),
+                    copies: g.copies.clone(),
+                })
+                .collect(),
+            stats: DuplicateStatsDto {
+                files: r.stats.files,
+                same_size: r.stats.same_size,
+                same_partial: r.stats.same_partial,
+                same_full: r.stats.same_full,
+                confirmed: r.stats.confirmed,
+            },
+        }
+    }
+}
+
 /// Resultado da validação de uma pasta de regra própria.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RuleCheckDto {
@@ -339,6 +388,8 @@ impl From<&ClassificationReport> for ClassificationDto {
                     } else if let Some(f) = r.large_files.iter().find(|f| f.id == c.id) {
                         dto.origin = "file";
                         dto.idle_days = f.age_days;
+                    } else if r.duplicates.iter().any(|d| d.id == c.id) {
+                        dto.origin = "duplicate";
                     }
                     dto
                 })
