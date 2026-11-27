@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notas de versão 01 · Modal de destaques — Disk Cleanup</title>
+<script>(function(){var m;try{m=localStorage.getItem('dc-theme-mode')}catch(e){}if(!m||m==='system')m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',m)})();</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../../apps/desktop/src/styles/app.css">
+<link rel="stylesheet" href="../menu/menu-kit.css">
+<link rel="stylesheet" href="rn-kit.css">
+<style>
+  /* Modal centrado: bloqueia só até a pessoa fechar; abre uma vez por versão. */
+  .rn-wrap { position: fixed; inset: 0 0 var(--sb-h); z-index: 85; display: grid; place-items: center; padding: 16px; }
+  .rn-scrim { position: absolute; inset: 0; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(3px); animation: fade-in 0.25s ease both; }
+  .rn-dlg {
+    position: relative; width: min(920px, 100%); max-height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding: 18px 20px;
+    background: var(--surface); border: 1px solid var(--border-strong); border-radius: 14px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.28);
+    animation: dlg-in 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  @keyframes dlg-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
+  .rn-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .rn-top h2 { font-size: 18px; letter-spacing: -0.01em; }
+  .rn-x { width: 32px; height: 32px; border-radius: 8px; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; flex: none; }
+  .rn-x:hover { background: var(--hover); color: var(--text); }
+  /* Segmentos: um por destaque, como o guia da Execução (concluído cheio, atual com contorno). */
+  .rn-segs { display: flex; gap: 4px; }
+  .rn-seg { flex: 1; height: 6px; border-radius: 3px; background: var(--track); border: 0; padding: 0; cursor: pointer; position: relative; overflow: hidden; }
+  .rn-seg.done { background: var(--bar); }
+  .rn-seg.cur { box-shadow: 0 0 0 1.5px var(--text); }
+  .rn-seg.fix { background: color-mix(in srgb, var(--ok) 30%, var(--track)); }
+  .rn-seg.fix.done { background: var(--ok); }
+  .rn-body { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 760px) { .rn-body { grid-template-columns: minmax(0, 1fr); } }
+  .rn-text { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .rn-text h3 { font-size: 17px; line-height: 1.3; letter-spacing: -0.01em; }
+  .rn-text p { margin: 0; color: var(--muted); font-size: 13.5px; }
+  .rn-slide { animation: slide 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .rn-slide.back { animation-name: slide-back; }
+  @keyframes slide { from { opacity: 0; transform: translateX(14px); } }
+  @keyframes slide-back { from { opacity: 0; transform: translateX(-14px); } }
+  .rn-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 12px; }
+  .rn-foot .count { font: 500 12px var(--font-mono); color: var(--muted); }
+  .rn-fixes { display: flex; flex-direction: column; gap: 12px; }
+  .rn-fix { display: flex; flex-direction: column; gap: 8px; }
+  .rn-fix b { font-size: 13.5px; }
+  .rn-known { display: flex; flex-direction: column; gap: 6px; }
+  .rn-known li { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: var(--muted); }
+  .rn-known li b { color: var(--text); font-weight: 500; }
+  .rn-known li svg { flex: none; margin-top: 2px; color: var(--warn); }
+  .rn-known ul, ul.rn-known { list-style: none; margin: 0; padding: 0; }
+  .rn-also { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--border-strong); font-size: 12.5px; }
+  .rn-also li { color: var(--muted); }
+  .rn-also ul { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 2px; }
+  .hl-target { box-shadow: 0 0 0 2px var(--info), 0 0 0 6px color-mix(in srgb, var(--info) 18%, transparent) !important; border-radius: 10px; transition: box-shadow 0.3s ease; }
+</style>
+</head>
+<body>
+<script src="rn-kit.js"></script>
+<script>
+(function () {
+  'use strict';
+  var R = RN, t = R.t, UI = R.UI, L = R.L, icon = R.icon, esc = R.esc;
+  var S = { sec: 'cleanup', open: false, i: 0, dir: 1, pending: true };
+  var close = null;
+
+  R.shell();
+  R.protoBar({ title: '01 · Modal', restart: function () { S.pending = true; S.i = 0; S.sec = 'cleanup'; render(); openNotes(); } });
+
+  /* Slides: um por novidade da(s) versão(ões) nova(s), mais um final com correções e conhecidos. */
+  function slides() {
+    var rels = R.since(R.seen()), cur = rels[0];
+    var list = R.byKind(cur, 'new').map(function (it) { return { it: it }; });
+    list.push({ fixes: true, rels: rels });
+    return list;
+  }
+
+  function render() {
+    R.paintStatic();
+    document.querySelectorAll('#nav a').forEach(function (a) { a.toggleAttribute('aria-current', a.getAttribute('data-sec') === S.sec); if (a.getAttribute('data-sec') === S.sec) a.setAttribute('aria-current', 'page'); });
+    var p = document.getElementById('page');
+    var sp = R.spec('<b>01 · Modal de destaques</b><ul>' +
+      '<li><b>Quando:</b> na primeira abertura depois de instalar, uma vez por versão (versão instalada &gt; última vista em <span class="mono">localStorage</span>). Instalação nova não mostra nada.</li>' +
+      '<li><b>Como:</b> um destaque por vez, GIF à esquerda (12 fps, ~720 px, gravado do DemoGateway pelo mesmo <span class="mono">record-readme-media.mjs</span>), texto e <b>Onde</b> à direita. Segmentos no topo seguem o guia da Execução. ← → navegam, Esc fecha.</li>' +
+      '<li><b>Bugs:</b> último passo junta correções com <b>Antes / Agora</b> sobre o mesmo alvo e os problemas conhecidos.</li>' +
+      '<li><b>Versão pulada</b> (beta.5 → 7): o último passo lista também o que entrou na beta.6, em texto, sem GIF.</li>' +
+      '<li><b>Ver depois</b> fecha sem marcar como vista: o selo na barra de status fica até concluir.</li>' +
+      '<li>Contra: modal interrompe. Mitigação: só aparece uma vez e nunca durante varredura/execução (no boot ainda não há nenhuma).</li></ul>');
+    if (S.sec === 'settings') {
+      R.settingsPage(function (v) { S.i = 0; openNotes(v); }, { before: sp });
+    } else {
+      p.innerHTML = R.surveyPage() + sp;
+      p.querySelector('#start').addEventListener('click', function () { R.toast(L('Varredura (simulada)', 'Scan (simulated)')); });
+    }
+    var news = document.getElementById('sb-news');
+    news.innerHTML = S.pending ? '<button type="button" class="sb-item sb-news" id="news-btn"><span class="dot"></span>' + esc(R.fill(t(UI.newsChip), { v: R.short(R.CURRENT) })) + '</button>' : '';
+    if (S.pending) news.querySelector('button').addEventListener('click', function () { openNotes(); });
+    document.getElementById('sb-ver').onclick = function () { S.sec = 'settings'; render(); };
+  }
+
+  document.getElementById('nav').addEventListener('click', function (e) {
+    var a = e.target.closest('a'); if (!a) return; e.preventDefault();
+    S.sec = a.getAttribute('data-sec') === 'history' ? 'cleanup' : a.getAttribute('data-sec');
+    if (a.getAttribute('data-sec') === 'history') R.toast(L('Histórico fora deste protótipo', 'History is out of this prototype'));
+    render();
+  });
+
+  function openNotes(version) {
+    shut();
+    S.open = true;
+    var host = document.createElement('div'); host.className = 'rn-wrap'; host.id = 'rn';
+    host.innerHTML = '<div class="rn-scrim"></div><div class="rn-dlg" role="dialog" aria-modal="true" aria-labelledby="rn-title"></div>';
+    document.body.appendChild(host);
+    host.querySelector('.rn-scrim').addEventListener('click', later);
+    var opener = document.activeElement;
+    var untrap = R.trapFocus(host, later);
+    close = function () { untrap(); host.remove(); S.open = false; if (opener && opener.focus) opener.focus(); };
+    paint(version);
+  }
+  function shut() { if (close) { close(); close = null; } }
+  function later() { shut(); R.toast(L('As novidades ficam na barra de status', 'What’s new stays in the status bar')); }
+  function finish() { S.pending = false; shut(); render(); }
+
+  function paint(version) {
+    var dlg = document.querySelector('#rn .rn-dlg'); if (!dlg) return;
+    var list = slides(), n = list.length, s = list[S.i], rels = R.since(R.seen()), cur = rels[0];
+    var skipped = rels.length - 1;
+    var head = '<div class="rn-top"><div class="titles" style="display:flex;flex-direction:column;gap:4px">' +
+      '<span class="label-caps">' + t(UI.updatedTo) + '</span>' +
+      '<h2 id="rn-title"><span class="ver-arrow"><span class="ver-chip">' + R.short(R.seen()) + '</span>' + icon('arrow', 13, 2) + '<span class="ver-chip" style="color:var(--text)">' + R.short(R.CURRENT) + '</span></span> ' + esc(t(cur.headline)) + '</h2>' +
+      (skipped ? '<span class="small muted">' + R.fill(t(skipped === 1 ? UI.skipped : UI.skippedN), { n: skipped }) + '</span>' : '') +
+      '</div><button type="button" class="rn-x" id="x" aria-label="' + t(UI.close) + '">' + icon('x', 16, 2) + '</button></div>';
+    var segs = '<div class="rn-segs" role="tablist" aria-label="' + t(UI.whatsNew) + '">' + list.map(function (x, k) {
+      return '<button type="button" role="tab" class="rn-seg' + (x.fixes ? ' fix' : '') + (k < S.i ? ' done' : '') + (k === S.i ? ' cur' : '') + '" aria-selected="' + (k === S.i) + '" aria-label="' + esc(x.fixes ? t(UI.groups.fixed) : t(x.it.title)) + '" data-k="' + k + '"></button>';
+    }).join('') + '</div>';
+    var body;
+    if (s.fixes) {
+      var fx = R.byKind(cur, 'fixed'), kn = R.byKind(cur, 'known');
+      body = '<div class="rn-body rn-slide' + (S.dir < 0 ? ' back' : '') + '"><div class="rn-fixes">' +
+        '<div style="display:flex;gap:8px;align-items:center"><span class="kind fixed">' + t(UI.groups.fixed) + '</span><span class="small muted">' + fx.length + '</span></div>' +
+        fx.map(function (it) { return '<div class="rn-fix"><b>' + esc(t(it.title)) + '</b>' + R.beforeAfter(it) + '</div>'; }).join('') + '</div>' +
+        '<div class="rn-text"><div style="display:flex;gap:8px;align-items:center"><span class="kind known">' + t(UI.groups.known) + '</span><span class="small muted">' + kn.length + '</span></div>' +
+        '<ul class="rn-known">' + kn.map(function (it) { return '<li>' + icon('warn', 13) + '<span><b>' + esc(t(it.title)) + '.</b> ' + esc(t(it.body)) + '</span></li>'; }).join('') + '</ul>' +
+        rels.slice(1).map(function (r) {
+          return '<div class="rn-also"><span class="label-caps">' + L('Também na', 'Also in') + ' ' + R.short(r.v) + ' · ' + R.fmtDate(r.date) + '</span><ul>' +
+            r.items.map(function (it) { return '<li><span style="color:var(--text)">' + esc(t(it.title)) + '</span> — ' + esc(t(it.body)) + '</li>'; }).join('') + '</ul></div>';
+        }).join('') + '</div></div>';
+    } else {
+      var it = s.it;
+      body = '<div class="rn-body rn-slide' + (S.dir < 0 ? ' back' : '') + '"><div id="clip-host"></div><div class="rn-text">' +
+        '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + R.kind(it) + R.where(it) + '</div>' +
+        '<h3>' + esc(t(it.title)) + '</h3><p>' + esc(t(it.body)) + '</p>' +
+        '<div><button type="button" class="btn" id="go" style="min-height:34px">' + t(UI.open) + ' ' + esc(t(it.area).split(' › ')[0]) + ' ' + icon('arrow', 14, 2) + '</button></div></div></div>';
+    }
+    var foot = '<div class="rn-foot"><button type="button" class="btn" id="later" style="min-height:36px">' + t(UI.later) + '</button><span class="spacer"></span>' +
+      '<span class="count">' + (S.i + 1) + ' / ' + n + '</span>' +
+      '<button type="button" class="btn" id="prev" style="min-height:36px"' + (S.i === 0 ? ' aria-disabled="true"' : '') + '>' + icon('left', 14, 2) + t(UI.prev) + '</button>' +
+      (S.i < n - 1 ? '<button type="button" class="btn btn-primary" id="next" style="min-height:36px">' + t(UI.next) + ' ' + icon('chevron', 14, 2) + '</button>' :
+        '<button type="button" class="btn btn-primary" id="done" style="min-height:36px">' + icon('check', 14, 2.4) + t(UI.done) + '</button>') + '</div>';
+    dlg.innerHTML = head + segs + body + foot;
+    if (!s.fixes) dlg.querySelector('#clip-host').appendChild(R.clip(s.it.scene));
+    dlg.querySelector('#x').onclick = later;
+    dlg.querySelector('#later').onclick = later;
+    dlg.querySelector('#prev').onclick = function () { go(-1); };
+    var nx = dlg.querySelector('#next'); if (nx) nx.onclick = function () { go(1); };
+    var dn = dlg.querySelector('#done'); if (dn) dn.onclick = finish;
+    var gb = dlg.querySelector('#go'); if (gb) gb.onclick = function () { jump(s.it); };
+    dlg.querySelectorAll('[data-k]').forEach(function (b) { b.onclick = function () { var k = +b.getAttribute('data-k'); S.dir = k >= S.i ? 1 : -1; S.i = k; paint(); }; });
+    (dlg.querySelector('#next') || dlg.querySelector('#done')).focus({ preventScroll: true });
+  }
+  function go(d) { var n = slides().length, k = S.i + d; if (k < 0 || k >= n) return; S.dir = d; S.i = k; paint(); }
+  /* "Abrir": fecha (sem marcar como vista) e leva ao lugar; no app, router.push(route). */
+  function jump(it) {
+    shut(); S.sec = it.route === 'settings' ? 'settings' : 'cleanup'; render();
+    var target = S.sec === 'settings' ? document.querySelector('.card') : document.querySelector('.flow-step[data-step="' + ({ survey: 0, classify: 1, plan: 2, execute: 3 })[it.route] + '"]');
+    if (target) { target.classList.add('hl-target'); setTimeout(function () { target.classList.remove('hl-target'); }, 2200); }
+    R.toast(L('No app: abre ', 'In the app: opens ') + t(it.area));
+  }
+  document.addEventListener('keydown', function (e) {
+    if (!S.open) return;
+    if (e.target.closest && e.target.closest('input, select')) return;
+    if (e.key === 'ArrowRight') go(1);
+    if (e.key === 'ArrowLeft') go(-1);
+  });
+  document.addEventListener('rn:lang', function () { render(); if (S.open) paint(); });
+
+  render();
+  setTimeout(openNotes, 450);
+})();
+</script>
+</body>
+</html>

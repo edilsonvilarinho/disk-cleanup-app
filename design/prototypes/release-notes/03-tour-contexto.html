@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notas de versão 03 · Tour no lugar — Disk Cleanup</title>
+<script>(function(){var m;try{m=localStorage.getItem('dc-theme-mode')}catch(e){}if(!m||m==='system')m=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',m)})();</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../../apps/desktop/src/styles/app.css">
+<link rel="stylesheet" href="../menu/menu-kit.css">
+<link rel="stylesheet" href="rn-kit.css">
+<style>
+  /* Faixa de atualização: logo abaixo das abas, no fluxo da página (não cobre nada). */
+  .upd-band { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-radius: var(--radius); border: 1px solid color-mix(in srgb, var(--info) 40%, var(--border)); background: color-mix(in srgb, var(--info) 5%, var(--surface)); animation: rise 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .upd-band .ico { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: color-mix(in srgb, var(--info) 14%, var(--surface)); color: var(--info); flex: none; }
+  .upd-band .gi-name { flex: 1 1 260px; gap: 2px; }
+  .upd-band .acts { display: flex; gap: 8px; flex-wrap: wrap; position: relative; }
+  .upd-band .btn { min-height: 34px; }
+  .rn-x { width: 30px; height: 30px; border-radius: 7px; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; flex: none; }
+  .rn-x:hover { background: var(--hover); color: var(--text); }
+
+  /* Correções: painel que abre colado no botão (requisito ao lado da ação). */
+  .fix-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: min(560px, calc(100vw - 48px)); display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2); animation: rise 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .fix-pop b { font-size: 13px; }
+  .fix-pop ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .fix-pop li { display: flex; gap: 8px; font-size: 12.5px; color: var(--muted); }
+  .fix-pop li svg { flex: none; margin-top: 2px; color: var(--warn); }
+  .fix-pop li b { color: var(--text); font-weight: 500; font-size: 12.5px; }
+
+  /* Holofote: um recorte só, movido entre os alvos. */
+  .spot { position: fixed; z-index: 80; border-radius: 10px; pointer-events: none; box-shadow: 0 0 0 2px var(--info), 0 0 0 9999px color-mix(in srgb, var(--bg) 62%, transparent); transition: left 0.38s cubic-bezier(0.4, 0, 0.2, 1), top 0.38s cubic-bezier(0.4, 0, 0.2, 1), width 0.38s cubic-bezier(0.4, 0, 0.2, 1), height 0.38s cubic-bezier(0.4, 0, 0.2, 1); }
+  .tour-pop { position: fixed; z-index: 81; width: min(400px, calc(100vw - 24px)); display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28); transition: left 0.38s cubic-bezier(0.4, 0, 0.2, 1), top 0.38s cubic-bezier(0.4, 0, 0.2, 1); }
+  .tour-pop h3 { font-size: 15px; line-height: 1.3; }
+  .tour-pop p { margin: 0; color: var(--muted); font-size: 13px; }
+  .tour-pop .segs { display: flex; gap: 4px; }
+  .tour-pop .segs i { flex: 1; height: 4px; border-radius: 2px; background: var(--track); }
+  .tour-pop .segs i.done { background: var(--bar); }
+  .tour-pop .segs i.cur { background: var(--info); }
+  .tour-pop .foot { display: flex; align-items: center; gap: 8px; }
+  .tour-pop .foot .btn { min-height: 32px; }
+  .tour-pop .count { font: 500 12px var(--font-mono); color: var(--muted); }
+  /* Mais de uma novidade no mesmo lugar: abas pequenas, um GIF por vez. */
+  .sub { display: flex; gap: 4px; flex-wrap: wrap; }
+  .sub button { min-height: 26px; padding: 0 9px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+  .sub button[aria-pressed="true"] { color: var(--text); background: var(--surface-2); border-color: var(--border-strong); font-weight: 600; }
+  .tour-body { display: flex; flex-direction: column; gap: 8px; animation: rise 0.25s ease both; }
+  .set-card .set-row .gi-name > span:first-child { display: flex; align-items: center; gap: 8px; }
+  .new-dot { top: 50%; margin-top: -3px; right: 12px; }
+</style>
+</head>
+<body>
+<script src="rn-kit.js"></script>
+<script>
+(function () {
+  'use strict';
+  var R = RN, t = R.t, UI = R.UI, L = R.L, icon = R.icon, esc = R.esc;
+  var S = { sec: 'cleanup', band: true, fixes: false, tour: -1, sub: 0, visited: {} };
+  var untrap = null;
+
+  R.shell();
+  R.protoBar({ title: '03 · No lugar', restart: function () { endTour(true); S.band = true; S.fixes = false; S.visited = {}; S.sec = 'cleanup'; render(); } });
+
+  var cur = function () { return R.since(R.seen())[0]; };
+  function it(id) { return cur().items.filter(function (x) { return x.id === id; })[0]; }
+  /* Paradas agrupadas pelo LUGAR onde a novidade mora; cada uma aponta um elemento que existe sempre. */
+  var STOPS = [
+    { sel: '#start', sec: 'cleanup', ids: ['treemap'], key: 'survey',
+      title: { pt: 'Depois da varredura, o mapa do volume', en: 'After the survey, the volume map' } },
+    { sel: '.flow-step[data-step="1"]', sec: 'cleanup', ids: ['dup', 'projects', 'big'], key: 'classify',
+      title: { pt: 'Três fontes novas na Classificação', en: 'Three new sources in Classification' } },
+    { sel: '.flow-step[data-step="2"]', sec: 'cleanup', ids: ['trash'], key: 'plan',
+      title: { pt: 'No Plano, a Lixeira por tier', en: 'In the Plan, the Recycle Bin per tier' } },
+    { sel: '#nav a[data-sec="settings"]', sec: 'cleanup', ids: ['rules', 'monitor', 'orphans'], key: 'settings',
+      title: { pt: 'Em Configurações: regras, monitoramento e sobras', en: 'In Settings: rules, monitoring and leftovers' } },
+    { sel: '#sb-ver', sec: 'cleanup', ids: [], key: 'version',
+      title: { pt: 'As notas ficam aqui', en: 'The notes stay here' },
+      body: { pt: 'Clique na versão para ver estas notas, as correções e o histórico em Configurações › Atualizações.', en: 'Click the version to see these notes, the fixes and the history in Settings › Updates.' } }
+  ];
+
+  function render() {
+    R.paintStatic();
+    document.querySelectorAll('#nav a').forEach(function (a) {
+      if (a.getAttribute('data-sec') === S.sec) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+      var d = a.querySelector('.new-dot'); if (d) d.remove();
+      if (a.getAttribute('data-sec') === 'settings' && !S.visited.settings) a.insertAdjacentHTML('beforeend', '<span class="new-dot" aria-label="' + t(UI.kinds.new) + '"></span>');
+    });
+    var p = document.getElementById('page');
+    var sp = R.spec('<b>03 · Tour no lugar</b><ul>' +
+      '<li><b>Faixa</b> logo abaixo das abas depois de atualizar: versão, título e três ações — <b>Fazer tour</b>, <b>Correções</b> (abre colado no botão) e fechar. Não cobre nada; fecha uma vez e some até a próxima versão.</li>' +
+      '<li><b>Tour</b> agrupado por <b>lugar</b>, não por item: 5 paradas para 8 novidades. O holofote aponta elementos que existem sempre (botão Iniciar, abas, menu, versão) — nada depende de já ter varrido.</li>' +
+      '<li>Lugar com mais de uma novidade (Classificação, Configurações) troca o GIF por abas pequenas: um GIF tocando por vez.</li>' +
+      '<li><b>Selo “Novo”</b> nas abas e ponto no menu até a pessoa visitar o lugar; em Configurações, o selo vai na linha exata da novidade.</li>' +
+      '<li><b>Bugs:</b> Correções com Antes / Agora e conhecidos, no painel da faixa. A versão na barra de status leva ao histórico.</li>' +
+      '<li>Contra: o mais caro de construir (posicionamento, foco, redimensionamento). Esc encerra; teclado ← → anda.</li></ul>');
+    if (S.sec === 'settings') {
+      S.visited.settings = true;
+      var newSet = '<section class="card set-card"><div class="card-head"><h2>' + L('Limpeza', 'Cleanup') + '</h2></div><div>' +
+        ['rules', 'monitor', 'orphans'].map(function (id) {
+          var x = it(id);
+          return '<div class="set-row"><span class="gi-name"><span>' + esc(t(x.area).split(' › ')[1]) + ' <span class="tag-new">' + t(UI.kinds.new) + '</span>' + (x.exp ? ' <span class="kind exp">' + t(UI.kinds.exp) + '</span>' : '') + '</span><span class="small muted">' + esc(t(x.body)) + '</span></span></div>';
+        }).join('') + '</div></section>';
+      R.settingsPage(function () { S.sec = 'cleanup'; S.band = true; render(); }, { before: sp + newSet });
+    } else {
+      p.innerHTML = R.surveyPage({ newSteps: { 1: !S.visited.classify, 2: !S.visited.plan }, top: S.band ? band() : '' }) + sp;
+      p.querySelector('#start').onclick = function () { R.toast(L('Varredura (simulada)', 'Scan (simulated)')); };
+      wireBand();
+    }
+    document.getElementById('sb-news').innerHTML = '';
+    document.getElementById('sb-ver').onclick = function () { endTour(true); S.sec = 'settings'; render(); };
+  }
+
+  function band() {
+    var rels = R.since(R.seen()), c = cur(), nNew = R.byKind(c, 'new').length, nFix = R.byKind(c, 'fixed').length, nKn = R.byKind(c, 'known').length;
+    return '<div class="upd-band" role="status"><span class="ico">' + icon('spark', 16) + '</span><span class="gi-name">' +
+      '<b><span class="ver-arrow"><span class="ver-chip">' + R.short(R.seen()) + '</span>' + icon('arrow', 12, 2) + '<span class="ver-chip" style="color:var(--text)">' + R.short(R.CURRENT) + '</span></span> ' + esc(t(c.headline)) + '</b>' +
+      '<span class="small muted">' + nNew + ' ' + L('novidades em', 'new features in') + ' ' + (STOPS.length - 1) + ' ' + L('lugares', 'places') + ' · ' + nFix + ' ' + L('correções', 'fixes') + ' · ' + nKn + ' ' + L('conhecidos', 'known issues') +
+      (rels.length > 1 ? ' · ' + L('inclui a ', 'includes ') + rels.slice(1).map(function (r) { return R.short(r.v); }).join(', ') : '') + '</span></span>' +
+      '<span class="acts"><button type="button" class="btn btn-primary ready" id="tour">' + icon('play', 12, 2.2) + L('Fazer tour', 'Take the tour') + ' · ' + STOPS.length + '</button>' +
+      '<button type="button" class="btn" id="fixes" aria-expanded="' + S.fixes + '">' + icon('bug', 14) + t(UI.groups.fixed) + ' · ' + nFix + '</button>' +
+      (S.fixes ? fixPop(rels) : '') + '</span>' +
+      '<button type="button" class="rn-x" id="band-x" aria-label="' + t(UI.close) + '">' + icon('x', 14, 2) + '</button></div>';
+  }
+  function fixPop(rels) {
+    var c = cur();
+    return '<div class="fix-pop" role="dialog" aria-label="' + t(UI.groups.fixed) + '">' +
+      R.byKind(c, 'fixed').map(function (x) { return '<div style="display:flex;flex-direction:column;gap:6px"><b>' + esc(t(x.title)) + '</b>' + R.beforeAfter(x) + '</div>'; }).join('') +
+      '<span class="kind known" style="align-self:flex-start">' + t(UI.groups.known) + '</span><ul>' +
+      R.byKind(c, 'known').map(function (x) { return '<li>' + icon('warn', 13) + '<span><b>' + esc(t(x.title)) + '.</b> ' + esc(t(x.body)) + '</span></li>'; }).join('') + '</ul>' +
+      rels.slice(1).map(function (r) { return '<span class="small muted">' + L('Também na', 'Also in') + ' ' + R.short(r.v) + ': ' + r.items.map(function (x) { return esc(t(x.title)); }).join(' · ') + '</span>'; }).join('') + '</div>';
+  }
+  function wireBand() {
+    var b = document.getElementById('tour'); if (!b) return;
+    b.onclick = function () { S.fixes = false; render(); startTour(); };
+    document.getElementById('fixes').onclick = function () { S.fixes = !S.fixes; render(); if (S.fixes) document.getElementById('fixes').focus(); };
+    document.getElementById('band-x').onclick = function () { S.band = false; S.fixes = false; render(); R.toast(L('As notas ficam na versão, na barra de status', 'Notes stay on the version in the status bar')); };
+  }
+
+  /* ---------- Tour ---------- */
+  function startTour() {
+    S.tour = 0; S.sub = 0;
+    var spot = document.createElement('div'); spot.className = 'spot'; spot.id = 'spot';
+    var pop = document.createElement('div'); pop.className = 'tour-pop'; pop.id = 'tpop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-modal', 'true'); pop.setAttribute('aria-labelledby', 'tp-title');
+    document.body.appendChild(spot); document.body.appendChild(pop);
+    untrap = R.trapFocus(pop, function () { endTour(); });
+    step();
+  }
+  function endTour(silent) {
+    ['spot', 'tpop'].forEach(function (id) { var e = document.getElementById(id); if (e) e.remove(); });
+    if (untrap) { untrap(); untrap = null; }
+    if (S.tour >= 0 && !silent) { S.tour = -1; render(); var b = document.getElementById('tour'); if (b) b.focus(); }
+    S.tour = -1;
+  }
+  function step() {
+    var st = STOPS[S.tour], pop = document.getElementById('tpop'); if (!pop) return;
+    S.visited[st.key] = true;
+    if (st.key === 'classify' || st.key === 'plan') render();
+    var items = st.ids.map(it), x = items[S.sub];
+    pop.innerHTML = '<div class="segs" aria-hidden="true">' + STOPS.map(function (_, k) { return '<i class="' + (k < S.tour ? 'done' : k === S.tour ? 'cur' : '') + '"></i>'; }).join('') + '</div>' +
+      '<h3 id="tp-title">' + esc(t(st.title)) + '</h3>' +
+      (items.length > 1 ? '<div class="sub" role="group">' + items.map(function (y, k) { return '<button type="button" aria-pressed="' + (k === S.sub) + '" data-s="' + k + '">' + esc(t(y.title).split(/[,:]/)[0]) + '</button>'; }).join('') + '</div>' : '') +
+      '<div class="tour-body">' + (x ? '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + R.kind(x) + R.where(x) + '</div><div data-c></div><p>' + esc(t(x.body)) + '</p>' : '<p>' + esc(t(st.body)) + '</p>') + '</div>' +
+      '<div class="foot"><button type="button" class="btn" id="tp-skip">' + L('Sair do tour', 'Leave tour') + '</button><span class="spacer"></span><span class="count">' + (S.tour + 1) + ' / ' + STOPS.length + '</span>' +
+      (S.tour > 0 ? '<button type="button" class="btn" id="tp-prev" aria-label="' + t(UI.prev) + '">' + icon('left', 14, 2) + '</button>' : '') +
+      (S.tour < STOPS.length - 1 ? '<button type="button" class="btn btn-primary" id="tp-next">' + t(UI.next) + ' ' + icon('chevron', 14, 2) + '</button>' : '<button type="button" class="btn btn-primary" id="tp-done">' + icon('check', 14, 2.4) + t(UI.done) + '</button>') + '</div>';
+    if (x && x.scene) pop.querySelector('[data-c]').appendChild(R.clip(x.scene));
+    pop.querySelectorAll('[data-s]').forEach(function (b) { b.onclick = function () { S.sub = +b.getAttribute('data-s'); step(); pop.querySelector('[data-s="' + S.sub + '"]').focus(); }; });
+    pop.querySelector('#tp-skip').onclick = function () { endTour(); };
+    var pv = pop.querySelector('#tp-prev'); if (pv) pv.onclick = function () { move(-1); };
+    var nx = pop.querySelector('#tp-next'); if (nx) nx.onclick = function () { move(1); };
+    var dn = pop.querySelector('#tp-done'); if (dn) dn.onclick = function () { S.band = false; endTour(); R.toast(L('Pronto. As notas ficam na versão.', 'Done. Notes stay on the version.')); };
+    place();
+    (nx || dn).focus({ preventScroll: true });
+  }
+  function move(d) { var k = S.tour + d; if (k < 0 || k >= STOPS.length) return; S.tour = k; S.sub = 0; step(); }
+  /* Posiciona holofote e balão: direita do alvo se couber, senão abaixo, senão acima; sempre dentro da janela. */
+  function place() {
+    if (S.tour < 0) return;
+    var st = STOPS[S.tour], el = document.querySelector(st.sel), spot = document.getElementById('spot'), pop = document.getElementById('tpop');
+    if (!el || !spot || !pop) return;
+    el.scrollIntoView({ block: 'nearest' });
+    var r = el.getBoundingClientRect(), pad = 6, vw = innerWidth, vh = innerHeight, m = 12;
+    spot.style.left = (r.left - pad) + 'px'; spot.style.top = (r.top - pad) + 'px'; spot.style.width = (r.width + pad * 2) + 'px'; spot.style.height = (r.height + pad * 2) + 'px';
+    var pw = pop.offsetWidth, ph = pop.offsetHeight, x, y;
+    if (r.right + pad + m + pw <= vw - m) { x = r.right + pad + m; y = r.top + r.height / 2 - ph / 2; }
+    else if (r.bottom + pad + m + ph <= vh - m) { x = r.left + r.width / 2 - pw / 2; y = r.bottom + pad + m; }
+    else { x = r.left + r.width / 2 - pw / 2; y = r.top - pad - m - ph; }
+    pop.style.left = Math.max(m, Math.min(vw - pw - m, x)) + 'px';
+    pop.style.top = Math.max(m, Math.min(vh - ph - m, y)) + 'px';
+  }
+  addEventListener('resize', place);
+  document.addEventListener('keydown', function (e) {
+    if (S.tour < 0) return;
+    if (e.key === 'ArrowRight') move(1);
+    if (e.key === 'ArrowLeft') move(-1);
+  });
+  document.addEventListener('click', function (e) {
+    if (!S.fixes) return;
+    if (e.target.closest('.fix-pop, #fixes')) return;
+    S.fixes = false; render();
+  });
+  document.getElementById('nav').addEventListener('click', function (e) {
+    var a = e.target.closest('a'); if (!a) return; e.preventDefault();
+    if (S.tour >= 0) return;
+    if (a.getAttribute('data-sec') === 'history') { R.toast(L('Histórico fora deste protótipo', 'History is out of this prototype')); return; }
+    S.sec = a.getAttribute('data-sec'); render();
+  });
+  document.addEventListener('rn:lang', function () { render(); if (S.tour >= 0) step(); });
+  render();
+})();
+</script>
+</body>
+</html>
