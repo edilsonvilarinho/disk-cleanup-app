@@ -11,6 +11,11 @@ export function fakeGateway(overrides: Partial<DiskCleanupGateway> = {}): DiskCl
       return survey
     }),
     classify: vi.fn(async () => classification),
+    findDuplicates: vi.fn(async () => ({
+      groups: [{ sizeBytes: 2 * 1024 ** 3, keep: 'C:\\Users\\u\\a.zip', copies: ['C:\\Users\\u\\b.zip'] }],
+      stats: { files: 10, sameSize: 4, samePartial: 3, sameFull: 2, confirmed: 2 },
+    })),
+    checkRule: vi.fn(async (_extra: string[], path: string) => ({ code: 'ok' as const, detail: path, reason: null })),
     buildPlan: vi.fn(async () => plan),
     approvePlan: vi.fn(async () => approval),
     previewTier: vi.fn(async () => stepsA),

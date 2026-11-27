@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createApp, defineComponent } from 'vue'
 import { createMemoryHistory } from 'vue-router'
 import type { DiskCleanupGateway } from '../application/gateway'
+import { backgroundPlugin, type BackgroundPort } from '../application/background'
 import { exporterPlugin, type ReportExporter } from '../application/exporter'
 import { gatewayPlugin } from '../application/gatewayPlugin'
 import { historyPlugin, memoryHistoryStorage, type HistoryStorage } from '../application/history'
@@ -13,9 +14,10 @@ import { usePlanStore } from '../application/stores/plan'
 import { useSettingsStore } from '../application/stores/settings'
 import { ThemeController } from '../application/theme'
 import { updaterPlugin, type UpdaterPort } from '../application/updater'
+import { fakeBackground } from '../test/fakeBackground'
 import { fakeGateway } from '../test/fakeGateway'
 import { fakeUpdater, updateInfo } from '../test/fakeUpdater'
-import { approval, classification, report, runA, runCTrash, stepsA, survey } from '../test/fixtures'
+import { approval, candidate, classification, report, runA, runCTrash, stepsA, survey } from '../test/fixtures'
 import { GIB } from '../domain/format'
 import { toSnapshot, type ScanSnapshot } from '../domain/history'
 import App from './App.vue'
@@ -30,6 +32,7 @@ interface MountOptions {
   updater?: UpdaterPort
   history?: HistoryStorage
   exporter?: ReportExporter
+  background?: BackgroundPort
 }
 
 function fakeExporter(overrides: Partial<ReportExporter> = {}): ReportExporter {
@@ -50,6 +53,7 @@ async function mountApp(path: string, gateway: DiskCleanupGateway = fakeGateway(
   pinia.use(updaterPlugin(updater))
   pinia.use(historyPlugin(options.history ?? memoryHistoryStorage()))
   pinia.use(exporterPlugin(options.exporter ?? fakeExporter()))
+  pinia.use(backgroundPlugin(options.background ?? fakeBackground()))
   const router = createAppRouter(createMemoryHistory())
   const apply = vi.fn()
   const theme = new ThemeController(() => true, apply)
@@ -105,7 +109,7 @@ describe('shell', () => {
   })
 
   it('a barra de status mostra o catálogo quando difere do sistema e leva a versão às Configurações', async () => {
-    const systemInfo = vi.fn(async () => ({ os: 'linux', volumeRoot: '/', profile: '/home/u', catalog: 'macos' }))
+    const systemInfo = vi.fn(async () => ({ os: 'linux', volumeRoot: '/', profile: '/home/u', catalog: 'macos', projectProfiles: [] }))
     const { wrapper, router } = await mountApp('/', fakeGateway({ systemInfo }))
     expect(wrapper.get('[data-test="env-catalog"]').text()).toContain('macos')
     await wrapper.get('[data-test="app-version"]').trigger('click')
@@ -353,6 +357,186 @@ describe('Plano', () => {
     await router.push('/plano')
     await flushPromises()
     expect(wrapper.get('[data-test="plan-error"]').text()).toContain('nenhum item selecionado')
+  })
+})
+
+describe('Projetos na Classificação', () => {
+  it('mostra a idade, filtra por idade mínima e guarda a escolha', async () => {
+    const project = (name: string, idle: number | null) =>
+      candidate(`project:D:\\dev\\${name}\\node_modules`, 'C', 1, { origin: 'project', project: `D:\\dev\\${name}`, idleDays: idle, label: { pt: `${name} · node_modules`, en: `${name} · node_modules` } })
+    const withProjects = { ...classification, candidates: [...classification.candidates, project('loja', 412), project('novo', 0), project('x', null)] }
+    const { wrapper, saved } = await mountApp('/classificacao', fakeGateway({ classify: vi.fn(async () => withProjects) }))
+    await wrapper.get('[data-test="tab-C"]').trigger('click')
+    const rows = () => wrapper.findAll('[data-test="row"]').filter((r) => r.text().includes('node_modules'))
+    expect(rows()[0]!.text()).toContain('sem atividade há 412 dias')
+    expect(rows()[1]!.text()).toContain('atividade hoje')
+    expect(rows()[2]!.text()).toContain('idade desconhecida')
+    const checked = () => rows().map((r) => (r.get('input').element as HTMLInputElement).checked)
+    expect(checked()).toEqual([true, false, false])
+    await wrapper.get('[data-test="min-idle"]').setValue('30')
+    expect(saved.at(-1)!.minIdleDays).toBe(30)
+    expect(checked()).toEqual([true, false, false])
+    await wrapper.get('[data-test="min-idle"]').setValue('365')
+    expect(checked()).toEqual([true, false, false])
+    // tier sem projetos não mostra o filtro
+    await wrapper.get('[data-test="tab-A"]').trigger('click')
+    expect(wrapper.find('[data-test="min-idle"]').exists()).toBe(false)
+  })
+})
+
+describe('Monitoramento', () => {
+  it('avisa uma vez quando o livre está abaixo do limite; limite desligado nem mede', async () => {
+    const background = fakeBackground({ volumeUsage: vi.fn(async () => ({ ...survey.volume, freeBytes: 10 * GIB })) })
+    await mountApp('/', fakeGateway(), { background, saved: { lowSpaceGb: 15 } })
+    await flushPromises()
+    expect(background.notify).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(background.notify).mock.calls[0]![0]).toBe('Pouco espaço em C:\\')
+    expect(vi.mocked(background.notify).mock.calls[0]![1]).toContain('10,0 GB livres (limite 15 GB)')
+
+    const off = fakeBackground()
+    await mountApp('/', fakeGateway(), { background: off, saved: { lowSpaceGb: 0 } })
+    await flushPromises()
+    expect(off.volumeUsage).not.toHaveBeenCalled()
+  })
+
+  it('falha ao medir não derruba o app nem avisa', async () => {
+    const background = fakeBackground({ volumeUsage: vi.fn(async () => Promise.reject(new Error('sem volume'))) })
+    const { wrapper } = await mountApp('/', fakeGateway(), { background })
+    await flushPromises()
+    expect(background.notify).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test="statusbar"]').exists()).toBe(true)
+  })
+
+  it('varredura agendada roda sem varredura anterior e mostra a próxima na barra', async () => {
+    const { wrapper, gateway } = await mountApp('/', fakeGateway(), { saved: { schedule: 'weekly' } })
+    await flushPromises()
+    expect(gateway.runSurvey).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('[data-test="sb-next-scan"]').text()).toContain('Próxima varredura')
+    const quiet = await mountApp('/', fakeGateway())
+    await flushPromises()
+    expect(quiet.gateway.runSurvey).not.toHaveBeenCalled()
+    expect(quiet.wrapper.find('[data-test="sb-next-scan"]').exists()).toBe(false)
+  })
+
+  it('bandeja e "Varrer agora": liga com os textos traduzidos e varre só lendo', async () => {
+    const background = fakeBackground()
+    const { wrapper, gateway, router, saved } = await mountApp('/configuracoes', fakeGateway(), { background })
+    await flushPromises()
+    expect(wrapper.get('[data-test="never-auto"]').text()).toContain('nunca')
+    await wrapper.get('[data-test="bg-tray"] input').setValue(true)
+    await flushPromises()
+    expect(background.setBackground).toHaveBeenLastCalledWith(true, expect.objectContaining({ open: 'Abrir Disk Cleanup', quit: 'Sair' }))
+    expect(saved.at(-1)!.backgroundEnabled).toBe(true)
+    await wrapper.get('[data-test="low-space"]').setValue('25')
+    expect(saved.at(-1)!.lowSpaceGb).toBe(25)
+    await wrapper.get('[data-test="schedule"]').setValue('daily')
+    expect(saved.at(-1)!.schedule).toBe('daily')
+    background.trayScan()
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/')
+    expect(gateway.runSurvey).toHaveBeenCalled()
+  })
+
+  it('com a bandeja ligada nas preferências, liga ao abrir', async () => {
+    const background = fakeBackground({ setBackground: vi.fn(async () => Promise.reject(new Error('sem bandeja'))) })
+    await mountApp('/', fakeGateway(), { background, saved: { backgroundEnabled: true } })
+    await flushPromises()
+    expect(background.setBackground).toHaveBeenCalledWith(true, expect.objectContaining({ scan: 'Varrer agora (somente leitura)' }))
+  })
+})
+
+describe('Duplicados na Classificação', () => {
+  it('procura sob demanda, mostra as etapas e oferece a cópia sem marcar', async () => {
+    const dup = candidate('dup:C:\\Users\\u\\b.zip', 'D', 2, {
+      origin: 'duplicate',
+      label: { pt: 'b.zip', en: 'b.zip' },
+      note: { pt: 'cópia de C:\\Users\\u\\a.zip', en: 'copy of C:\\Users\\u\\a.zip' },
+    })
+    const classify = vi
+      .fn()
+      .mockResolvedValueOnce(classification)
+      .mockResolvedValueOnce({ ...classification, candidates: [...classification.candidates, dup] })
+    const { wrapper, gateway } = await mountApp('/classificacao', fakeGateway({ classify }))
+    await wrapper.get('[data-test="tab-A"]').trigger('click')
+    expect(wrapper.find('[data-test="find-duplicates"]').exists()).toBe(false)
+    await wrapper.get('[data-test="tab-D"]').trigger('click')
+    expect(wrapper.find('[data-test="duplicates-summary"]').exists()).toBe(false)
+    // seleção manual anterior sobrevive à reclassificação
+    await wrapper.get('[data-test="tab-A"]').trigger('click')
+    await wrapper.findAll('[data-test="row"]')[0]!.get('input').trigger('change')
+    await wrapper.get('[data-test="tab-D"]').trigger('click')
+    await wrapper.get('[data-test="find-duplicates"]').trigger('click')
+    await flushPromises()
+    expect(gateway.findDuplicates).toHaveBeenCalledTimes(1)
+    expect(classify).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-test="duplicates-summary"]').text()).toContain('2 confirmados byte a byte (1 grupos)')
+    const row = wrapper.findAll('[data-test="row"]').find((r) => r.text().includes('b.zip'))!
+    expect(row.text()).toContain('cópia de C:\\Users\\u\\a.zip')
+    expect((row.get('input').element as HTMLInputElement).checked).toBe(false)
+    await wrapper.get('[data-test="tab-A"]').trigger('click')
+    expect((wrapper.findAll('[data-test="row"]')[0]!.get('input').element as HTMLInputElement).checked).toBe(false)
+  })
+
+  it('erro na busca aparece sem perder a classificação', async () => {
+    const findDuplicates = vi.fn(async () => Promise.reject(new Error('sem acesso ao perfil')))
+    const { wrapper } = await mountApp('/classificacao', fakeGateway({ findDuplicates }))
+    await wrapper.get('[data-test="tab-D"]').trigger('click')
+    await wrapper.get('[data-test="find-duplicates"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="classify-error"]').text()).toContain('sem acesso ao perfil')
+    expect(wrapper.findAll('[data-test="tab-A"]')).toHaveLength(1)
+  })
+})
+
+describe('Mapa do volume', () => {
+  it('entra na pasta, volta pela trilha e não abre "outros" nem folha', async () => {
+    const { wrapper } = await mountApp('/')
+    await wrapper.get('[data-test="start-survey"]').trigger('click')
+    await flushPromises()
+    const cells = () => wrapper.findAll('[data-test="tm-cell"]')
+    expect(cells().map((c) => c.attributes('aria-label'))).toEqual(['Users · 412,6 GB', 'Windows · 38,9 GB'])
+    await cells()[1]!.trigger('click')
+    expect(cells()).toHaveLength(2)
+    await cells()[0]!.trigger('click')
+    expect(wrapper.get('[data-test="crumb-1"]').text()).toBe('Users')
+    expect(cells().map((c) => c.attributes('aria-label'))).toEqual(['u · 400,0 GB', 'outros · 12,6 GB'])
+    await cells()[1]!.trigger('click')
+    expect(wrapper.find('[data-test="crumb-2"]').exists()).toBe(false)
+    await cells()[0]!.trigger('click')
+    expect(wrapper.find('[data-test="crumb-2"]').exists()).toBe(false)
+    await wrapper.get('[data-test="crumb-0"]').trigger('click')
+    expect(cells()).toHaveLength(2)
+  })
+
+  it('volume sem subpastas medidas explica em vez de desenhar vazio', async () => {
+    const runSurvey = vi.fn(async () => ({ ...survey, tree: { name: 'C:\\', bytes: 1, children: [] } }))
+    const { wrapper } = await mountApp('/', fakeGateway({ runSurvey }))
+    await wrapper.get('[data-test="start-survey"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="treemap-empty"]').text()).toContain('Sem subpastas')
+  })
+})
+
+describe('Arquivos grandes na Classificação', () => {
+  it('mostra a idade, avisa que nada vem marcado e deixa marcar um a um', async () => {
+    const iso = candidate('file:C:\\Users\\u\\Downloads\\ubuntu.iso', 'D', 4.9, {
+      origin: 'file',
+      idleDays: 420,
+      label: { pt: 'ubuntu.iso', en: 'ubuntu.iso' },
+      risk: 'low',
+    })
+    const novo = candidate('file:C:\\Users\\u\\x.bin', 'D', 1, { origin: 'file', idleDays: null, label: { pt: 'x.bin', en: 'x.bin' } })
+    const withFiles = { ...classification, candidates: [...classification.candidates, iso, novo] }
+    const { wrapper } = await mountApp('/classificacao', fakeGateway({ classify: vi.fn(async () => withFiles) }))
+    await wrapper.get('[data-test="tab-D"]').trigger('click')
+    expect(wrapper.text()).toContain('nada vem marcado')
+    const rows = wrapper.findAll('[data-test="row"]')
+    expect(rows[0]!.text()).toContain('modificado há 420 dias')
+    expect(rows[1]!.text()).toContain('idade desconhecida')
+    const box = rows[0]!.get('input')
+    expect((box.element as HTMLInputElement).checked).toBe(false)
+    await box.trigger('change')
+    expect((box.element as HTMLInputElement).checked).toBe(true)
   })
 })
 
@@ -888,7 +1072,67 @@ describe('Configurações', () => {
       defaultDepth: 1,
       autoUpdate: true,
       betaUpdates: false,
+      projectRoots: [],
+      minIdleDays: 90,
+      userRules: [],
+      disabledProfiles: [],
+      findOrphans: false,
+      backgroundEnabled: false,
+      lowSpaceGb: 15,
+      schedule: 'off',
     })
+  })
+
+  it('regra própria passa pela validação do núcleo antes de salvar; perfis ligam e desligam', async () => {
+    const checkRule = vi
+      .fn()
+      .mockResolvedValueOnce({ code: 'excluded', detail: 'C:\\Windows\\Installer', reason: { pt: 'cache do MSI', en: 'MSI cache' } })
+      .mockResolvedValueOnce({ code: 'ok', detail: 'C:\\Users\\u\\Teams\\Cache', reason: null })
+    const { wrapper, gateway, router, saved } = await mountApp('/configuracoes', fakeGateway({ checkRule }))
+    expect(wrapper.find('[data-test="no-user-rules"]').exists()).toBe(true)
+    await wrapper.get('[data-test="rule-path"]').setValue('C:\\Windows')
+    await wrapper.get('[data-test="user-rule-form"]').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('[data-test="rule-error"]').text()).toContain('C:\\Windows\\Installer')
+    expect(wrapper.get('[data-test="rule-error"]').text()).toContain('cache do MSI')
+    expect(wrapper.findAll('[data-test="user-rule"]')).toHaveLength(0)
+    await wrapper.get('[data-test="rule-label"]').setValue('Teams')
+    await wrapper.get('[data-test="rule-path"]').setValue('C:\\Users\\u\\Teams\\Cache')
+    await wrapper.get('[data-test="user-rule-form"]').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('[data-test="rule-error"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="user-rule"]').text()).toContain('Teams')
+    expect(saved.at(-1)!.userRules).toEqual([{ label: 'Teams', path: 'C:\\Users\\u\\Teams\\Cache', tier: 'A' }])
+    await wrapper.get('[data-test="profile-node"] input').setValue(false)
+    expect(saved.at(-1)!.disabledProfiles).toEqual(['node'])
+    expect((wrapper.get('[data-test="find-orphans"] input').element as HTMLInputElement).checked).toBe(false)
+    await wrapper.get('[data-test="find-orphans"] input').setValue(true)
+    expect(saved.at(-1)!.findOrphans).toBe(true)
+    await router.push('/classificacao')
+    await flushPromises()
+    expect(gateway.classify).toHaveBeenCalledWith(
+      expect.objectContaining({ disabledProfiles: ['node'], findOrphans: true, userRules: [expect.objectContaining({ label: 'Teams' })] }),
+    )
+    await router.push('/configuracoes')
+    await flushPromises()
+    await wrapper.get('[data-test="user-rule"] button').trigger('click')
+    expect(wrapper.find('[data-test="no-user-rules"]').exists()).toBe(true)
+  })
+
+  it('adiciona e remove pastas de projetos, que vão para a classificação', async () => {
+    const { wrapper, gateway, router } = await mountApp('/configuracoes')
+    expect(wrapper.find('[data-test="no-project-roots"]').exists()).toBe(true)
+    await wrapper.get('[data-test="new-project-root"]').setValue('D:\\dev')
+    await wrapper.get('[data-test="project-roots-form"]').trigger('submit')
+    expect(wrapper.findAll('[data-test="project-root"]')).toHaveLength(1)
+    expect((wrapper.get('[data-test="new-project-root"]').element as HTMLInputElement).value).toBe('')
+    await router.push('/classificacao')
+    await flushPromises()
+    expect(gateway.classify).toHaveBeenCalledWith(expect.objectContaining({ projectRoots: ['D:\\dev'] }))
+    await router.push('/configuracoes')
+    await flushPromises()
+    await wrapper.get('[data-test="project-root"] button').trigger('click')
+    expect(wrapper.find('[data-test="no-project-roots"]').exists()).toBe(true)
   })
 
   it('adiciona e remove pastas extras, que vão para a classificação', async () => {
@@ -902,7 +1146,7 @@ describe('Configurações', () => {
     expect((wrapper.get('[data-test="new-exclusion"]').element as HTMLInputElement).value).toBe('c:\\projetos')
     await router.push('/classificacao')
     await flushPromises()
-    expect(gateway.classify).toHaveBeenCalledWith(['C:\\Projetos'])
+    expect(gateway.classify).toHaveBeenCalledWith(expect.objectContaining({ extraExclusions: ['C:\\Projetos'] }))
     await router.push('/configuracoes')
     await flushPromises()
     await wrapper.get('[data-test="exclusion"] button').trigger('click')
@@ -967,6 +1211,7 @@ describe('ramos de apresentação', () => {
     const pinia = createPinia()
     pinia.use(gatewayPlugin(fakeGateway()))
     pinia.use(settingsPlugin({ load: () => null, save: () => {} }))
+    pinia.use(backgroundPlugin(fakeBackground()))
     const Probe = defineComponent({ setup: () => ({ i18n: useI18n() }), render: () => null })
     vi.stubGlobal('navigator', { languages: [], language: 'pt-BR' })
     expect(mount(Probe, { global: { plugins: [pinia] } }).vm.i18n.locale.value).toBe('pt')

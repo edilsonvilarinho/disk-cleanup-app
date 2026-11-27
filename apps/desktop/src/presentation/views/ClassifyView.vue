@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useClassificationStore, type ClassificationTab } from '../../application/stores/classification'
+import { MIN_IDLE_OPTIONS, type MinIdleDays } from '../../application/settings'
 import { useSettingsStore } from '../../application/stores/settings'
-import type { SkippedDto } from '../../domain/models'
+import type { CandidateDto, SkippedDto } from '../../domain/models'
 import { TIERS } from '../../domain/selection'
 import TierBadge from '../components/TierBadge.vue'
 import { useI18n } from '../i18n'
@@ -11,8 +12,23 @@ const store = useClassificationStore()
 const settings = useSettingsStore()
 const { t, txt, err, gb, num } = useI18n()
 
-onMounted(() => store.ensureLoaded(settings.extraExclusions))
-const reload = () => store.load(settings.extraExclusions)
+onMounted(() => store.ensureLoaded(settings.classifyRequest, settings.minIdleDays))
+const reload = () => store.load(settings.classifyRequest, settings.minIdleDays)
+const hasProjects = computed(() => store.visible.some((c) => c.project !== null))
+const hasFiles = computed(() => store.visible.some((c) => c.origin === 'file' || c.origin === 'duplicate' || c.origin === 'orphan'))
+const findDuplicates = () => store.findDuplicates(settings.classifyRequest, settings.minIdleDays)
+
+function onMinIdle(event: Event) {
+  const days = Number((event.target as HTMLSelectElement).value) as MinIdleDays
+  settings.setMinIdleDays(days)
+  store.applyMinIdle(days)
+}
+
+function idleText(c: CandidateDto): string {
+  if (c.idleDays === null) return t('classify.idleUnknown')
+  if (c.origin === 'file') return t('classify.modified', { n: c.idleDays })
+  return c.idleDays === 0 ? t('classify.idleToday') : t('classify.idle', { n: c.idleDays })
+}
 
 const tabs = computed<{ id: ClassificationTab; label: string }[]>(() => [
   ...TIERS.map((tier) => ({ id: tier as ClassificationTab, label: `${tier} · ${t(`tier.${tier}`)}` })),
@@ -94,9 +110,41 @@ function skipText(s: SkippedDto): string {
       </template>
       <template v-else>
         <div class="card-head">
-          <p class="small muted">{{ t('classify.blockedHint') }}</p>
-          <button type="button" class="btn" data-test="toggle-tier" @click="store.toggleTier(store.activeTab)">{{ t('classify.toggleTier') }}</button>
+          <p class="small muted">{{ hasFiles ? t('classify.filesHint') : hasProjects ? t('classify.projectsHint') : t('classify.blockedHint') }}</p>
+          <div class="actions">
+            <template v-if="hasProjects">
+              <label class="small muted" for="min-idle">{{ t('classify.minIdleLabel') }}</label>
+              <select id="min-idle" class="select" data-test="min-idle" :value="settings.minIdleDays" @change="onMinIdle">
+                <option v-for="d in MIN_IDLE_OPTIONS" :key="d" :value="d">{{ t('classify.minIdle', { n: d }) }}</option>
+              </select>
+            </template>
+            <button
+              v-if="store.activeTab === 'D'"
+              type="button"
+              class="btn"
+              data-test="find-duplicates"
+              :disabled="store.duplicatesStatus === 'running'"
+              :title="t('classify.duplicatesHint')"
+              @click="findDuplicates"
+            >
+              <span v-if="store.duplicatesStatus === 'running'" class="spin-ring" aria-hidden="true" />
+              {{ store.duplicatesStatus === 'running' ? t('classify.findingDuplicates') : t('classify.findDuplicates') }}
+            </button>
+            <button type="button" class="btn" data-test="toggle-tier" @click="store.toggleTier(store.activeTab)">{{ t('classify.toggleTier') }}</button>
+          </div>
         </div>
+        <p v-if="store.activeTab === 'D' && store.duplicates" class="small muted" data-test="duplicates-summary">
+          {{
+            t('classify.duplicatesSummary', {
+              files: store.duplicates.stats.files,
+              size: store.duplicates.stats.sameSize,
+              partial: store.duplicates.stats.samePartial,
+              full: store.duplicates.stats.sameFull,
+              confirmed: store.duplicates.stats.confirmed,
+              groups: store.duplicates.groups.length,
+            })
+          }}
+        </p>
         <p v-if="store.visible.length === 0" class="muted" data-test="tier-empty">{{ t('classify.emptyTier') }}</p>
         <div v-else class="table-wrap">
           <table>
@@ -129,6 +177,7 @@ function skipText(s: SkippedDto): string {
                 <td>
                   <span v-if="c.blocked" class="pill warn"><span class="dot" />{{ t('classify.blocked', { reason: t(`block.${c.blocked.code}`, { value: c.blocked.value }) }) }}</span>
                   <span v-else class="small muted">{{ txt(c.note) }}</span>
+                  <span v-if="c.origin !== 'rule'" class="small muted" style="display: block" data-test="idle">{{ idleText(c) }}</span>
                 </td>
               </tr>
             </tbody>

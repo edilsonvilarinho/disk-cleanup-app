@@ -187,7 +187,7 @@ fn describe(path: &Path, e: &std::io::Error) -> String {
     format!("{}: {e}", path.display())
 }
 
-fn is_link(meta: &Metadata) -> bool {
+pub(crate) fn is_link(meta: &Metadata) -> bool {
     meta.file_type().is_symlink() || is_reparse_point(meta)
 }
 

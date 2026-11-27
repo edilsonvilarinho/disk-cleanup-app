@@ -3,7 +3,8 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use disk_cleanup_application::{
-    Catalog, CatalogExclusion, CatalogRepository, CatalogRule, PortError, RuleTarget,
+    Catalog, CatalogExclusion, CatalogRepository, CatalogRule, PortError, ProjectProfile,
+    RuleTarget,
 };
 use disk_cleanup_domain::{LocalizedText, Risk, Tier};
 use serde::Deserialize;
@@ -54,6 +55,66 @@ struct FileModel {
     exclusion: Vec<ExclusionModel>,
     #[serde(default)]
     rule: Vec<RuleModel>,
+    #[serde(default)]
+    project: Vec<ProjectModel>,
+    #[serde(default)]
+    project_root: Vec<RootModel>,
+    #[serde(default)]
+    orphans: OrphansModel,
+}
+
+/// Onde procurar sobras de apps e que nomes de pasta nunca são sobra.
+#[derive(Debug, Default, Deserialize)]
+struct OrphansModel {
+    #[serde(default)]
+    roots: Vec<String>,
+    #[serde(default)]
+    ignore: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RootModel {
+    path: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProjectModel {
+    id: String,
+    label: String,
+    label_en: Option<String>,
+    #[serde(default)]
+    markers: Vec<String>,
+    #[serde(default)]
+    artifacts: Vec<String>,
+    #[serde(default)]
+    note: String,
+    note_en: Option<String>,
+}
+
+impl ProjectModel {
+    /// Artefato é um nome dentro da raiz do projeto: nunca caminho nem `..`.
+    fn into_profile(self) -> Result<ProjectProfile, String> {
+        if self.markers.is_empty() || self.markers.iter().any(|m| m.trim().is_empty()) {
+            return Err("ao menos um marcador, nenhum vazio".into());
+        }
+        if self.artifacts.is_empty() {
+            return Err("ao menos um artefato".into());
+        }
+        if let Some(bad) = self
+            .artifacts
+            .iter()
+            .find(|a| a.is_empty() || *a == "." || *a == ".." || a.contains(['/', '\\']))
+        {
+            return Err(format!("artefato inválido '{bad}': use só o nome da pasta"));
+        }
+        Ok(ProjectProfile {
+            label: bilingual(&self.label, self.label_en.as_deref()),
+            note: bilingual(&self.note, self.note_en.as_deref()),
+            id: self.id,
+            markers: self.markers,
+            artifacts: self.artifacts,
+        })
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -157,6 +218,26 @@ impl CatalogRepository for TomlCatalogRepository {
                 pattern: e.pattern,
             })
             .collect();
-        Ok(Catalog { rules, exclusions })
+        let mut project_ids = HashSet::new();
+        let mut projects = Vec::with_capacity(model.project.len());
+        for project in model.project {
+            let id = project.id.clone();
+            if !project_ids.insert(id.clone()) {
+                return Err(PortError::InvalidData(format!("perfil duplicado: {id}")));
+            }
+            projects.push(
+                project
+                    .into_profile()
+                    .map_err(|e| PortError::InvalidData(format!("perfil '{id}': {e}")))?,
+            );
+        }
+        Ok(Catalog {
+            rules,
+            exclusions,
+            projects,
+            project_roots: model.project_root.into_iter().map(|r| r.path).collect(),
+            orphan_roots: model.orphans.roots,
+            orphan_ignore: model.orphans.ignore,
+        })
     }
 }

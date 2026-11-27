@@ -37,7 +37,8 @@ impl SafetyGuard {
         if let Some(p) = self
             .protected
             .iter()
-            .find(|p| path_is_within(target, p) && path_is_within(p, target))
+            // Igual a uma protegida ou contendo uma (`p` dentro de `target`).
+            .find(|p| path_is_within(p, target))
         {
             return Err(SafetyViolation::Protected { path: p.clone() });
         }

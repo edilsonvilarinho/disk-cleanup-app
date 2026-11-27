@@ -8,7 +8,15 @@ use jwalk::WalkDirGeneric;
 use crate::allocated_size;
 
 /// `(lógico, alocado)` calculado nas threads de leitura do jwalk.
-type Sizes = Option<(u64, u64)>;
+/// Lógico, alocado e modificação (segundos Unix).
+type Sizes = Option<(u64, u64, Option<u64>)>;
+
+fn unix_secs(meta: &fs::Metadata) -> Option<u64> {
+    let t = meta.modified().ok()?;
+    t.duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_secs())
+}
 
 /// Varredura paralela: diretórios são lidos em várias threads e os metadados
 /// de cada arquivo são obtidos já nessas threads (`process_read_dir`).
@@ -30,7 +38,7 @@ impl FileWalker for JwalkFileWalker {
                         let path = child.path();
                         child.client_state = fs::symlink_metadata(&path)
                             .ok()
-                            .map(|m| (m.len(), allocated_size(&path, &m)));
+                            .map(|m| (m.len(), allocated_size(&path, &m), unix_secs(&m)));
                     }
                 }
             });
@@ -49,7 +57,7 @@ impl FileWalker for JwalkFileWalker {
             if !entry.file_type.is_file() {
                 continue;
             }
-            let Some((logical, allocated)) = entry.client_state else {
+            let Some((logical, allocated, modified)) = entry.client_state else {
                 stats.unreadable += 1;
                 continue;
             };
@@ -58,6 +66,7 @@ impl FileWalker for JwalkFileWalker {
                 components: path_components(&entry.path().to_string_lossy()),
                 logical: ByteSize::from_bytes(logical),
                 allocated: ByteSize::from_bytes(allocated),
+                modified,
             });
         }
         Ok(stats)

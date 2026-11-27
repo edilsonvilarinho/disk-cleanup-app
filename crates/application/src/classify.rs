@@ -1,11 +1,13 @@
 use std::fmt;
 
 use disk_cleanup_domain::{
-    Action, Availability, ByteSize, Candidate, ExclusionList, LocalizedText, ToolchainGuard,
+    belongs_to_installed, path_components, Action, Availability, ByteSize, Candidate,
+    ExclusionList, LargeFile, LocalizedText, Risk, Tier, ToolchainGuard,
 };
 
 use crate::{
-    expand_template, AppError, CatalogRepository, CatalogRule, Environment, PathInspector,
+    expand_template, AppError, Catalog, CatalogRepository, CatalogRule, DuplicateGroup,
+    Environment, FoundArtifact, OrphanFinder, PathInspector, ProjectFinder, ProjectProfile,
     RuleTarget,
 };
 
@@ -37,12 +39,54 @@ pub struct SkippedRule {
     pub reason: SkipReason,
 }
 
+/// Dados de um candidato que veio de um projeto (não do catálogo de regras).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectInfo {
+    /// `id` do candidato.
+    pub id: String,
+    /// Raiz do projeto.
+    pub project: String,
+    pub idle_days: Option<u32>,
+}
+
+/// Cópia duplicada oferecida como candidato; `keep` é a que fica.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DuplicateInfo {
+    /// `id` do candidato.
+    pub id: String,
+    pub keep: String,
+}
+
+/// Pasta de app desinstalado oferecida como candidato.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OrphanInfo {
+    /// `id` do candidato.
+    pub id: String,
+    pub idle_days: Option<u32>,
+}
+
+/// Sobra só com pelo menos estes dias sem modificação (app em uso mexe nos dados).
+const ORPHAN_MIN_IDLE_DAYS: u32 = 90;
+
+/// Dados de um candidato que veio dos arquivos grandes da varredura.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LargeFileInfo {
+    /// `id` do candidato.
+    pub id: String,
+    /// Dias desde a última modificação.
+    pub age_days: Option<u32>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClassificationReport {
-    /// Na ordem do catálogo.
+    /// Na ordem do catálogo; os artefatos de projeto vêm depois das regras.
     pub candidates: Vec<Candidate>,
     pub skipped: Vec<SkippedRule>,
     pub exclusions: ExclusionList,
+    pub projects: Vec<ProjectInfo>,
+    pub large_files: Vec<LargeFileInfo>,
+    pub duplicates: Vec<DuplicateInfo>,
+    pub orphans: Vec<OrphanInfo>,
 }
 
 impl ClassificationReport {
@@ -61,6 +105,32 @@ pub struct ClassifyService<'a> {
     catalog: &'a dyn CatalogRepository,
     env: &'a dyn Environment,
     inspector: &'a dyn PathInspector,
+    projects: Option<(&'a dyn ProjectFinder, Vec<String>)>,
+    large_files: (&'a [LargeFile], u64),
+    user_rules: &'a [CatalogRule],
+    disabled_profiles: &'a [String],
+    duplicates: &'a [DuplicateGroup],
+    orphans: Option<&'a dyn OrphanFinder>,
+}
+
+/// Exclusões efetivas: obrigatórias + pastas das Configurações + catálogo.
+/// Só somam; nenhuma fonte remove exclusão de outra.
+pub fn effective_exclusions(
+    catalog: &Catalog,
+    env: &dyn Environment,
+    baseline: ExclusionList,
+    extra: &[String],
+) -> ExclusionList {
+    let settings = LocalizedText::new("excluída nas Configurações", "excluded in Settings");
+    let baseline = extra
+        .iter()
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty())
+        .fold(baseline, |list, p| list.with(p, settings.clone()));
+    catalog.exclusions.iter().fold(baseline, |list, ex| {
+        let pattern = expand_template(&ex.pattern, env).unwrap_or_else(|_| ex.pattern.clone());
+        list.with(&pattern, ex.reason.clone())
+    })
 }
 
 impl<'a> ClassifyService<'a> {
@@ -73,7 +143,51 @@ impl<'a> ClassifyService<'a> {
             catalog,
             env,
             inspector,
+            projects: None,
+            large_files: (&[], 0),
+            user_rules: &[],
+            disabled_profiles: &[],
+            duplicates: &[],
+            orphans: None,
         }
+    }
+
+    /// Procura pastas de apps desinstalados nas `orphan_roots` do catálogo.
+    pub fn with_orphans(mut self, finder: &'a dyn OrphanFinder) -> Self {
+        self.orphans = Some(finder);
+        self
+    }
+
+    /// Cópias duplicadas (exceto a mantida) como candidatos do tier D.
+    pub fn with_duplicates(mut self, groups: &'a [DuplicateGroup]) -> Self {
+        self.duplicates = groups;
+        self
+    }
+
+    /// Regras próprias do usuário (somadas às do catálogo, com as mesmas
+    /// exclusões e guardas) e perfis de projeto desligados.
+    pub fn with_user_rules(
+        mut self,
+        rules: &'a [CatalogRule],
+        disabled_profiles: &'a [String],
+    ) -> Self {
+        self.user_rules = rules;
+        self.disabled_profiles = disabled_profiles;
+        self
+    }
+
+    /// Oferece os arquivos grandes da última varredura como candidatos do tier D.
+    /// `now_secs`: agora em segundos Unix, para a idade.
+    pub fn with_large_files(mut self, files: &'a [LargeFile], now_secs: u64) -> Self {
+        self.large_files = (files, now_secs);
+        self
+    }
+
+    /// Liga a busca de artefatos de projeto. `extra_roots`: pastas de projetos
+    /// das Configurações, somadas às do catálogo.
+    pub fn with_projects(mut self, finder: &'a dyn ProjectFinder, extra_roots: &[String]) -> Self {
+        self.projects = Some((finder, extra_roots.to_vec()));
+        self
     }
 
     /// `baseline`: exclusões obrigatórias da plataforma (definidas na composição).
@@ -84,25 +198,19 @@ impl<'a> ClassifyService<'a> {
         extra: &[String],
     ) -> Result<ClassificationReport, AppError> {
         let catalog = self.catalog.load()?;
-        let settings = LocalizedText::new("excluída nas Configurações", "excluded in Settings");
-        let baseline = extra
-            .iter()
-            .map(|p| p.trim())
-            .filter(|p| !p.is_empty())
-            .fold(baseline, |list, p| list.with(p, settings.clone()));
-        let exclusions = catalog.exclusions.iter().fold(baseline, |list, ex| {
-            let pattern =
-                expand_template(&ex.pattern, self.env).unwrap_or_else(|_| ex.pattern.clone());
-            list.with(&pattern, ex.reason.clone())
-        });
+        let exclusions = effective_exclusions(&catalog, self.env, baseline, extra);
         let guard = ToolchainGuard::new(self.env.vars(), self.env.path_entries());
 
         let mut report = ClassificationReport {
             candidates: Vec::new(),
             skipped: Vec::new(),
             exclusions,
+            projects: Vec::new(),
+            large_files: Vec::new(),
+            duplicates: Vec::new(),
+            orphans: Vec::new(),
         };
-        for rule in &catalog.rules {
+        for rule in catalog.rules.iter().chain(self.user_rules) {
             match self.evaluate(rule, &report.exclusions, &guard) {
                 Ok(candidate) => report.candidates.push(candidate),
                 Err(reason) => report.skipped.push(SkippedRule {
@@ -111,7 +219,233 @@ impl<'a> ClassifyService<'a> {
                 }),
             }
         }
+        for found in self.find_projects(&catalog) {
+            let id = format!("project:{}", found.path);
+            let Some(profile) = catalog.projects.iter().find(|p| p.id == found.profile) else {
+                continue;
+            };
+            match self.evaluate_artifact(&id, &found, profile, &report.exclusions, &guard) {
+                Ok(candidate) => {
+                    report.projects.push(ProjectInfo {
+                        id,
+                        project: found.project,
+                        idle_days: found.idle_days,
+                    });
+                    report.candidates.push(candidate);
+                }
+                // Artefato vazio não é notícia: some sem poluir "sem candidato".
+                Err(SkipReason::Empty) => {}
+                Err(reason) => report.skipped.push(SkippedRule { id, reason }),
+            }
+        }
+        for group in self.duplicates {
+            for copy in &group.copies {
+                let id = format!("dup:{copy}");
+                if let Some(ex) = report.exclusions.conflicting(copy) {
+                    report.skipped.push(SkippedRule {
+                        id,
+                        reason: SkipReason::Excluded(ex.reason.clone()),
+                    });
+                    continue;
+                }
+                let availability = match guard.blocking_reason(copy, &[]) {
+                    Some(reason) => Availability::Blocked { reason },
+                    None => Availability::Selectable,
+                };
+                report.duplicates.push(DuplicateInfo {
+                    id: id.clone(),
+                    keep: group.keep.clone(),
+                });
+                report.candidates.push(Candidate {
+                    id,
+                    label: LocalizedText::same(&path_components(copy).pop().unwrap_or_default()),
+                    tier: Tier::D,
+                    action: Action::RemovePath { path: copy.clone() },
+                    size: group.size,
+                    risk: Risk::Low,
+                    note: LocalizedText::new(
+                        &format!("cópia de {}", group.keep),
+                        &format!("copy of {}", group.keep),
+                    ),
+                    availability,
+                });
+            }
+        }
+        self.find_orphans(&catalog, &mut report, &guard);
+        let (files, now) = self.large_files;
+        for file in files {
+            let id = format!("file:{}", file.path);
+            if let Some(ex) = report.exclusions.conflicting(&file.path) {
+                report.skipped.push(SkippedRule {
+                    id,
+                    reason: SkipReason::Excluded(ex.reason.clone()),
+                });
+                continue;
+            }
+            let availability = match guard.blocking_reason(&file.path, &[]) {
+                Some(reason) => Availability::Blocked { reason },
+                None => Availability::Selectable,
+            };
+            let name = path_components(&file.path).pop().unwrap_or_default();
+            report.large_files.push(LargeFileInfo {
+                id: id.clone(),
+                age_days: file
+                    .modified
+                    .map(|m| u32::try_from(now.saturating_sub(m) / 86_400).unwrap_or(u32::MAX)),
+            });
+            report.candidates.push(Candidate {
+                id,
+                label: LocalizedText::same(&name),
+                tier: Tier::D,
+                action: Action::RemovePath {
+                    path: file.path.clone(),
+                },
+                size: file.size,
+                risk: Risk::Low,
+                note: LocalizedText::default(),
+                availability,
+            });
+        }
         Ok(report)
+    }
+
+    /// Sobra = pasta sem programa instalado correspondente, parada há
+    /// `ORPHAN_MIN_IDLE_DAYS`+ dias e fora da lista de ignoradas. Na dúvida
+    /// (idade desconhecida, nome genérico), não é sobra.
+    fn find_orphans(
+        &self,
+        catalog: &Catalog,
+        report: &mut ClassificationReport,
+        guard: &ToolchainGuard,
+    ) {
+        let Some(finder) = self.orphans else {
+            return;
+        };
+        let Some(apps) = finder.installed() else {
+            return;
+        };
+        let ignore: Vec<String> = catalog
+            .orphan_ignore
+            .iter()
+            .map(|n| n.to_lowercase())
+            .collect();
+        for root in catalog
+            .orphan_roots
+            .iter()
+            .filter_map(|r| expand_template(r, self.env).ok())
+        {
+            for folder in finder.folders(&root) {
+                let idle = match folder.idle_days {
+                    Some(d) if d >= ORPHAN_MIN_IDLE_DAYS => d,
+                    _ => continue,
+                };
+                if ignore.contains(&folder.name.to_lowercase())
+                    || belongs_to_installed(&folder.name, &apps)
+                {
+                    continue;
+                }
+                let id = format!("orphan:{}", folder.path);
+                if let Some(ex) = report.exclusions.conflicting(&folder.path) {
+                    report.skipped.push(SkippedRule {
+                        id,
+                        reason: SkipReason::Excluded(ex.reason.clone()),
+                    });
+                    continue;
+                }
+                let size = match self.inspector.size_of(&folder.path) {
+                    Ok(s) if s > ByteSize::ZERO => s,
+                    _ => continue,
+                };
+                let availability = match guard.blocking_reason(&folder.path, &[]) {
+                    Some(reason) => Availability::Blocked { reason },
+                    None => Availability::Selectable,
+                };
+                report.orphans.push(OrphanInfo {
+                    id: id.clone(),
+                    idle_days: Some(idle),
+                });
+                report.candidates.push(Candidate {
+                    id,
+                    label: LocalizedText::same(&folder.name),
+                    tier: Tier::D,
+                    action: Action::RemovePath {
+                        path: folder.path.clone(),
+                    },
+                    size,
+                    risk: Risk::Low,
+                    note: LocalizedText::new(
+                        &format!("nenhum programa instalado com este nome · sem modificação há {idle} dias"),
+                        &format!("no installed program with this name · not modified for {idle} days"),
+                    ),
+                    availability,
+                });
+            }
+        }
+    }
+
+    fn find_projects(&self, catalog: &Catalog) -> Vec<FoundArtifact> {
+        let Some((finder, extra)) = &self.projects else {
+            return Vec::new();
+        };
+        let profiles: Vec<ProjectProfile> = catalog
+            .projects
+            .iter()
+            .filter(|p| !self.disabled_profiles.contains(&p.id))
+            .cloned()
+            .collect();
+        if profiles.is_empty() {
+            return Vec::new();
+        }
+        let mut roots: Vec<String> = catalog
+            .project_roots
+            .iter()
+            .filter_map(|r| expand_template(r, self.env).ok())
+            .chain(extra.iter().map(|r| r.trim().to_string()))
+            .filter(|r| !r.is_empty())
+            .collect();
+        roots.dedup();
+        finder.find(&roots, &profiles)
+    }
+
+    fn evaluate_artifact(
+        &self,
+        id: &str,
+        found: &FoundArtifact,
+        profile: &ProjectProfile,
+        exclusions: &ExclusionList,
+        guard: &ToolchainGuard,
+    ) -> Result<Candidate, SkipReason> {
+        if let Some(ex) = exclusions.conflicting(&found.path) {
+            return Err(SkipReason::Excluded(ex.reason.clone()));
+        }
+        let size = self
+            .inspector
+            .size_of(&found.path)
+            .map_err(|e| SkipReason::Unmeasurable(e.to_string()))?;
+        if size == ByteSize::ZERO {
+            return Err(SkipReason::Empty);
+        }
+        let last = |p: &str| path_components(p).pop().unwrap_or_default();
+        let availability = match guard.blocking_reason(&found.path, &[]) {
+            Some(reason) => Availability::Blocked { reason },
+            None => Availability::Selectable,
+        };
+        Ok(Candidate {
+            id: id.to_string(),
+            label: LocalizedText::same(&format!(
+                "{} · {}",
+                last(&found.project),
+                last(&found.path)
+            )),
+            tier: Tier::C,
+            action: Action::RemovePath {
+                path: found.path.clone(),
+            },
+            size,
+            risk: Risk::Redownload,
+            note: profile.note.clone(),
+            availability,
+        })
     }
 
     fn evaluate(
@@ -122,7 +456,7 @@ impl<'a> ClassifyService<'a> {
     ) -> Result<Candidate, SkipReason> {
         let measured = expand_template(rule.target.measured_template(), self.env)
             .map_err(SkipReason::UnresolvedVariable)?;
-        if let Some(ex) = exclusions.matching(&measured) {
+        if let Some(ex) = exclusions.conflicting(&measured) {
             return Err(SkipReason::Excluded(ex.reason.clone()));
         }
         if !self.inspector.exists(&measured) {

@@ -89,7 +89,8 @@ test fake.
   `SkipCause`, `FailCause`, `SafetyViolation`); errors cross IPC as `ErrorDto {code, params}`. The UI
   translates in `src/i18n/messages.ts`, where `en` is typed by `pt` (missing/extra keys don't compile).
 - New cleanup targets are `[[rule]]` entries in `catalog/<os>.toml` (tier A–D, `kind = path|command`,
-  `watch_env`), not code. The catalog may widen mandatory exclusions but never remove the baseline.
+  `watch_env`), not code. Project artifacts (`node_modules`, `target`...) are `[[project]]` profiles
+  (markers + artifact names) searched under `[[project_root]]` plus the roots from Settings. The catalog may widen mandatory exclusions but never remove the baseline.
 - Safety invariants (see `docs/architecture.md`) must not be weakened: `Plan::from_selection` rejects
   blocked/excluded/duplicate items; `approve` is the only way to get an `ApprovedPlan`;
   `ExecuteService` only accepts `ApprovedPlan`; item failures become a status and never abort a tier;

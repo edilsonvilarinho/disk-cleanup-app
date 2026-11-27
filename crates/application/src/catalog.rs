@@ -39,8 +39,26 @@ pub struct CatalogExclusion {
     pub reason: LocalizedText,
 }
 
+/// Perfil de projeto: arquivos que marcam a raiz de um projeto e os diretórios
+/// regeneráveis dele (`node_modules`, `target`...). Vira candidato do tier C.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectProfile {
+    pub id: String,
+    pub label: LocalizedText,
+    pub markers: Vec<String>,
+    pub artifacts: Vec<String>,
+    pub note: LocalizedText,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Catalog {
     pub rules: Vec<CatalogRule>,
     pub exclusions: Vec<CatalogExclusion>,
+    pub projects: Vec<ProjectProfile>,
+    /// Pastas onde procurar projetos (templates; as inexistentes são ignoradas).
+    pub project_roots: Vec<String>,
+    /// Pastas de dados de apps onde procurar sobras (templates).
+    pub orphan_roots: Vec<String>,
+    /// Nomes de pasta que nunca são sobra (sistema, ferramentas sem registro).
+    pub orphan_ignore: Vec<String>,
 }

@@ -77,3 +77,42 @@ fn aggregate_entry_reports_placeholder_bytes_for_cloud_files() {
     assert_eq!(e.placeholder(), b(51));
     assert_eq!(e.name(), "OneDrive - Empresa");
 }
+
+#[test]
+fn size_tree_keeps_the_largest_children_per_node_and_folds_the_rest() {
+    use disk_cleanup_domain::{path_components, SizeTree};
+    let b = ByteSize::from_bytes;
+    let mut tree = SizeTree::new(r"C:\", 2, 2);
+    for (path, size) in [
+        (r"C:\Users\u\a.bin", 50),
+        (r"C:\Users\u\b.bin", 30),
+        (r"C:\Users\v\c.bin", 40),
+        (r"C:\Users\w\d.bin", 5),
+        (r"C:\Windows\x.dll", 60),
+        (r"C:\pagefile.sys", 8),
+        (r"C:\boot.ini", 2),
+        (r"D:\fora.bin", 999),
+    ] {
+        tree.add_file(&path_components(path), b(size));
+    }
+    let root = tree.into_root();
+    assert_eq!((root.name.as_str(), root.size), (r"C:\", b(195)));
+    // 2 maiores filhos + "outros" (nome vazio) com o resto
+    let names: Vec<_> = root
+        .children
+        .iter()
+        .map(|c| (c.name.as_str(), c.size.bytes()))
+        .collect();
+    assert_eq!(names, vec![("Users", 125), ("Windows", 60), ("", 10)]);
+    let users = &root.children[0];
+    let users_kids: Vec<_> = users
+        .children
+        .iter()
+        .map(|c| (c.name.as_str(), c.size.bytes()))
+        .collect();
+    assert_eq!(users_kids, vec![("u", 80), ("v", 40), ("", 5)]);
+    // profundidade 2: abaixo de Users\u não há mais nós (arquivos somam no pai)
+    assert!(users.children[0].children.is_empty());
+    // "outros" nunca tem filhos
+    assert!(root.children[2].children.is_empty());
+}

@@ -178,6 +178,10 @@ pnpm test
 pnpm coverage                   # fails below 95%
 pnpm typecheck
 pnpm dev                        # UI in the browser with demo data
+
+# Command line (same core, explicit approval)
+cargo run -p disk-cleanup-cli -- classify --out plan.json
+cargo run -p disk-cleanup-cli -- execute --plan plan.json --approve A --yes --dry-run
 ```
 
 Regenerate the README media (demo data, recorded with the installed Edge):

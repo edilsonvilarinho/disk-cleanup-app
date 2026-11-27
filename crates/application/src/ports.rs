@@ -26,6 +26,8 @@ pub struct FileRecord {
     pub logical: ByteSize,
     /// Espaço realmente alocado (≈0 para placeholder de nuvem).
     pub allocated: ByteSize,
+    /// Última modificação (segundos Unix), quando o sistema informa.
+    pub modified: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -85,6 +87,40 @@ pub struct CommandOutcome {
     pub success: bool,
     pub code: Option<i32>,
     pub output: String,
+}
+
+/// Artefato regenerável encontrado dentro de um projeto.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FoundArtifact {
+    /// `id` do `ProjectProfile` que o reconheceu.
+    pub profile: String,
+    /// Raiz do projeto (onde está o marcador).
+    pub project: String,
+    /// Diretório do artefato.
+    pub path: String,
+    /// Dias desde a atividade mais recente no projeto, fora dos artefatos.
+    pub idle_days: Option<u32>,
+}
+
+/// Procura projetos nas pastas dadas. Somente leitura; nunca segue link.
+pub trait ProjectFinder {
+    fn find(&self, roots: &[String], profiles: &[crate::ProjectProfile]) -> Vec<FoundArtifact>;
+}
+
+/// Subpasta de uma pasta de dados de apps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FolderInfo {
+    pub name: String,
+    pub path: String,
+    /// Dias desde o arquivo mais recente dentro dela.
+    pub idle_days: Option<u32>,
+}
+
+/// Programas instalados e pastas de dados de apps. `installed` devolve `None`
+/// quando a plataforma não tem fonte confiável (aí não se procura sobra).
+pub trait OrphanFinder {
+    fn installed(&self) -> Option<Vec<disk_cleanup_domain::InstalledApp>>;
+    fn folders(&self, root: &str) -> Vec<FolderInfo>;
 }
 
 /// Executa as ações de um plano aprovado. `remove_path` e `trash_path` devolvem

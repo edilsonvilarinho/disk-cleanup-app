@@ -21,6 +21,24 @@ export interface SystemInfoDto {
   volumeRoot: string
   profile: string | null
   catalog: string
+  /** Perfis de projeto do catálogo (ligar/desligar nas Configurações). */
+  projectProfiles: { id: string; label: TextDto }[]
+}
+
+/** Regra própria das Configurações: só pasta, tier A ou C. */
+export interface UserRule {
+  label: string
+  path: string
+  tier: 'A' | 'C'
+}
+
+export type RuleCheckCode = 'ok' | 'empty' | 'unresolved_variable' | 'excluded' | 'protected' | 'too_broad'
+
+/** Validação de uma pasta de regra própria, feita pelo núcleo. */
+export interface RuleCheckDto {
+  code: RuleCheckCode
+  detail: string | null
+  reason: TextDto | null
 }
 
 export interface VolumeDto {
@@ -52,6 +70,14 @@ export interface SurveyDto {
   unreadable: number
   unattributedBytes: number
   elapsedMs: number
+  /** Mapa do volume por espaço alocado; `name` vazio = "outros". */
+  tree: TreeNodeDto
+}
+
+export interface TreeNodeDto {
+  name: string
+  bytes: number
+  children: TreeNodeDto[]
 }
 
 export interface ScanProgressDto {
@@ -74,6 +100,20 @@ export interface CandidateDto {
   risk: Risk
   note: TextDto
   blocked: BlockDto | null
+  /** `rule` (catálogo) | `project` (artefato de projeto) | `file` (arquivo grande do perfil). */
+  origin: CandidateOrigin
+  /** Raiz do projeto, quando o candidato é artefato de projeto. */
+  project: string | null
+  /** Dias sem atividade no projeto, ou desde a modificação do arquivo grande; `null` = desconhecido. */
+  idleDays: number | null
+}
+
+export type CandidateOrigin = 'rule' | 'project' | 'file' | 'duplicate' | 'orphan'
+
+/** Resultado da busca de duplicados (só leitura). `keep` nunca vira candidato. */
+export interface DuplicatesDto {
+  groups: { sizeBytes: number; keep: string; copies: string[] }[]
+  stats: { files: number; sameSize: number; samePartial: number; sameFull: number; confirmed: number }
 }
 
 export type SkipCode = 'not_found' | 'empty' | 'unresolved_variable' | 'excluded' | 'unmeasurable'

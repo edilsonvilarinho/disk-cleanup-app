@@ -155,6 +155,14 @@ impl ExclusionList {
             .find(|e| path_is_within(path, &e.pattern))
     }
 
+    /// Exclusão que o alvo toca: o alvo está dentro dela **ou a contém**
+    /// (remover a pasta pai apagaria a protegida junto).
+    pub fn conflicting(&self, path: &str) -> Option<&Exclusion> {
+        self.entries
+            .iter()
+            .find(|e| path_is_within(path, &e.pattern) || path_is_within(&e.pattern, path))
+    }
+
     pub fn entries(&self) -> &[Exclusion] {
         &self.entries
     }

@@ -32,6 +32,14 @@ describe('sanitizeSettings', () => {
       defaultDepth: 2,
       autoUpdate: true,
       betaUpdates: false,
+      projectRoots: [],
+      minIdleDays: 90,
+      userRules: [],
+      disabledProfiles: [],
+      findOrphans: false,
+      backgroundEnabled: false,
+      lowSpaceGb: 15,
+      schedule: 'off',
     })
     expect(
       sanitizeSettings({
@@ -41,10 +49,43 @@ describe('sanitizeSettings', () => {
         defaultDepth: 1,
         autoUpdate: false,
         betaUpdates: true,
+        projectRoots: [' D:\\dev ', 'D:\\dev', 7],
+        minIdleDays: 180,
+        userRules: [
+          { label: ' Teams ', path: ' C:\\t ', tier: 'A' },
+          { label: 'dup', path: 'c:\\T', tier: 'C' },
+          { path: 'C:\\d', tier: 'D' },
+          { path: '', tier: 'A' },
+          { path: 'C:\\sem-nome', tier: 'C', label: 3 },
+          'x',
+        ],
+        disabledProfiles: ['node', 'node', 1],
+        findOrphans: true,
+        backgroundEnabled: false,
+        lowSpaceGb: 15,
+        schedule: 'off',
       }),
-    ).toEqual({ language: 'en', theme: 'dark', extraExclusions: ['/a'], defaultDepth: 1, autoUpdate: false, betaUpdates: true })
+    ).toEqual({
+      language: 'en',
+      theme: 'dark',
+      extraExclusions: ['/a'],
+      defaultDepth: 1,
+      autoUpdate: false,
+      betaUpdates: true,
+      projectRoots: ['D:\\dev'],
+      minIdleDays: 180,
+      userRules: [
+        { label: 'Teams', path: 'C:\\t', tier: 'A' },
+        { label: '', path: 'C:\\sem-nome', tier: 'C' },
+      ],
+      disabledProfiles: ['node'],
+      findOrphans: true,
+      backgroundEnabled: false,
+      lowSpaceGb: 15,
+      schedule: 'off',
+    })
     expect(
-      sanitizeSettings({ language: 'fr', theme: 'roxo', extraExclusions: 'x', defaultDepth: 7, autoUpdate: 'sim', betaUpdates: 1 }),
+      sanitizeSettings({ language: 'fr', theme: 'roxo', extraExclusions: 'x', defaultDepth: 7, autoUpdate: 'sim', betaUpdates: 1, projectRoots: 'x', minIdleDays: 45 }),
     ).toEqual(DEFAULT_SETTINGS)
   })
 })
@@ -61,6 +102,7 @@ describe('settings store', () => {
     store.setDefaultDepth(1)
     store.setAutoUpdate(false)
     store.setBetaUpdates(true)
+    store.setMinIdleDays(365)
     expect(storage.saved.at(-1)).toEqual({
       language: 'en',
       theme: 'dark',
@@ -68,6 +110,14 @@ describe('settings store', () => {
       defaultDepth: 1,
       autoUpdate: false,
       betaUpdates: true,
+      projectRoots: [],
+      minIdleDays: 365,
+      userRules: [],
+      disabledProfiles: [],
+      findOrphans: false,
+      backgroundEnabled: false,
+      lowSpaceGb: 15,
+      schedule: 'off',
     })
   })
 
@@ -81,6 +131,37 @@ describe('settings store', () => {
     expect(store.extraExclusions).toEqual(['C:\\Projetos'])
     store.removeExclusion('C:\\Projetos')
     expect(store.extraExclusions).toEqual([])
+    expect(storage.saved).toHaveLength(2)
+  })
+
+  it('regras próprias não repetem pasta; perfis alternam', () => {
+    const storage = memory()
+    const store = setup(storage)
+    store.load()
+    expect(store.addUserRule({ label: ' x ', path: ' C:\\a ', tier: 'C' })).toBe(true)
+    expect(store.addUserRule({ label: 'y', path: 'c:\\A', tier: 'A' })).toBe(false)
+    expect(store.addUserRule({ label: 'y', path: '  ', tier: 'A' })).toBe(false)
+    expect(store.userRules).toEqual([{ label: 'x', path: 'C:\\a', tier: 'C' }])
+    expect(store.classifyRequest.userRules).toEqual(store.userRules)
+    store.toggleProfile('rust')
+    expect(store.disabledProfiles).toEqual(['rust'])
+    store.toggleProfile('rust')
+    expect(store.disabledProfiles).toEqual([])
+    store.removeUserRule('C:\\a')
+    expect(store.userRules).toEqual([])
+    expect(storage.saved).toHaveLength(4)
+  })
+
+  it('pastas de projetos seguem a mesma regra das exclusões', () => {
+    const storage = memory()
+    const store = setup(storage)
+    store.load()
+    expect(store.addProjectRoot('  D:\\dev ')).toBe(true)
+    expect(store.addProjectRoot('d:\\DEV')).toBe(false)
+    expect(store.addProjectRoot('')).toBe(false)
+    expect(store.projectRoots).toEqual(['D:\\dev'])
+    store.removeProjectRoot('D:\\dev')
+    expect(store.projectRoots).toEqual([])
     expect(storage.saved).toHaveLength(2)
   })
 })

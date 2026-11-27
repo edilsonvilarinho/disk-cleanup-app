@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia'
 import { markRaw } from 'vue'
-import type { CandidateDto, ClassificationDto, Tier } from '../../domain/models'
-import { countByTier, defaultSelection, selectionTotal, toggle, toggleTier, totalsByTier } from '../../domain/selection'
+import type { CandidateDto, ClassificationDto, DuplicatesDto, Tier } from '../../domain/models'
+import { countByTier, defaultSelection, isIdleEnough, selectionTotal, toggle, toggleTier, totalsByTier } from '../../domain/selection'
 import { errorInfo, type ErrorInfo } from '../../i18n/i18n'
+import { EMPTY_CLASSIFY_REQUEST, type ClassifyRequest } from '../gateway'
 import type { AsyncStatus } from './survey'
 
 /** Aba ativa: um tier ou `X` (exclusões). */
@@ -15,6 +16,8 @@ export const useClassificationStore = defineStore('classification', {
     selected: [] as string[],
     activeTab: 'A' as ClassificationTab,
     error: null as ErrorInfo | null,
+    duplicates: null as DuplicatesDto | null,
+    duplicatesStatus: 'idle' as AsyncStatus,
   }),
   getters: {
     candidates: (state): CandidateDto[] => state.report?.candidates ?? [],
@@ -33,20 +36,41 @@ export const useClassificationStore = defineStore('classification', {
     },
   },
   actions: {
-    async load(extraExclusions: string[] = []) {
+    async load(request: ClassifyRequest = EMPTY_CLASSIFY_REQUEST, minIdleDays = 90) {
       this.status = 'running'
       this.error = null
       try {
-        this.report = markRaw(await this.gateway.classify([...extraExclusions]))
-        this.selected = defaultSelection(this.report.candidates)
+        this.report = markRaw(await this.gateway.classify(request))
+        this.selected = defaultSelection(this.report.candidates, minIdleDays)
         this.status = 'done'
       } catch (e) {
         this.error = errorInfo(e)
         this.status = 'error'
       }
     },
-    async ensureLoaded(extraExclusions: string[] = []) {
-      if (this.status === 'idle') await this.load(extraExclusions)
+    async ensureLoaded(request: ClassifyRequest = EMPTY_CLASSIFY_REQUEST, minIdleDays = 90) {
+      if (this.status === 'idle') await this.load(request, minIdleDays)
+    },
+    /** Busca duplicados e reclassifica mantendo a seleção que ainda existir. */
+    async findDuplicates(request: ClassifyRequest = EMPTY_CLASSIFY_REQUEST, minIdleDays = 90) {
+      this.duplicatesStatus = 'running'
+      this.error = null
+      try {
+        this.duplicates = markRaw(await this.gateway.findDuplicates())
+        const kept = [...this.selected]
+        await this.load(request, minIdleDays)
+        this.selected = this.candidates.filter((c) => kept.includes(c.id)).map((c) => c.id)
+        this.duplicatesStatus = 'done'
+      } catch (e) {
+        this.error = errorInfo(e)
+        this.duplicatesStatus = 'error'
+      }
+    },
+    /** Remarca só os projetos pela idade mínima; o resto da seleção fica. */
+    applyMinIdle(minIdleDays: number) {
+      this.selected = this.candidates
+        .filter((c) => (c.project === null ? this.selected.includes(c.id) : !c.blocked && isIdleEnough(c, minIdleDays)))
+        .map((c) => c.id)
     },
     toggle(id: string) {
       this.selected = toggle(this.selected, id)

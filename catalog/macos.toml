@@ -194,3 +194,71 @@ note_en = "models downloaded again on demand"
 kind = "path"
 path = '~/.cache/huggingface'
 watch_env = ["HF_HOME", "HUGGINGFACE_HUB_CACHE"]
+
+# ------------------------------------------------------------------ projetos
+# Pastas onde procurar projetos (as inexistentes são ignoradas; o usuário
+# soma outras nas Configurações). Cada [[project]] reconhece a raiz por um
+# marcador e oferece os artefatos regeneráveis dela como candidatos do tier C.
+
+[[project_root]]
+path = '~/workspace'
+
+[[project_root]]
+path = '~/projects'
+
+[[project_root]]
+path = '~/dev'
+
+[[project_root]]
+path = '~/src'
+
+[[project_root]]
+path = '~/code'
+
+[[project]]
+id = "node"
+label = "Node.js"
+markers = ["package.json"]
+artifacts = ["node_modules", ".next", ".nuxt", ".turbo", ".parcel-cache"]
+note = "npm/pnpm/yarn install recria"
+note_en = "npm/pnpm/yarn install recreates it"
+
+[[project]]
+id = "rust"
+label = "Rust"
+markers = ["Cargo.toml"]
+artifacts = ["target"]
+note = "cargo build recria"
+note_en = "cargo build recreates it"
+
+[[project]]
+id = "python"
+label = "Python"
+markers = ["pyproject.toml", "requirements.txt", "setup.py"]
+artifacts = [".venv", "venv", ".tox", ".mypy_cache", ".pytest_cache"]
+note = "recriar o ambiente (pip/uv) antes de usar"
+note_en = "recreate the environment (pip/uv) before use"
+
+[[project]]
+id = "gradle"
+label = "Gradle"
+markers = ["settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts"]
+artifacts = ["build", ".gradle"]
+note = "gradle build recria"
+note_en = "gradle build recreates it"
+
+[[project]]
+id = "maven"
+label = "Maven"
+markers = ["pom.xml"]
+artifacts = ["target"]
+note = "mvn package recria"
+note_en = "mvn package recreates it"
+
+[[project]]
+id = "dotnet"
+label = ".NET"
+markers = ["*.csproj", "*.fsproj", "*.sln"]
+artifacts = ["bin", "obj"]
+note = "dotnet build recria"
+note_en = "dotnet build recreates it"

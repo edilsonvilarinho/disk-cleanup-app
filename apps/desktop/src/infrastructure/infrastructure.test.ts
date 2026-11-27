@@ -1,3 +1,5 @@
+import { BrowserBackground, TauriBackground } from './background'
+import { EMPTY_CLASSIFY_REQUEST } from '../application/gateway'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyThemeToDocument, localStorageSettingsStorage, systemPrefersDark, trackPointer, watchSystemTheme } from './browserTheme'
 import { DemoGateway } from './demoGateway'
@@ -9,9 +11,23 @@ describe('TauriGateway', () => {
     const invoke = vi.fn(async (cmd: string) => ({ cmd }))
     const gateway = new TauriGateway(invoke as never, vi.fn() as never)
     expect(await gateway.systemInfo()).toEqual({ cmd: 'system_info' })
-    await gateway.classify(['C:\\Projetos'])
+    await gateway.classify({
+      extraExclusions: ['C:\\Projetos'],
+      projectRoots: ['D:\\dev'],
+      userRules: [{ label: 'T', path: 'C:\\t', tier: 'A' }],
+      disabledProfiles: ['node'],
+      findOrphans: true,
+    })
+    await gateway.checkRule(['C:\\Projetos'], 'C:\\x')
+    await gateway.findDuplicates()
     await gateway.buildPlan('C:', ['a'])
-    expect(invoke).toHaveBeenCalledWith('classify', { extraExclusions: ['C:\\Projetos'] })
+    expect(invoke).toHaveBeenCalledWith('classify', {
+      extraExclusions: ['C:\\Projetos'],
+      projectRoots: ['D:\\dev'],
+      customization: { userRules: [{ label: 'T', path: 'C:\\t', tier: 'A' }], disabledProfiles: ['node'], findOrphans: true },
+    })
+    expect(invoke).toHaveBeenCalledWith('check_rule', { extraExclusions: ['C:\\Projetos'], path: 'C:\\x' })
+    expect(invoke).toHaveBeenCalledWith('find_duplicates')
     expect(invoke).toHaveBeenCalledWith('build_plan', { volume: 'C:', selected: ['a'] })
   })
 
@@ -80,8 +96,16 @@ describe('DemoGateway', () => {
     expect(survey.volume.usedBytes + survey.volume.freeBytes).toBe(survey.volume.totalBytes)
     expect(survey.cloud.every((c) => c.isCloud)).toBe(true)
 
-    const classification = await gateway.classify([])
+    const classification = await gateway.classify(EMPTY_CLASSIFY_REQUEST)
     expect(classification.candidates.some((c) => c.blocked !== null)).toBe(true)
+    // Projetos de exemplo: tier C, com raiz e idade; um recente (começa desmarcado).
+    const projects = classification.candidates.filter((c) => c.project !== null)
+    expect(projects.length).toBeGreaterThan(1)
+    expect(projects.every((c) => c.tier === 'C' && c.idleDays !== null)).toBe(true)
+    expect(projects.some((c) => c.idleDays! < 90)).toBe(true)
+    const files = classification.candidates.filter((c) => c.origin === 'file')
+    expect(files.length).toBeGreaterThan(0)
+    expect(files.every((c) => c.tier === 'D')).toBe(true)
 
     const ids = classification.candidates.filter((c) => c.tier === 'A').map((c) => c.id)
     const plan = await gateway.buildPlan('C:', ids)
@@ -96,7 +120,7 @@ describe('DemoGateway', () => {
     await expect(gateway.report()).rejects.toMatchObject({ code: 'no_execution' })
     await expect(gateway.previewTier('A')).rejects.toMatchObject({ code: 'not_approved' })
     await expect(gateway.approvePlan(['A'], {}, true)).rejects.toMatchObject({ code: 'plan_required' })
-    const classification = await gateway.classify(['%USERPROFILE%\\.m2'])
+    const classification = await gateway.classify({ ...EMPTY_CLASSIFY_REQUEST, extraExclusions: ['%USERPROFILE%\\.m2'] })
     expect(classification.candidates.some((c) => c.id === 'maven-repository')).toBe(false)
     expect(classification.skipped.some((s) => s.id === 'maven-repository' && s.code === 'excluded')).toBe(true)
     const ids = classification.candidates.filter((c) => c.tier !== 'B' && !c.blocked).map((c) => c.id)
@@ -132,6 +156,79 @@ describe('DemoGateway', () => {
   })
 })
 
+describe('DemoGateway · regras próprias e perfis', () => {
+  it('valida a pasta e aplica regras e perfis desligados', async () => {
+    const gateway = new DemoGateway(0)
+    expect((await gateway.checkRule([], ' ')).code).toBe('empty')
+    expect((await gateway.checkRule([], 'C:\\Windows')).code).toBe('excluded')
+    expect((await gateway.checkRule(['D:\\meus'], 'D:\\meus\\x')).code).toBe('excluded')
+    expect((await gateway.checkRule([], 'D:\\x')).code).toBe('too_broad')
+    expect((await gateway.checkRule([], 'D:\\dev\\cache')).code).toBe('ok')
+    const info = await gateway.systemInfo()
+    expect(info.projectProfiles.map((p) => p.id)).toContain('node')
+    const all = await gateway.classify(EMPTY_CLASSIFY_REQUEST)
+    const custom = await gateway.classify({
+      ...EMPTY_CLASSIFY_REQUEST,
+      userRules: [{ label: '', path: 'D:\\unity\\Library', tier: 'C' }],
+      disabledProfiles: ['node', 'rust', 'python'],
+    })
+    expect(custom.candidates.some((c) => c.id === 'user:D:\\unity\\Library' && c.label.pt === 'D:\\unity\\Library')).toBe(true)
+    expect(custom.candidates.filter((c) => c.origin === 'project')).toHaveLength(0)
+    expect(all.candidates.filter((c) => c.origin === 'project').length).toBeGreaterThan(0)
+    const plan = await gateway.buildPlan('C:', ['user:D:\\unity\\Library'])
+    expect(plan.itemCount).toBe(1)
+    expect(all.candidates.some((c) => c.origin === 'orphan')).toBe(false)
+    const withOrphans = await gateway.classify({ ...EMPTY_CLASSIFY_REQUEST, findOrphans: true })
+    expect(withOrphans.candidates.filter((c) => c.origin === 'orphan')).toHaveLength(1)
+    const dups = await gateway.findDuplicates()
+    expect(dups.groups.length).toBe(2)
+    const after = await gateway.classify(EMPTY_CLASSIFY_REQUEST)
+    const copies = after.candidates.filter((c) => c.origin === 'duplicate')
+    expect(copies).toHaveLength(3)
+    expect(copies.some((c) => c.target.includes('Win11') && c.target.startsWith('D:'))).toBe(true)
+    // a cópia mantida nunca vira candidata a duplicado (pode aparecer como arquivo grande)
+    expect(copies.some((c) => dups.groups.some((g) => g.keep === c.target))).toBe(false)
+  })
+})
+
+describe('Segundo plano', () => {
+  it('TauriBackground: volume, bandeja, evento e aviso pedindo permissão só quando precisa', async () => {
+    const invoke = vi.fn(async () => ({ freeBytes: 1 }))
+    const unlisten = vi.fn()
+    const listen = vi.fn(async () => unlisten)
+    const notifier = { granted: vi.fn(async () => false), request: vi.fn(async () => 'granted'), send: vi.fn() }
+    const bg = new TauriBackground(invoke as never, listen as never, notifier)
+    await bg.volumeUsage('C:\\')
+    expect(invoke).toHaveBeenCalledWith('volume_usage', { volumeRoot: 'C:\\' })
+    const labels = { open: 'a', scan: 'b', quit: 'c', tooltip: 'd' }
+    await bg.setBackground(true, labels)
+    expect(invoke).toHaveBeenCalledWith('set_background', { enabled: true, labels })
+    const cb = vi.fn()
+    expect(await bg.onTrayScan(cb)).toBe(unlisten)
+    expect(listen).toHaveBeenCalledWith('tray-scan', cb)
+    await bg.notify('t', 'b')
+    expect(notifier.send).toHaveBeenCalledWith({ title: 't', body: 'b' })
+    notifier.granted.mockResolvedValue(false)
+    notifier.request.mockResolvedValue('denied')
+    await bg.notify('t2', 'b2')
+    expect(notifier.send).toHaveBeenCalledTimes(1)
+    notifier.granted.mockResolvedValue(true)
+    await bg.notify('t3', 'b3')
+    expect(notifier.request).toHaveBeenCalledTimes(2)
+    expect(notifier.send).toHaveBeenCalledTimes(2)
+  })
+
+  it('BrowserBackground: sem bandeja nem aviso; volume de exemplo coerente', async () => {
+    const bg = new BrowserBackground()
+    const v = await bg.volumeUsage()
+    expect(v.usedBytes + v.freeBytes).toBe(v.totalBytes)
+    await expect(bg.notify()).resolves.toBeUndefined()
+    await expect(bg.setBackground()).resolves.toBeUndefined()
+    const stop = await bg.onTrayScan()
+    expect(stop()).toBeUndefined()
+  })
+})
+
 describe('browserTheme', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -140,7 +237,22 @@ describe('browserTheme', () => {
 
   it('persiste as Configurações no localStorage e tolera storage bloqueado', () => {
     expect(localStorageSettingsStorage.load()).toBeNull()
-    const settings = { language: 'en' as const, theme: 'dark' as const, extraExclusions: ['/a'], defaultDepth: 1 as const, autoUpdate: true, betaUpdates: false }
+    const settings = {
+      language: 'en' as const,
+      theme: 'dark' as const,
+      extraExclusions: ['/a'],
+      defaultDepth: 1 as const,
+      autoUpdate: true,
+      betaUpdates: false,
+      projectRoots: ['/dev'],
+      minIdleDays: 90 as const,
+      userRules: [{ label: 'x', path: '/x/y/z', tier: 'C' as const }],
+      disabledProfiles: ['rust'],
+      findOrphans: false,
+      backgroundEnabled: true,
+      lowSpaceGb: 25 as const,
+      schedule: 'weekly' as const,
+    }
     localStorageSettingsStorage.save(settings)
     expect(localStorageSettingsStorage.load()).toEqual(settings)
     vi.stubGlobal('localStorage', {

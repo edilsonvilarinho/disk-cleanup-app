@@ -1,7 +1,7 @@
 // Gateway de demonstração: permite abrir a interface no navegador (`pnpm dev`)
 // sem o núcleo Rust. Dados baseados no caso documentado na skill; mesmo
 // contrato do núcleo (textos `{pt, en}`, motivos e erros como código).
-import type { DiskCleanupGateway, SurveyRequest } from '../application/gateway'
+import type { ClassifyRequest, DiskCleanupGateway, SurveyRequest } from '../application/gateway'
 import { defaultDisposal } from '../domain/disposal'
 import { GIB } from '../domain/format'
 import type {
@@ -9,7 +9,9 @@ import type {
   CandidateDto,
   ClassificationDto,
   Disposal,
+  DuplicatesDto,
   ErrorDto,
+  RuleCheckDto,
   ExclusionDto,
   ExecutionEventDto,
   ItemResultDto,
@@ -22,6 +24,7 @@ import type {
   TextDto,
   Tier,
   TierRunDto,
+  TreeNodeDto,
   UsageEntryDto,
 } from '../domain/models'
 import { TIERS } from '../domain/selection'
@@ -57,8 +60,72 @@ const candidate = (
   risk: tier === 'C' ? 'redownload' : 'none',
   note: text(''),
   blocked: null,
+  origin: 'rule',
+  project: null,
+  idleDays: null,
   ...extra,
 })
+
+/** Artefato de projeto de exemplo (tier C), com raiz e dias sem atividade. */
+const project = (name: string, artifact: string, size: number, idleDays: number, note: TextDto): CandidateDto =>
+  candidate(`project:D:\\dev\\${name}\\${artifact}`, text(`${name} · ${artifact}`), 'C', size, `D:\\dev\\${name}\\${artifact}`, {
+    note,
+    origin: 'project',
+    project: `D:\\dev\\${name}`,
+    idleDays,
+  })
+
+const node = (name: string, size: number, children: TreeNodeDto[] = []): TreeNodeDto => ({ name, bytes: gb(size), children })
+
+/** Mapa do volume de exemplo (mesmos totais das raízes). */
+const DEMO_TREE: TreeNodeDto = node('C:\\', 822.3, [
+  node('Users', 412.6, [
+    node('demo', 404, [
+      node('AppData', 186.4, [node('Local', 151.2), node('Roaming', 35.2)]),
+      node('OneDrive - Empresa', 9.1),
+      node('workspace', 44.7, [node('api-pagamentos', 9.4), node('loja-vue', 6.1), node('', 29.2)]),
+      node('Downloads', 38.5),
+      node('.gradle', 14.2),
+      node('', 111.1),
+    ]),
+    node('Public', 8.6),
+  ]),
+  node('Program Files', 158.3),
+  node('ProgramData', 96.4),
+  node('Program Files (x86)', 92.1),
+  node('Windows', 38.9, [node('WinSxS', 14.8), node('System32', 12.1), node('', 12)]),
+  node('pagefile.sys', 24),
+])
+
+const PROJECTS: CandidateDto[] = [
+  project('api-pagamentos', 'target', 6.8, 203, text('cargo build recria', 'cargo build recreates it')),
+  project('ml-notebook', '.venv', 3.4, 131, text('recriar o ambiente (pip/uv) antes de usar', 'recreate the environment (pip/uv) before use')),
+  project('loja-vue', 'node_modules', 1.9, 412, text('npm/pnpm/yarn install recria', 'npm/pnpm/yarn install recreates it')),
+  project('site-pessoal', 'node_modules', 0.6, 12, text('npm/pnpm/yarn install recria', 'npm/pnpm/yarn install recreates it')),
+]
+
+const DEMO_DUPLICATES = [
+  {
+    size: 5.8,
+    keep: '%USERPROFILE%\\Downloads\\Win11_24H2_x64.iso',
+    copies: ['D:\\isos\\Win11_24H2_x64.iso'],
+  },
+  {
+    size: 1.7,
+    keep: '%USERPROFILE%\\Desktop\\fotos-viagem-2024.zip',
+    copies: ['%USERPROFILE%\\Documents\\fotos-viagem-2024.zip', '%USERPROFILE%\\Downloads\\fotos-viagem-2024 (1).zip'],
+  },
+]
+
+/** Arquivo grande do perfil (tier D), nunca pré-marcado. */
+const file = (path: string, size: number, idleDays: number): CandidateDto =>
+  candidate(`file:${path}`, text(path.split('\\').pop()!), 'D', size, path, { origin: 'file', idleDays, risk: 'low' })
+
+const FILES: CandidateDto[] = [
+  file('%USERPROFILE%\\Downloads\\Win11_24H2_x64.iso', 5.8, 150),
+  file('%USERPROFILE%\\Downloads\\ubuntu-22.04.4-desktop-amd64.iso', 4.9, 420),
+  file('%USERPROFILE%\\Videos\\gravacao-reuniao-2025-03.mp4', 3.6, 240),
+]
 
 const CANDIDATES: CandidateDto[] = [
   candidate('npm-cache', text('npm cache'), 'A', 6.4, 'npm cache clean --force', {
@@ -109,6 +176,9 @@ export class DemoGateway implements DiskCleanupGateway {
   private extra: string[] = []
   private approved: Tier[] = []
   private disposals: Partial<Record<Tier, Disposal>> = {}
+  /** Regras próprias, projetos dos perfis ligados e duplicados, da última classificação. */
+  private custom: CandidateDto[] = []
+  private dups: typeof DEMO_DUPLICATES = []
   private runs: TierRunDto[] = []
   private free = INITIAL_FREE
 
@@ -119,7 +189,41 @@ export class DemoGateway implements DiskCleanupGateway {
   }
 
   async systemInfo(): Promise<SystemInfoDto> {
-    return { os: 'demo', volumeRoot: 'C:\\', profile: 'C:\\Users\\demo', catalog: 'windows' }
+    return {
+      os: 'demo',
+      volumeRoot: 'C:\\',
+      profile: 'C:\\Users\\demo',
+      catalog: 'windows',
+      projectProfiles: [
+        { id: 'node', label: text('Node.js') },
+        { id: 'rust', label: text('Rust') },
+        { id: 'python', label: text('Python') },
+      ],
+    }
+  }
+
+  /** Duplicados de exemplo; a próxima classificação inclui as cópias (exceto a mantida). */
+  async findDuplicates(): Promise<DuplicatesDto> {
+    await this.wait()
+    this.dups = DEMO_DUPLICATES
+    return {
+      groups: DEMO_DUPLICATES.map((g) => ({ sizeBytes: gb(g.size), keep: g.keep, copies: g.copies })),
+      stats: { files: 18_402, sameSize: 1_284, samePartial: 96, sameFull: 7, confirmed: 7 },
+    }
+  }
+
+  /** Mesmos códigos do núcleo, com regras simplificadas para a demonstração. */
+  async checkRule(extraExclusions: string[], path: string): Promise<RuleCheckDto> {
+    const value = path.trim()
+    if (!value) return { code: 'empty', detail: null, reason: null }
+    const lower = value.toLowerCase()
+    const hit = [...EXCLUSIONS.map((e) => e.pattern), ...extraExclusions].find((p) => {
+      const pl = p.toLowerCase()
+      return lower.startsWith(pl) || pl.startsWith(lower)
+    })
+    if (hit) return { code: 'excluded', detail: hit, reason: text('exclusão obrigatória', 'mandatory exclusion') }
+    if (value.split(/[\\/]/).filter(Boolean).length < 3) return { code: 'too_broad', detail: value, reason: null }
+    return { code: 'ok', detail: value, reason: null }
   }
 
   async runSurvey(_request: SurveyRequest, onProgress: (p: ScanProgressDto) => void): Promise<SurveyDto> {
@@ -146,15 +250,41 @@ export class DemoGateway implements DiskCleanupGateway {
       unreadable: 37,
       unattributedBytes: gb(56.4),
       elapsedMs: this.delayMs * SCAN_STEPS.length,
+      tree: DEMO_TREE,
     }
   }
 
-  async classify(extraExclusions: string[]): Promise<ClassificationDto> {
+  async classify(request: ClassifyRequest): Promise<ClassificationDto> {
     await this.wait()
-    this.extra = [...extraExclusions]
+    this.extra = [...request.extraExclusions]
+    const own = request.userRules.map((r) =>
+      candidate(`user:${r.path}`, text(r.label || r.path), r.tier, 1.2, r.path, { note: text('regra própria', 'own rule') }),
+    )
+    const profileOf = (c: CandidateDto) => (c.target.endsWith('node_modules') ? 'node' : c.target.endsWith('target') ? 'rust' : 'python')
+    const projects = PROJECTS.filter((c) => !request.disabledProfiles.includes(profileOf(c)))
+    const dups = this.dups.flatMap((g) =>
+      g.copies.map((copy) =>
+        candidate(`dup:${copy}`, text(copy.split('\\').pop()!), 'D', g.size, copy, {
+          origin: 'duplicate',
+          risk: 'low',
+          note: text(`cópia de ${g.keep}`, `copy of ${g.keep}`),
+        }),
+      ),
+    )
+    const orphans = request.findOrphans
+      ? [
+          candidate('orphan:%APPDATA%\\Postman', text('Postman'), 'D', 1.1, '%APPDATA%\\Postman', {
+            origin: 'orphan',
+            idleDays: 520,
+            risk: 'low',
+            note: text('nenhum programa instalado com este nome · sem modificação há 520 dias', 'no installed program with this name · not modified for 520 days'),
+          }),
+        ]
+      : []
+    this.custom = [...own, ...projects, ...dups, ...orphans]
     const extra = this.extra.map((pattern) => ({ pattern, reason: text('excluída nas Configurações', 'excluded in Settings') }))
     const isExcluded = (c: CandidateDto) => this.extra.some((p) => c.target.toLowerCase().startsWith(p.toLowerCase()))
-    const candidates = CANDIDATES.filter((c) => !isExcluded(c))
+    const candidates = [...CANDIDATES, ...this.custom, ...FILES].filter((c) => !isExcluded(c))
     return {
       candidates,
       skipped: [
@@ -167,7 +297,7 @@ export class DemoGateway implements DiskCleanupGateway {
   }
 
   async buildPlan(volumeName: string, selected: string[]): Promise<PlanDto> {
-    const items = CANDIDATES.filter((c) => selected.includes(c.id))
+    const items = [...CANDIDATES, ...this.custom, ...FILES].filter((c) => selected.includes(c.id))
     if (items.length === 0) throw fail('plan_empty')
     this.planned = items
     this.approved = []

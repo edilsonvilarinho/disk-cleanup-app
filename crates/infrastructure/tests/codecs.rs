@@ -244,3 +244,192 @@ fn plan_json_decode_accepts_skill_files_without_estimates_and_rejects_bad_input(
         matches!(codec.decode(r#"{"volume":"C:","tiers":{"Z":[]}}"#), Err(PortError::InvalidData(m)) if m.contains("Z"))
     );
 }
+
+#[test]
+fn toml_catalog_parses_project_profiles_and_roots() {
+    let text = r#"
+[[project_root]]
+path = '%USERPROFILE%\workspace'
+
+[[project]]
+id = "node"
+label = "Node.js"
+markers = ["package.json"]
+artifacts = ["node_modules", ".next"]
+note = "npm install recria"
+note_en = "npm install recreates"
+"#;
+    let catalog = TomlCatalogRepository::from_text(text).load().unwrap();
+    assert_eq!(
+        catalog.project_roots,
+        vec![r"%USERPROFILE%\workspace".to_string()]
+    );
+    let node = &catalog.projects[0];
+    assert_eq!(
+        (node.id.as_str(), node.label.en.as_str()),
+        ("node", "Node.js")
+    );
+    assert_eq!(node.markers, vec!["package.json".to_string()]);
+    assert_eq!(
+        node.artifacts,
+        vec!["node_modules".to_string(), ".next".to_string()]
+    );
+    assert_eq!(node.note.en, "npm install recreates");
+
+    let bad = |text: &str| match TomlCatalogRepository::from_text(text).load() {
+        Err(PortError::InvalidData(msg)) => msg,
+        other => panic!("esperava InvalidData, veio {other:?}"),
+    };
+    let p = |markers: &str, artifacts: &str| {
+        format!("[[project]]\nid = \"p\"\nlabel = \"P\"\nmarkers = {markers}\nartifacts = {artifacts}\n")
+    };
+    assert!(bad(&p("[]", "[\"x\"]")).contains("marcador"));
+    assert!(bad(&p("[\"m\"]", "[]")).contains("artefato"));
+    // Artefato é um nome dentro da raiz: nunca caminho, nunca "..".
+    for evil in ["\"..\"", "\"a/b\"", "'a\\b'", "\".\"", "\"\""] {
+        assert!(
+            bad(&p("[\"m\"]", &format!("[{evil}]"))).contains("artefato"),
+            "{evil}"
+        );
+    }
+    let ok = p("[\"m\"]", "[\"x\"]");
+    assert!(bad(&format!("{ok}{ok}")).contains("duplicado"));
+}
+
+#[test]
+fn bundled_catalogs_have_project_profiles_and_roots() {
+    for os in ["windows", "linux", "macos"] {
+        let catalog = catalog_for(os).unwrap().load().unwrap();
+        let ids: Vec<_> = catalog.projects.iter().map(|p| p.id.as_str()).collect();
+        for id in ["node", "rust", "python", "gradle", "maven", "dotnet"] {
+            assert!(ids.contains(&id), "{os} sem perfil {id}");
+        }
+        assert!(
+            !catalog.project_roots.is_empty(),
+            "{os} sem pastas de projetos"
+        );
+        for p in &catalog.projects {
+            assert!(
+                !p.note.en.is_empty() && p.note.en != p.note.pt,
+                "{os}/{}: nota sem inglês",
+                p.id
+            );
+        }
+    }
+}
+
+/// Nenhuma regra embutida pode conter (ou cair dentro de) uma exclusão: o
+/// endurecimento de `conflicting` não pode tirar alvos legítimos do catálogo.
+#[test]
+fn bundled_rules_never_touch_an_exclusion_after_expansion() {
+    use disk_cleanup_application::expand_template;
+    use disk_cleanup_infrastructure::{exclusions_for, SnapshotEnvironment};
+    let env = SnapshotEnvironment::from_pairs(
+        [
+            ("SystemDrive", "C:"),
+            ("SystemRoot", r"C:\Windows"),
+            ("USERPROFILE", r"C:\Users\u"),
+            ("LOCALAPPDATA", r"C:\Users\u\AppData\Local"),
+            ("APPDATA", r"C:\Users\u\AppData\Roaming"),
+            ("ProgramData", r"C:\ProgramData"),
+            ("ProgramFiles", r"C:\Program Files"),
+            ("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+            ("TEMP", r"C:\Users\u\AppData\Local\Temp"),
+            ("HOME", "/home/u"),
+        ]
+        .iter()
+        .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+        .collect(),
+    );
+    for os in ["windows", "linux", "macos"] {
+        let catalog = catalog_for(os).unwrap().load().unwrap();
+        let exclusions = catalog
+            .exclusions
+            .iter()
+            .fold(exclusions_for(os, &env), |l, e| {
+                l.with(
+                    &expand_template(&e.pattern, &env).unwrap_or_else(|_| e.pattern.clone()),
+                    e.reason.clone(),
+                )
+            });
+        for rule in &catalog.rules {
+            let Ok(path) = expand_template(rule.target.measured_template(), &env) else {
+                continue;
+            };
+            assert!(
+                exclusions.conflicting(&path).is_none(),
+                "{os}/{}: {path} toca a exclusão {:?}",
+                rule.id,
+                exclusions.conflicting(&path).map(|e| &e.pattern)
+            );
+        }
+    }
+}
+
+/// Com a guarda mais estrita (alvo que contém pasta protegida), nenhuma regra
+/// de caminho embutida passa a ser recusada na execução.
+#[test]
+fn bundled_path_rules_pass_the_safety_guard() {
+    use disk_cleanup_application::{expand_template, protected_paths_guard, RuleTarget};
+    use disk_cleanup_infrastructure::SnapshotEnvironment;
+    let env = SnapshotEnvironment::from_pairs(
+        [
+            ("SystemDrive", "C:"),
+            ("SystemRoot", r"C:\Windows"),
+            ("USERPROFILE", r"C:\Users\u"),
+            ("LOCALAPPDATA", r"C:\Users\u\AppData\Local"),
+            ("APPDATA", r"C:\Users\u\AppData\Roaming"),
+            ("ProgramData", r"C:\ProgramData"),
+            ("ProgramFiles", r"C:\Program Files"),
+            ("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+            ("TEMP", r"C:\Users\u\AppData\Local\Temp"),
+            ("TMP", r"C:\Users\u\AppData\Local\Temp"),
+            ("HOME", "/home/u"),
+            ("TMPDIR", "/tmp"),
+        ]
+        .iter()
+        .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+        .collect(),
+    );
+    let guard = protected_paths_guard(&env);
+    for os in ["windows", "linux", "macos"] {
+        for rule in catalog_for(os).unwrap().load().unwrap().rules {
+            let RuleTarget::Path { path } = &rule.target else {
+                continue;
+            };
+            let Ok(path) = expand_template(path, &env) else {
+                continue;
+            };
+            // Conhecido e anterior: `C:\OneDriveTemp` tem 2 segmentos e a guarda
+            // exige 3 (`TooBroad`); o item aparece mas é pulado na execução.
+            if os == "windows" && rule.id == "onedrive-temp" {
+                assert!(guard.check(&path).is_err());
+                continue;
+            }
+            assert!(
+                guard.check(&path).is_ok(),
+                "{os}/{}: {path} recusado",
+                rule.id
+            );
+        }
+    }
+}
+
+#[test]
+fn catalog_reads_orphan_roots_and_ignore_list() {
+    let windows = catalog_for("windows").unwrap().load().unwrap();
+    assert_eq!(
+        windows.orphan_roots,
+        vec!["%APPDATA%".to_string(), "%LOCALAPPDATA%".to_string()]
+    );
+    assert!(windows.orphan_ignore.iter().any(|n| n == "Microsoft"));
+    // Linux e macOS: sem fonte de programas instalados, sem pastas de sobras
+    for os in ["linux", "macos"] {
+        assert!(catalog_for(os)
+            .unwrap()
+            .load()
+            .unwrap()
+            .orphan_roots
+            .is_empty());
+    }
+}

@@ -3,21 +3,24 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, MutexGuard};
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use disk_cleanup_application::{
-    export_plan, ActionRunner, CatalogRepository, ClassificationReport, ClassifyService,
-    Environment, ExecuteService, ExecutionProgress, FileWalker, PathInspector, PlanCodec,
-    ScanProgress, SurveyRequest, SurveyService, VolumeInfo,
+    effective_exclusions, expand_template, export_plan, protected_paths_guard, ActionRunner,
+    CatalogRepository, CatalogRule, ClassificationReport, ClassifyService, ContentHasher,
+    DuplicateGroup, DuplicateService, Environment, ExecuteService, ExecutionProgress, FileWalker,
+    OrphanFinder, PathInspector, PlanCodec, ProjectFinder, RuleTarget, ScanProgress, SurveyRequest,
+    SurveyService, VolumeInfo,
 };
 use disk_cleanup_domain::{
-    approve, ApprovedPlan, ByteSize, CleanupReport, Disposal, ExclusionList, ItemResult, Plan,
-    SafetyGuard, Tier, TierRun, VolumeUsage,
+    approve, ApprovedPlan, ByteSize, CleanupReport, Disposal, ExclusionList, ItemResult, LargeFile,
+    Plan, SafetyGuard, Tier, TierRun, VolumeUsage,
 };
 
 use crate::dto::{
-    ApprovalDto, ClassificationDto, ExecutionEventDto, ItemResultDto, PlanDto, ReportDto, StepDto,
-    SurveyDto, SurveyRequestDto, SystemInfoDto, TierRunDto,
+    ApprovalDto, ClassificationDto, DuplicatesDto, ExecutionEventDto, ItemResultDto, PlanDto,
+    ProfileDto, ReportDto, RuleCheckDto, StepDto, SurveyDto, SurveyRequestDto, SystemInfoDto,
+    TextDto, TierRunDto, UserCustomizationDto, UserRuleDto, VolumeDto,
 };
 use crate::error::ErrorDto;
 
@@ -28,6 +31,10 @@ struct SessionState {
     approved: Option<ApprovedPlan>,
     /// Volume antes do primeiro tier executado.
     initial: Option<VolumeUsage>,
+    /// Maiores arquivos do perfil na última varredura (viram candidatos do tier D).
+    largest: Vec<LargeFile>,
+    /// Grupos da última busca de duplicados (cópias viram candidatos do tier D).
+    duplicates: Vec<DuplicateGroup>,
     runs: Vec<TierRun>,
 }
 
@@ -107,7 +114,12 @@ fn parse_tier(value: &str) -> Result<Tier, ErrorDto> {
 }
 
 /// `os`: valor de `std::env::consts::OS` ("windows", "linux", "macos").
-pub fn system_info(env: &dyn Environment, os: &str) -> SystemInfoDto {
+/// `catalog`: de onde vêm os perfis de projeto (catálogo ilegível = sem perfis).
+pub fn system_info(
+    env: &dyn Environment,
+    os: &str,
+    catalog: &dyn CatalogRepository,
+) -> SystemInfoDto {
     let (volume_root, profile) = if os == "windows" {
         let drive = env.var("SystemDrive").unwrap_or_else(|| "C:".to_string());
         (format!(r"{drive}\"), env.var("USERPROFILE"))
@@ -119,10 +131,39 @@ pub fn system_info(env: &dyn Environment, os: &str) -> SystemInfoDto {
         volume_root,
         profile,
         catalog: os.to_string(),
+        project_profiles: catalog
+            .load()
+            .map(|c| {
+                c.projects
+                    .iter()
+                    .map(|p| ProfileDto {
+                        id: p.id.clone(),
+                        label: TextDto::from(&p.label),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
     }
 }
 
+/// Espaço do volume, sem varrer: usado pelo monitoramento de pouco espaço.
+pub fn volume_usage(volumes: &dyn VolumeInfo, volume_root: &str) -> Result<VolumeDto, ErrorDto> {
+    Ok(VolumeDto::from(&volumes.usage(volume_root)?))
+}
+
 pub fn run_survey(
+    walker: &dyn FileWalker,
+    volumes: &dyn VolumeInfo,
+    progress: &dyn ScanProgress,
+    request: &SurveyRequestDto,
+) -> Result<SurveyDto, ErrorDto> {
+    run_survey_in(&Session::default(), walker, volumes, progress, request)
+}
+
+/// Como `run_survey`, guardando na sessão os arquivos grandes do perfil para a
+/// classificação seguinte.
+pub fn run_survey_in(
+    session: &Session,
     walker: &dyn FileWalker,
     volumes: &dyn VolumeInfo,
     progress: &dyn ScanProgress,
@@ -135,6 +176,7 @@ pub fn run_survey(
         depth: request.depth,
     })?;
     let elapsed = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    session.lock().largest = report.largest.clone();
     Ok(SurveyDto::from_report(&report, elapsed))
 }
 
@@ -147,9 +189,167 @@ pub fn classify(
     baseline: ExclusionList,
     extra: &[String],
 ) -> Result<ClassificationDto, ErrorDto> {
-    let report = ClassifyService::new(catalog, env, inspector).run(baseline, extra)?;
+    classify_projects(session, catalog, env, inspector, baseline, extra, None)
+}
+
+/// Busca de artefatos de projeto: o finder e as pastas das Configurações.
+#[derive(Clone, Copy)]
+pub struct ProjectSearch<'a> {
+    pub finder: &'a dyn ProjectFinder,
+    pub roots: &'a [String],
+}
+
+impl std::fmt::Debug for ProjectSearch<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProjectSearch")
+            .field("roots", &self.roots)
+            .finish()
+    }
+}
+
+/// Como `classify`, somando os artefatos de projeto (tier C) quando `projects` vem.
+pub fn classify_projects(
+    session: &Session,
+    catalog: &dyn CatalogRepository,
+    env: &dyn Environment,
+    inspector: &dyn PathInspector,
+    baseline: ExclusionList,
+    extra: &[String],
+    projects: Option<ProjectSearch<'_>>,
+) -> Result<ClassificationDto, ErrorDto> {
+    let none = UserCustomizationDto::default();
+    classify_custom(
+        session, catalog, env, inspector, baseline, extra, projects, None, &none,
+    )
+}
+
+/// Regra própria das Configurações como regra de catálogo: só tier A ou C,
+/// sempre caminho; passa pelas mesmas exclusões e guardas.
+fn user_rule(dto: &UserRuleDto) -> Result<CatalogRule, ErrorDto> {
+    let path = dto.path.trim();
+    if path.is_empty() {
+        return Err(ErrorDto::new("user_rule_path"));
+    }
+    let tier = parse_tier(&dto.tier)?;
+    let risk = match tier {
+        Tier::A => disk_cleanup_domain::Risk::None,
+        Tier::C => disk_cleanup_domain::Risk::Redownload,
+        other => return Err(ErrorDto::new("user_rule_tier").with("tier", other)),
+    };
+    let label = if dto.label.trim().is_empty() {
+        path
+    } else {
+        dto.label.trim()
+    };
+    Ok(CatalogRule {
+        id: format!("user:{path}"),
+        label: disk_cleanup_domain::LocalizedText::same(label),
+        tier,
+        risk,
+        note: disk_cleanup_domain::LocalizedText::new("regra própria", "own rule"),
+        target: RuleTarget::Path {
+            path: path.to_string(),
+        },
+        watch_env: Vec::new(),
+    })
+}
+
+/// Classificação com projetos, regras próprias e perfis desligados.
+#[allow(clippy::too_many_arguments)]
+pub fn classify_custom(
+    session: &Session,
+    catalog: &dyn CatalogRepository,
+    env: &dyn Environment,
+    inspector: &dyn PathInspector,
+    baseline: ExclusionList,
+    extra: &[String],
+    projects: Option<ProjectSearch<'_>>,
+    orphans: Option<&dyn OrphanFinder>,
+    custom: &UserCustomizationDto,
+) -> Result<ClassificationDto, ErrorDto> {
+    let rules: Vec<CatalogRule> = custom
+        .user_rules
+        .iter()
+        .map(user_rule)
+        .collect::<Result<_, _>>()?;
+    let (largest, duplicates) = {
+        let state = session.lock();
+        (state.largest.clone(), state.duplicates.clone())
+    };
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let mut service = ClassifyService::new(catalog, env, inspector)
+        .with_large_files(&largest, now)
+        .with_user_rules(&rules, &custom.disabled_profiles)
+        .with_duplicates(&duplicates);
+    if let Some(search) = projects {
+        service = service.with_projects(search.finder, search.roots);
+    }
+    // Sobras de apps: opt-in nas Configurações (heurística com falsos positivos).
+    if let (true, Some(finder)) = (custom.find_orphans, orphans) {
+        service = service.with_orphans(finder);
+    }
+    let report = service.run(baseline, extra)?;
     let dto = ClassificationDto::from(&report);
     session.lock().classification = Some(report);
+    Ok(dto)
+}
+
+/// Valida a pasta de uma regra própria antes de salvar: variável ausente,
+/// exclusão (dentro ou contendo), pasta protegida ou alvo amplo demais.
+pub fn check_rule(
+    catalog: &dyn CatalogRepository,
+    env: &dyn Environment,
+    baseline: ExclusionList,
+    extra: &[String],
+    path: &str,
+) -> Result<RuleCheckDto, ErrorDto> {
+    let result =
+        |code: &'static str, detail: Option<String>, reason: Option<TextDto>| RuleCheckDto {
+            code,
+            detail,
+            reason,
+        };
+    let expanded = match expand_template(path.trim(), env) {
+        Ok(p) if p.is_empty() => return Ok(result("empty", None, None)),
+        Ok(p) => p,
+        Err(var) => return Ok(result("unresolved_variable", Some(var), None)),
+    };
+    let catalog = catalog.load()?;
+    let exclusions = effective_exclusions(&catalog, env, baseline, extra);
+    if let Some(ex) = exclusions.conflicting(&expanded) {
+        return Ok(result(
+            "excluded",
+            Some(ex.pattern.clone()),
+            Some(TextDto::from(&ex.reason)),
+        ));
+    }
+    Ok(match protected_paths_guard(env).check(&expanded) {
+        Ok(()) => result("ok", Some(expanded), None),
+        Err(disk_cleanup_domain::SafetyViolation::TooBroad { target }) => {
+            result("too_broad", Some(target), None)
+        }
+        Err(disk_cleanup_domain::SafetyViolation::Protected { path }) => {
+            result("protected", Some(path), None)
+        }
+    })
+}
+
+/// Duplicados só a partir de 1 MiB: abaixo disso o ganho não paga a leitura.
+const DUPLICATE_MIN: ByteSize = ByteSize::from_bytes(1024 * 1024);
+
+/// Busca duplicados nas pastas dadas (o perfil, na interface) e guarda os
+/// grupos para a próxima classificação. Somente leitura.
+pub fn find_duplicates(
+    session: &Session,
+    walker: &dyn FileWalker,
+    hasher: &dyn ContentHasher,
+    roots: &[String],
+) -> Result<DuplicatesDto, ErrorDto> {
+    let report = DuplicateService::new(walker, hasher).run(roots, DUPLICATE_MIN)?;
+    let dto = DuplicatesDto::from(&report);
+    session.lock().duplicates = report.groups;
     Ok(dto)
 }
 
@@ -263,18 +463,5 @@ pub fn report(session: &Session, volumes: &dyn VolumeInfo) -> Result<ReportDto, 
 
 /// Pastas que nunca podem ser o alvo de uma remoção.
 pub fn safety_guard(env: &dyn Environment) -> SafetyGuard {
-    const PROTECTED_VARS: [&str; 11] = [
-        "USERPROFILE",
-        "HOME",
-        "LOCALAPPDATA",
-        "APPDATA",
-        "ProgramData",
-        "ProgramFiles",
-        "ProgramFiles(x86)",
-        "SystemRoot",
-        "TEMP",
-        "TMP",
-        "TMPDIR",
-    ];
-    SafetyGuard::new(PROTECTED_VARS.iter().filter_map(|v| env.var(v)).collect())
+    disk_cleanup_application::protected_paths_guard(env)
 }

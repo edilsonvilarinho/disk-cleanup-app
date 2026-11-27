@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useHistoryStore } from '../../application/stores/history'
+import { useSettingsStore } from '../../application/stores/settings'
+import { nextScanAt } from '../../domain/monitor'
 import { computed } from 'vue'
 import { useClassificationStore } from '../../application/stores/classification'
 import { useExecutionStore } from '../../application/stores/execution'
@@ -13,7 +16,7 @@ const survey = useSurveyStore()
 const classification = useClassificationStore()
 const exec = useExecutionStore()
 const update = useUpdateStore()
-const { t, err, count } = useI18n()
+const { t, err, count, date } = useI18n()
 
 /** Itens do tier em execução que já terminaram (evento `finished` com resultado). */
 const execDone = computed(() => {
@@ -46,6 +49,11 @@ const state = computed(() => {
   }
 })
 const progress = computed(() => (execTotal.value ? (execDone.value / execTotal.value) * 100 : 0))
+
+const historyStore = useHistoryStore()
+const settingsStore = useSettingsStore()
+/** Próxima varredura agendada (somente leitura), quando houver. */
+const nextScan = computed(() => nextScanAt(settingsStore.schedule, historyStore.latest?.at ?? null, new Date()))
 </script>
 
 <template>
@@ -86,6 +94,7 @@ const progress = computed(() => (execTotal.value ? (execDone.value / execTotal.v
       {{ t('env.explicit') }}
     </span>
 
+    <span v-if="nextScan" class="sb-item" :title="t('settings.schedule')" data-test="sb-next-scan">{{ t('bar.nextScan', { when: date(nextScan.toISOString()) }) }}</span>
     <span class="sb-right">
       <UpdateNotice />
       <RouterLink class="sb-item sb-link" to="/configuracoes" :title="t('bar.version')">

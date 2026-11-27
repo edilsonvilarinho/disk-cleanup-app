@@ -18,9 +18,17 @@ apps/desktop/src (Vue)  ──IPC──▶  apps/desktop/src-tauri (comandos, DT
 | Crate | Responsabilidade | Depende de |
 |---|---|---|
 | `domain` | `ByteSize`, `VolumeUsage`, `Tier`, `ExclusionList`, `ToolchainGuard`, `SafetyGuard`, `SizeAggregator`, `Candidate`, `Plan`, `approve`, `ItemResult`, `TierRun`, `CleanupReport` | nada (só `thiserror`) |
-| `application` | Portas (`FileWalker`, `VolumeInfo`, `Environment`, `PathInspector`, `CatalogRepository`, `PlanCodec`, `ScanProgress`, `ActionRunner`, `ExecutionProgress`) e casos de uso (`SurveyService`, `ClassifyService`, `export_plan`, `ExecuteService`) | `domain` |
-| `infrastructure` | `JwalkFileWalker`, `allocated_size` (Win32/POSIX), `SysinfoVolumeInfo`, `SnapshotEnvironment`, `TomlCatalogRepository`, `SkillPlanJsonCodec`, `platform_exclusions`, `FsActionRunner` (remoção best-effort sem seguir link/junção, envio para a Lixeira via `Recycler`/`SystemRecycler` com o crate `trash`, comandos pelo shell da plataforma) | `application`, `domain` |
+| `application` | Portas (`FileWalker`, `VolumeInfo`, `Environment`, `PathInspector`, `CatalogRepository`, `PlanCodec`, `ScanProgress`, `ActionRunner`, `ExecutionProgress`, `ProjectFinder`) e casos de uso (`SurveyService`, `ClassifyService`, `export_plan`, `ExecuteService`) | `domain` |
+| `infrastructure` | `JwalkFileWalker`, `allocated_size` (Win32/POSIX), `SysinfoVolumeInfo`, `SnapshotEnvironment`, `TomlCatalogRepository`, `SkillPlanJsonCodec`, `platform_exclusions`, `FsProjectFinder` (projetos por marcador, sem seguir link nem descer em artefato ou pasta oculta; idade pela atividade fora dos artefatos e pelo `.git/index`), `FsActionRunner` (remoção best-effort sem seguir link/junção, envio para a Lixeira via `Recycler`/`SystemRecycler` com o crate `trash`, comandos pelo shell da plataforma) | `application`, `domain` |
 | `src-tauri` | `service` (lógica dos comandos, testada) + `dto` (mapeamento camelCase) + `bootstrap` (raiz de composição) | todos |
+
+## Linha de comando (`apps/cli`)
+
+Segunda raiz de composição sobre a mesma `application`, sem regra nova: `survey`, `classify
+[--project-root] [--out plan.json]` e `execute --plan --approve <tiers> [--disposal A=trash] --yes
+[--dry-run]`. Sem `--approve` e `--yes` nada é removido (`approve` continua sendo o único caminho para
+`ApprovedPlan`). A guarda de pastas protegidas (`protected_paths_guard`) é a mesma do desktop. A lógica
+fica em `lib.rs` (testada com portas falsas); `main.rs` só liga os adaptadores e fica fora da cobertura.
 
 ## Frontend (Vue 3 + TypeScript)
 
@@ -74,6 +82,24 @@ ele é substituído por um fake.
    por nível, e para após 5 erros. Os testes usam uma Lixeira falsa; a real só roda com `-- --ignored`.
 8. A sessão desktop executa cada tier uma única vez por aprovação; remontar o plano descarta aprovação
    e execuções.
+10. Exclusão e pasta protegida valem nos dois sentidos: `ExclusionList::conflicting` e `SafetyGuard`
+   recusam alvo dentro **ou contendo** o que é protegido (remover a pasta pai apagaria a filha).
+11. Regra própria (Configurações) é só caminho, tier A ou C, e passa pelas mesmas exclusões e guardas do
+   catálogo; o comando `check_rule` explica a recusa antes de salvar. Perfis de projeto podem ser desligados.
+12. Duplicados (`DuplicateService`, sob demanda e só no perfil): tamanho → hash parcial → hash completo →
+   byte a byte. Placeholder de nuvem (alocado 0 ou pasta de nuvem) nunca é lido. A cópia mais antiga de
+   cada grupo nunca vira candidata; as demais entram no tier D, nunca pré-marcadas.
+13. Sobras de apps (só Windows, **opt-in**): pasta em `%APPDATA%`/`%LOCALAPPDATA%` sem programa no registro de
+   desinstalação, parada há 90+ dias e fora da lista `[orphans].ignore` do catálogo. Heurística com falsos
+   positivos medidos (saves de jogos, apps que não se registram): desligada por padrão, nunca pré-marcada,
+   fora do plano padrão da CLI (`--orphans`). Sem fonte de programas instalados (Linux/macOS), não procura.
+14. Monitoramento só lê: mede o espaço livre a cada 10 min (`volume_usage`, sem varrer) e avisa uma vez ao
+   cruzar o limite (histerese de 10%); a varredura agendada é a mesma varredura somente leitura; a bandeja
+   só abre o app ou dispara "Varrer agora". Nenhuma limpeza roda sem aprovação. Bandeja e agendamento vêm
+   desligados; os textos do menu da bandeja vêm da interface traduzida.
+9. Arquivo grande (`TopFiles`, os 30 maiores ≥ 512 MiB da varredura) só é oferecido **dentro do perfil do
+   usuário**, como tier D, nunca pré-marcado e fora do "marcar tier inteiro"; o destino padrão do tier D
+   é a Lixeira.
 
 ## Idioma, erros e plataformas
 

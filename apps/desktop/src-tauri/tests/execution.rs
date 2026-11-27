@@ -89,6 +89,10 @@ impl CatalogRepository for Catalogue {
         };
         let path = |p: &str| RuleTarget::Path { path: p.into() };
         Ok(Catalog {
+            projects: Vec::new(),
+            project_roots: Vec::new(),
+            orphan_roots: Vec::new(),
+            orphan_ignore: Vec::new(),
             rules: vec![
                 rule("npm", Tier::A, path(r"C:\Users\u\AppData\Local\npm")),
                 rule("dx", Tier::A, path(r"C:\Users\u\AppData\Local\dx")),

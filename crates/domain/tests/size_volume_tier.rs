@@ -86,3 +86,54 @@ fn tiers_have_fixed_execution_order_and_parse_from_letter() {
         assert_eq!(t.to_string(), t.letter().to_string());
     }
 }
+
+#[test]
+fn top_files_keeps_only_the_largest_above_the_minimum() {
+    use disk_cleanup_domain::{LargeFile, TopFiles};
+    let b = ByteSize::from_bytes;
+    let mut top = TopFiles::new(3, b(100));
+    let mut built = 0;
+    for (name, size) in [
+        ("a", 50),
+        ("b", 300),
+        ("c", 100),
+        ("d", 900),
+        ("e", 200),
+        ("f", 150),
+    ] {
+        top.offer(
+            || {
+                built += 1;
+                format!("/h/{name}")
+            },
+            b(size),
+            Some(7),
+        );
+    }
+    // o caminho só é montado para quem entra (ou disputa) o top
+    assert!(built < 6);
+    let got: Vec<_> = top.into_sorted();
+    assert_eq!(
+        got,
+        vec![
+            LargeFile {
+                path: "/h/d".into(),
+                size: b(900),
+                modified: Some(7)
+            },
+            LargeFile {
+                path: "/h/b".into(),
+                size: b(300),
+                modified: Some(7)
+            },
+            LargeFile {
+                path: "/h/e".into(),
+                size: b(200),
+                modified: Some(7)
+            },
+        ]
+    );
+    let mut none = TopFiles::new(0, b(1));
+    none.offer(|| "x".into(), b(10), None);
+    assert!(none.into_sorted().is_empty());
+}

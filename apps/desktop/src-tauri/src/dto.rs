@@ -36,6 +36,92 @@ pub struct SystemInfoDto {
     pub volume_root: String,
     pub profile: Option<String>,
     pub catalog: String,
+    /// Perfis de projeto do catálogo (para ligar/desligar nas Configurações).
+    pub project_profiles: Vec<ProfileDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ProfileDto {
+    pub id: String,
+    pub label: TextDto,
+}
+
+/// Regra própria das Configurações: só caminho, tier `A` ou `C`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct UserRuleDto {
+    pub label: String,
+    pub path: String,
+    pub tier: String,
+}
+
+/// Personalização da classificação vinda das Configurações.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct UserCustomizationDto {
+    pub user_rules: Vec<UserRuleDto>,
+    pub disabled_profiles: Vec<String>,
+    /// Procurar sobras de apps desinstalados (desligado por padrão).
+    pub find_orphans: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateGroupDto {
+    pub size_bytes: u64,
+    /// Cópia que fica (a mais antiga); nunca vira candidato.
+    pub keep: String,
+    pub copies: Vec<String>,
+}
+
+/// Quantos arquivos passaram por cada etapa da comparação.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateStatsDto {
+    pub files: u64,
+    pub same_size: u64,
+    pub same_partial: u64,
+    pub same_full: u64,
+    pub confirmed: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DuplicatesDto {
+    pub groups: Vec<DuplicateGroupDto>,
+    pub stats: DuplicateStatsDto,
+}
+
+impl From<&disk_cleanup_application::DuplicateReport> for DuplicatesDto {
+    fn from(r: &disk_cleanup_application::DuplicateReport) -> Self {
+        Self {
+            groups: r
+                .groups
+                .iter()
+                .map(|g| DuplicateGroupDto {
+                    size_bytes: g.size.bytes(),
+                    keep: g.keep.clone(),
+                    copies: g.copies.clone(),
+                })
+                .collect(),
+            stats: DuplicateStatsDto {
+                files: r.stats.files,
+                same_size: r.stats.same_size,
+                same_partial: r.stats.same_partial,
+                same_full: r.stats.same_full,
+                confirmed: r.stats.confirmed,
+            },
+        }
+    }
+}
+
+/// Resultado da validação de uma pasta de regra própria.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RuleCheckDto {
+    /// `ok` | `empty` | `unresolved_variable` | `excluded` | `protected` | `too_broad`.
+    pub code: &'static str,
+    /// Caminho expandido (`ok`), variável, exclusão ou pasta protegida.
+    pub detail: Option<String>,
+    /// Motivo da exclusão, quando `excluded`.
+    pub reason: Option<TextDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -116,6 +202,25 @@ pub struct SurveyDto {
     pub unreadable: u64,
     pub unattributed_bytes: u64,
     pub elapsed_ms: u64,
+    /// Mapa do volume (treemap); `name` vazio = "outros".
+    pub tree: TreeNodeDto,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TreeNodeDto {
+    pub name: String,
+    pub bytes: u64,
+    pub children: Vec<TreeNodeDto>,
+}
+
+impl From<&disk_cleanup_domain::TreeNode> for TreeNodeDto {
+    fn from(n: &disk_cleanup_domain::TreeNode) -> Self {
+        Self {
+            name: n.name.clone(),
+            bytes: n.size.bytes(),
+            children: n.children.iter().map(TreeNodeDto::from).collect(),
+        }
+    }
 }
 
 impl SurveyDto {
@@ -130,6 +235,7 @@ impl SurveyDto {
             unreadable: report.unreadable,
             unattributed_bytes: report.unattributed.bytes(),
             elapsed_ms,
+            tree: TreeNodeDto::from(&report.tree),
         }
     }
 }
@@ -169,6 +275,12 @@ pub struct CandidateDto {
     pub risk: &'static str,
     pub note: TextDto,
     pub blocked: Option<BlockDto>,
+    /// `rule` (catálogo) | `project` (artefato de projeto) | `file` (arquivo grande).
+    pub origin: &'static str,
+    /// Raiz do projeto, quando o candidato é artefato de projeto.
+    pub project: Option<String>,
+    /// Dias sem atividade no projeto, ou desde a modificação do arquivo grande.
+    pub idle_days: Option<u32>,
 }
 
 fn risk_name(risk: Risk) -> &'static str {
@@ -203,6 +315,9 @@ impl From<&Candidate> for CandidateDto {
                 Availability::Selectable => None,
                 Availability::Blocked { reason } => Some(BlockDto::from(reason)),
             },
+            origin: "rule",
+            project: None,
+            idle_days: None,
         }
     }
 }
@@ -263,7 +378,27 @@ pub struct ClassificationDto {
 impl From<&ClassificationReport> for ClassificationDto {
     fn from(r: &ClassificationReport) -> Self {
         Self {
-            candidates: r.candidates.iter().map(CandidateDto::from).collect(),
+            candidates: r
+                .candidates
+                .iter()
+                .map(|c| {
+                    let mut dto = CandidateDto::from(c);
+                    if let Some(p) = r.projects.iter().find(|p| p.id == c.id) {
+                        dto.origin = "project";
+                        dto.project = Some(p.project.clone());
+                        dto.idle_days = p.idle_days;
+                    } else if let Some(f) = r.large_files.iter().find(|f| f.id == c.id) {
+                        dto.origin = "file";
+                        dto.idle_days = f.age_days;
+                    } else if r.duplicates.iter().any(|d| d.id == c.id) {
+                        dto.origin = "duplicate";
+                    } else if let Some(o) = r.orphans.iter().find(|o| o.id == c.id) {
+                        dto.origin = "orphan";
+                        dto.idle_days = o.idle_days;
+                    }
+                    dto
+                })
+                .collect(),
             skipped: r.skipped.iter().map(SkippedDto::from).collect(),
             exclusions: r
                 .exclusions
