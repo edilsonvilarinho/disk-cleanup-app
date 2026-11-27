@@ -89,6 +89,10 @@ ele é substituído por um fake.
 12. Duplicados (`DuplicateService`, sob demanda e só no perfil): tamanho → hash parcial → hash completo →
    byte a byte. Placeholder de nuvem (alocado 0 ou pasta de nuvem) nunca é lido. A cópia mais antiga de
    cada grupo nunca vira candidata; as demais entram no tier D, nunca pré-marcadas.
+13. Sobras de apps (só Windows, **opt-in**): pasta em `%APPDATA%`/`%LOCALAPPDATA%` sem programa no registro de
+   desinstalação, parada há 90+ dias e fora da lista `[orphans].ignore` do catálogo. Heurística com falsos
+   positivos medidos (saves de jogos, apps que não se registram): desligada por padrão, nunca pré-marcada,
+   fora do plano padrão da CLI (`--orphans`). Sem fonte de programas instalados (Linux/macOS), não procura.
 9. Arquivo grande (`TopFiles`, os 30 maiores ≥ 512 MiB da varredura) só é oferecido **dentro do perfil do
    usuário**, como tier D, nunca pré-marcado e fora do "marcar tier inteiro"; o destino padrão do tier D
    é a Lixeira.

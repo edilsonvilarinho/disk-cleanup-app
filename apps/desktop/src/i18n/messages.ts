@@ -328,6 +328,8 @@ export const pt = {
     noUserRules: 'Nenhuma regra própria.',
     profiles: 'Perfis de projeto',
     profilesHint: 'Quais artefatos de projeto procurar nas pastas de projetos.',
+    orphans: 'Procurar sobras de apps desinstalados (experimental)',
+    orphansHint: 'Só no Windows: pasta em AppData sem programa no registro de desinstalação e parada há 90+ dias. Há falsos positivos (saves de jogos, apps que não se registram): nada vem marcado e o padrão é a Lixeira.',
     ruleCheck: {
       ok: 'Pasta válida: {detail}',
       empty: 'Informe a pasta.',
@@ -767,6 +769,8 @@ export const en: Messages = {
     noUserRules: 'No own rules.',
     profiles: 'Project profiles',
     profilesHint: 'Which project artifacts to look for in the project folders.',
+    orphans: 'Look for leftovers of uninstalled apps (experimental)',
+    orphansHint: 'Windows only: AppData folder with no program in the uninstall registry and idle for 90+ days. There are false positives (game saves, apps that do not register): nothing is checked and the default is the Recycle Bin.',
     ruleCheck: {
       ok: 'Valid folder: {detail}',
       empty: 'Enter the folder.',

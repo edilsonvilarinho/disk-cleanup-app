@@ -109,7 +109,7 @@ describe('classification store', () => {
   it('envia as exclusões das Configurações e aceita erro do núcleo com código', async () => {
     const gateway = setup()
     const store = useClassificationStore()
-    const request = { extraExclusions: ['C:\\Projetos'], projectRoots: ['D:\\dev'], userRules: [], disabledProfiles: ['node'] }
+    const request = { extraExclusions: ['C:\\Projetos'], projectRoots: ['D:\\dev'], userRules: [], disabledProfiles: ['node'], findOrphans: false }
     await store.load(request)
     expect(gateway.classify).toHaveBeenCalledWith(request)
     setup(fakeGateway({ classify: vi.fn(async () => Promise.reject({ code: 'invalid_data', params: { detail: 'toml' } })) }))

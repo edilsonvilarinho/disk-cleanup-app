@@ -7,7 +7,8 @@ use std::process::ExitCode;
 use disk_cleanup_cli::{run, Ports, TextFiles};
 use disk_cleanup_infrastructure::{
     catalog_for, exclusions_for, FsActionRunner, FsProjectFinder, JwalkFileWalker,
-    SkillPlanJsonCodec, SnapshotEnvironment, SysinfoVolumeInfo, WalkerPathInspector,
+    RegistryOrphanFinder, SkillPlanJsonCodec, SnapshotEnvironment, SysinfoVolumeInfo,
+    WalkerPathInspector,
 };
 
 struct Disk;
@@ -39,6 +40,7 @@ fn main() -> ExitCode {
         catalog: &catalog,
         baseline: exclusions_for(OS, &env),
         finder: &FsProjectFinder::default(),
+        orphans: &RegistryOrphanFinder::default(),
         runner: &FsActionRunner::default(),
         codec: &SkillPlanJsonCodec,
         files: &Disk,

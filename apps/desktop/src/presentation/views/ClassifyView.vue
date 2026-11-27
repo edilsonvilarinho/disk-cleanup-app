@@ -15,7 +15,7 @@ const { t, txt, err, gb, num } = useI18n()
 onMounted(() => store.ensureLoaded(settings.classifyRequest, settings.minIdleDays))
 const reload = () => store.load(settings.classifyRequest, settings.minIdleDays)
 const hasProjects = computed(() => store.visible.some((c) => c.project !== null))
-const hasFiles = computed(() => store.visible.some((c) => c.origin === 'file' || c.origin === 'duplicate'))
+const hasFiles = computed(() => store.visible.some((c) => c.origin === 'file' || c.origin === 'duplicate' || c.origin === 'orphan'))
 const findDuplicates = () => store.findDuplicates(settings.classifyRequest, settings.minIdleDays)
 
 function onMinIdle(event: Event) {

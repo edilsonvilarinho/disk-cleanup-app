@@ -1,13 +1,14 @@
 use std::fmt;
 
 use disk_cleanup_domain::{
-    path_components, Action, Availability, ByteSize, Candidate, ExclusionList, LargeFile,
-    LocalizedText, Risk, Tier, ToolchainGuard,
+    belongs_to_installed, path_components, Action, Availability, ByteSize, Candidate,
+    ExclusionList, LargeFile, LocalizedText, Risk, Tier, ToolchainGuard,
 };
 
 use crate::{
     expand_template, AppError, Catalog, CatalogRepository, CatalogRule, DuplicateGroup,
-    Environment, FoundArtifact, PathInspector, ProjectFinder, ProjectProfile, RuleTarget,
+    Environment, FoundArtifact, OrphanFinder, PathInspector, ProjectFinder, ProjectProfile,
+    RuleTarget,
 };
 
 /// Por que uma regra do catálogo não virou candidato.
@@ -56,6 +57,17 @@ pub struct DuplicateInfo {
     pub keep: String,
 }
 
+/// Pasta de app desinstalado oferecida como candidato.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OrphanInfo {
+    /// `id` do candidato.
+    pub id: String,
+    pub idle_days: Option<u32>,
+}
+
+/// Sobra só com pelo menos estes dias sem modificação (app em uso mexe nos dados).
+const ORPHAN_MIN_IDLE_DAYS: u32 = 90;
+
 /// Dados de um candidato que veio dos arquivos grandes da varredura.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LargeFileInfo {
@@ -74,6 +86,7 @@ pub struct ClassificationReport {
     pub projects: Vec<ProjectInfo>,
     pub large_files: Vec<LargeFileInfo>,
     pub duplicates: Vec<DuplicateInfo>,
+    pub orphans: Vec<OrphanInfo>,
 }
 
 impl ClassificationReport {
@@ -97,6 +110,7 @@ pub struct ClassifyService<'a> {
     user_rules: &'a [CatalogRule],
     disabled_profiles: &'a [String],
     duplicates: &'a [DuplicateGroup],
+    orphans: Option<&'a dyn OrphanFinder>,
 }
 
 /// Exclusões efetivas: obrigatórias + pastas das Configurações + catálogo.
@@ -134,7 +148,14 @@ impl<'a> ClassifyService<'a> {
             user_rules: &[],
             disabled_profiles: &[],
             duplicates: &[],
+            orphans: None,
         }
+    }
+
+    /// Procura pastas de apps desinstalados nas `orphan_roots` do catálogo.
+    pub fn with_orphans(mut self, finder: &'a dyn OrphanFinder) -> Self {
+        self.orphans = Some(finder);
+        self
     }
 
     /// Cópias duplicadas (exceto a mantida) como candidatos do tier D.
@@ -187,6 +208,7 @@ impl<'a> ClassifyService<'a> {
             projects: Vec::new(),
             large_files: Vec::new(),
             duplicates: Vec::new(),
+            orphans: Vec::new(),
         };
         for rule in catalog.rules.iter().chain(self.user_rules) {
             match self.evaluate(rule, &report.exclusions, &guard) {
@@ -249,6 +271,7 @@ impl<'a> ClassifyService<'a> {
                 });
             }
         }
+        self.find_orphans(&catalog, &mut report, &guard);
         let (files, now) = self.large_files;
         for file in files {
             let id = format!("file:{}", file.path);
@@ -284,6 +307,80 @@ impl<'a> ClassifyService<'a> {
             });
         }
         Ok(report)
+    }
+
+    /// Sobra = pasta sem programa instalado correspondente, parada há
+    /// `ORPHAN_MIN_IDLE_DAYS`+ dias e fora da lista de ignoradas. Na dúvida
+    /// (idade desconhecida, nome genérico), não é sobra.
+    fn find_orphans(
+        &self,
+        catalog: &Catalog,
+        report: &mut ClassificationReport,
+        guard: &ToolchainGuard,
+    ) {
+        let Some(finder) = self.orphans else {
+            return;
+        };
+        let Some(apps) = finder.installed() else {
+            return;
+        };
+        let ignore: Vec<String> = catalog
+            .orphan_ignore
+            .iter()
+            .map(|n| n.to_lowercase())
+            .collect();
+        for root in catalog
+            .orphan_roots
+            .iter()
+            .filter_map(|r| expand_template(r, self.env).ok())
+        {
+            for folder in finder.folders(&root) {
+                let idle = match folder.idle_days {
+                    Some(d) if d >= ORPHAN_MIN_IDLE_DAYS => d,
+                    _ => continue,
+                };
+                if ignore.contains(&folder.name.to_lowercase())
+                    || belongs_to_installed(&folder.name, &apps)
+                {
+                    continue;
+                }
+                let id = format!("orphan:{}", folder.path);
+                if let Some(ex) = report.exclusions.conflicting(&folder.path) {
+                    report.skipped.push(SkippedRule {
+                        id,
+                        reason: SkipReason::Excluded(ex.reason.clone()),
+                    });
+                    continue;
+                }
+                let size = match self.inspector.size_of(&folder.path) {
+                    Ok(s) if s > ByteSize::ZERO => s,
+                    _ => continue,
+                };
+                let availability = match guard.blocking_reason(&folder.path, &[]) {
+                    Some(reason) => Availability::Blocked { reason },
+                    None => Availability::Selectable,
+                };
+                report.orphans.push(OrphanInfo {
+                    id: id.clone(),
+                    idle_days: Some(idle),
+                });
+                report.candidates.push(Candidate {
+                    id,
+                    label: LocalizedText::same(&folder.name),
+                    tier: Tier::D,
+                    action: Action::RemovePath {
+                        path: folder.path.clone(),
+                    },
+                    size,
+                    risk: Risk::Low,
+                    note: LocalizedText::new(
+                        &format!("nenhum programa instalado com este nome · sem modificação há {idle} dias"),
+                        &format!("no installed program with this name · not modified for {idle} days"),
+                    ),
+                    availability,
+                });
+            }
+        }
     }
 
     fn find_projects(&self, catalog: &Catalog) -> Vec<FoundArtifact> {

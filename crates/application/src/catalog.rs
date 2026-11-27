@@ -57,4 +57,8 @@ pub struct Catalog {
     pub projects: Vec<ProjectProfile>,
     /// Pastas onde procurar projetos (templates; as inexistentes são ignoradas).
     pub project_roots: Vec<String>,
+    /// Pastas de dados de apps onde procurar sobras (templates).
+    pub orphan_roots: Vec<String>,
+    /// Nomes de pasta que nunca são sobra (sistema, ferramentas sem registro).
+    pub orphan_ignore: Vec<String>,
 }

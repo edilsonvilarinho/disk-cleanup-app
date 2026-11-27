@@ -108,7 +108,7 @@ export interface CandidateDto {
   idleDays: number | null
 }
 
-export type CandidateOrigin = 'rule' | 'project' | 'file' | 'duplicate'
+export type CandidateOrigin = 'rule' | 'project' | 'file' | 'duplicate' | 'orphan'
 
 /** Resultado da busca de duplicados (só leitura). `keep` nunca vira candidato. */
 export interface DuplicatesDto {

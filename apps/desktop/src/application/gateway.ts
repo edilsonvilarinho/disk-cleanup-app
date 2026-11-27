@@ -29,9 +29,17 @@ export interface ClassifyRequest {
   projectRoots: string[]
   userRules: UserRule[]
   disabledProfiles: string[]
+  /** Sobras de apps desinstalados: experimental, desligado por padrão. */
+  findOrphans: boolean
 }
 
-export const EMPTY_CLASSIFY_REQUEST: ClassifyRequest = { extraExclusions: [], projectRoots: [], userRules: [], disabledProfiles: [] }
+export const EMPTY_CLASSIFY_REQUEST: ClassifyRequest = {
+  extraExclusions: [],
+  projectRoots: [],
+  userRules: [],
+  disabledProfiles: [],
+  findOrphans: false,
+}
 
 export interface DiskCleanupGateway {
   systemInfo(): Promise<SystemInfoDto>

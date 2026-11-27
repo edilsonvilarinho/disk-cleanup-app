@@ -74,6 +74,8 @@ fn catalog() -> Catalog {
     Catalog {
         projects: Vec::new(),
         project_roots: Vec::new(),
+        orphan_roots: Vec::new(),
+        orphan_ignore: Vec::new(),
         rules: vec![
             rule(
                 "npm",
@@ -250,6 +252,8 @@ fn catalog_exclusion_with_unresolved_variable_is_kept_literally() {
     let catalog = Catalog {
         projects: Vec::new(),
         project_roots: Vec::new(),
+        orphan_roots: Vec::new(),
+        orphan_ignore: Vec::new(),
         rules: vec![],
         exclusions: vec![CatalogExclusion {
             pattern: r"%SEM_VAR%\x".into(),
@@ -541,4 +545,98 @@ fn effective_exclusions_add_settings_and_catalog_entries() {
     assert!(list.conflicting(r"D:\x\y").is_some());
     assert!(list.conflicting(r"C:\Users\u\.claude\projects").is_some());
     assert_eq!(list.len(), 2);
+}
+
+// ---------- Sobras de apps ----------
+
+use disk_cleanup_application::{FolderInfo, OrphanFinder};
+use disk_cleanup_domain::InstalledApp;
+
+struct Orphans {
+    installed: Option<Vec<InstalledApp>>,
+    folders: Vec<FolderInfo>,
+}
+
+impl OrphanFinder for Orphans {
+    fn installed(&self) -> Option<Vec<InstalledApp>> {
+        self.installed.clone()
+    }
+    fn folders(&self, root: &str) -> Vec<FolderInfo> {
+        self.folders
+            .iter()
+            .filter(|f| f.path.starts_with(root))
+            .cloned()
+            .collect()
+    }
+}
+
+fn folder(root: &str, name: &str, idle: Option<u32>) -> FolderInfo {
+    FolderInfo {
+        name: name.into(),
+        path: format!(r"{root}\{name}"),
+        idle_days: idle,
+    }
+}
+
+#[test]
+fn orphan_folders_need_no_installed_match_long_inactivity_and_no_ignore() {
+    let roaming = r"C:\Users\u\AppData\Roaming";
+    let finder = Orphans {
+        installed: Some(vec![InstalledApp {
+            name: "Slack".into(),
+            publisher: "Slack Technologies".into(),
+            location: String::new(),
+        }]),
+        folders: vec![
+            folder(roaming, "Postman", Some(400)),
+            folder(roaming, "Slack", Some(400)),
+            folder(roaming, "npm", Some(400)),
+            folder(roaming, "Figma", Some(10)),
+            folder(roaming, "Sem idade", None),
+            folder(roaming, "Vazio", Some(400)),
+            folder(roaming, "Protegido", Some(400)),
+        ],
+    };
+    let catalog = FakeCatalog(Ok(Catalog {
+        orphan_roots: vec![r"%APPDATA%".into(), r"%NAO_EXISTE%".into()],
+        orphan_ignore: vec!["NPM".into()],
+        ..Catalog::default()
+    }));
+    let mut env = env();
+    env.vars.insert("APPDATA".into(), roaming.into());
+    let inspector = FakeInspector::with(&[
+        (r"C:\Users\u\AppData\Roaming\Postman", 900),
+        (r"C:\Users\u\AppData\Roaming\Vazio", 0),
+        (r"C:\Users\u\AppData\Roaming\Protegido", 50),
+    ]);
+    let baseline = ExclusionList::default().with(
+        r"C:\Users\u\AppData\Roaming\Protegido",
+        LocalizedText::same("p"),
+    );
+    let report = ClassifyService::new(&catalog, &env, &inspector)
+        .with_orphans(&finder)
+        .run(baseline, &[])
+        .unwrap();
+    let ids: Vec<_> = report.candidates.iter().map(|c| c.id.as_str()).collect();
+    assert_eq!(ids, [r"orphan:C:\Users\u\AppData\Roaming\Postman"]);
+    let c = &report.candidates[0];
+    assert_eq!((c.tier, c.risk, c.size.bytes()), (Tier::D, Risk::Low, 900));
+    assert!(
+        c.note.pt.contains("nenhum programa instalado"),
+        "{}",
+        c.note.pt
+    );
+    assert!(c.note.en.contains("400"), "{}", c.note.en);
+    assert_eq!(report.orphans[0].idle_days, Some(400));
+
+    // plataforma sem lista de programas instalados: nada é inventado
+    let unknown = Orphans {
+        installed: None,
+        folders: vec![folder(roaming, "Postman", Some(400))],
+    };
+    let report = ClassifyService::new(&catalog, &env, &inspector)
+        .with_orphans(&unknown)
+        .run(ExclusionList::default(), &[])
+        .unwrap();
+    assert!(report.candidates.is_empty());
 }

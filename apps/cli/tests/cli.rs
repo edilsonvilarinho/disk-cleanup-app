@@ -53,6 +53,21 @@ impl PathInspector for Inspector {
     }
 }
 
+/// Um app "desinstalado" com dados parados há 400 dias em %APPDATA%.
+struct NoOrphans;
+impl disk_cleanup_application::OrphanFinder for NoOrphans {
+    fn installed(&self) -> Option<Vec<disk_cleanup_domain::InstalledApp>> {
+        Some(Vec::new())
+    }
+    fn folders(&self, root: &str) -> Vec<disk_cleanup_application::FolderInfo> {
+        vec![disk_cleanup_application::FolderInfo {
+            name: "Postman".into(),
+            path: format!(r"{root}\Postman"),
+            idle_days: Some(400),
+        }]
+    }
+}
+
 struct Finder;
 impl ProjectFinder for Finder {
     fn find(&self, roots: &[String], _: &[ProjectProfile]) -> Vec<FoundArtifact> {
@@ -119,6 +134,9 @@ impl TextFiles for Files {
 }
 
 const CATALOG: &str = r#"
+[orphans]
+roots = ['%APPDATA%']
+
 [[rule]]
 id = "npm-cache"
 label = "npm cache"
@@ -159,6 +177,7 @@ impl World {
                 ("SystemDrive".into(), "C:".into()),
                 ("USERPROFILE".into(), r"C:\Users\u".into()),
                 ("LOCALAPPDATA".into(), r"C:\Users\u\AppData\Local".into()),
+                ("APPDATA".into(), r"C:\Users\u\AppData\Roaming".into()),
             ]),
             catalog: TomlCatalogRepository::from_text(CATALOG),
             runner: Runner::default(),
@@ -175,6 +194,7 @@ impl World {
             catalog: &self.catalog,
             baseline: ExclusionList::default(),
             finder: &Finder,
+            orphans: &NoOrphans,
             runner: &self.runner,
             codec: &SkillPlanJsonCodec,
             files: &self.files,
@@ -338,4 +358,18 @@ fn dry_run_lists_without_touching_and_execute_respects_the_disposal() {
     let (_, out) = w.run(&["execute", "--plan", "plan.json", "--approve", "C", "--yes"]);
     assert!(out.contains("Lixeira 1,0 GB"), "{out}");
     assert_eq!(w.runner.0.borrow()[0], r"trash C:\Users\u\.gradle\caches");
+}
+
+#[test]
+fn orphans_only_with_the_flag_and_never_in_the_default_plan() {
+    let w = World::new();
+    let (_, out) = w.run(&["classify"]);
+    assert!(!out.contains("orphan:"), "{out}");
+    let (code, out) = w.run(&["classify", "--orphans", "--out", "plan.json"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(
+        out.contains(r"orphan:C:\Users\u\AppData\Roaming\Postman"),
+        "{out}"
+    );
+    assert!(!w.files.read("plan.json").unwrap().contains("Postman"));
 }

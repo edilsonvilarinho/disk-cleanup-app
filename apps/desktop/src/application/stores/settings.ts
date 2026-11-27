@@ -21,6 +21,7 @@ export const useSettingsStore = defineStore('settings', {
         projectRoots: [...this.projectRoots],
         userRules: this.userRules.map((r) => ({ ...r })),
         disabledProfiles: [...this.disabledProfiles],
+        findOrphans: this.findOrphans,
       }
     },
   },
@@ -40,6 +41,7 @@ export const useSettingsStore = defineStore('settings', {
         minIdleDays: this.minIdleDays,
         userRules: this.userRules.map((r) => ({ ...r })),
         disabledProfiles: [...this.disabledProfiles],
+        findOrphans: this.findOrphans,
       })
     },
     setLanguage(language: LanguagePreference) {
@@ -91,6 +93,10 @@ export const useSettingsStore = defineStore('settings', {
     },
     removeUserRule(path: string) {
       this.userRules = this.userRules.filter((r) => r.path !== path)
+      this.persist()
+    },
+    setFindOrphans(enabled: boolean) {
+      this.findOrphans = enabled
       this.persist()
     },
     toggleProfile(id: string) {

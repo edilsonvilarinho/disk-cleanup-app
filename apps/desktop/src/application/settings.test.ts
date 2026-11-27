@@ -36,6 +36,7 @@ describe('sanitizeSettings', () => {
       minIdleDays: 90,
       userRules: [],
       disabledProfiles: [],
+      findOrphans: false,
     })
     expect(
       sanitizeSettings({
@@ -56,6 +57,7 @@ describe('sanitizeSettings', () => {
           'x',
         ],
         disabledProfiles: ['node', 'node', 1],
+        findOrphans: true,
       }),
     ).toEqual({
       language: 'en',
@@ -71,6 +73,7 @@ describe('sanitizeSettings', () => {
         { label: '', path: 'C:\\sem-nome', tier: 'C' },
       ],
       disabledProfiles: ['node'],
+      findOrphans: true,
     })
     expect(
       sanitizeSettings({ language: 'fr', theme: 'roxo', extraExclusions: 'x', defaultDepth: 7, autoUpdate: 'sim', betaUpdates: 1, projectRoots: 'x', minIdleDays: 45 }),
@@ -102,6 +105,7 @@ describe('settings store', () => {
       minIdleDays: 365,
       userRules: [],
       disabledProfiles: [],
+      findOrphans: false,
     })
   })
 

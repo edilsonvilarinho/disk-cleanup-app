@@ -9,7 +9,7 @@ use disk_cleanup_application::{
     effective_exclusions, expand_template, export_plan, protected_paths_guard, ActionRunner,
     CatalogRepository, CatalogRule, ClassificationReport, ClassifyService, ContentHasher,
     DuplicateGroup, DuplicateService, Environment, ExecuteService, ExecutionProgress, FileWalker,
-    PathInspector, PlanCodec, ProjectFinder, RuleTarget, ScanProgress, SurveyRequest,
+    OrphanFinder, PathInspector, PlanCodec, ProjectFinder, RuleTarget, ScanProgress, SurveyRequest,
     SurveyService, VolumeInfo,
 };
 use disk_cleanup_domain::{
@@ -214,7 +214,7 @@ pub fn classify_projects(
 ) -> Result<ClassificationDto, ErrorDto> {
     let none = UserCustomizationDto::default();
     classify_custom(
-        session, catalog, env, inspector, baseline, extra, projects, &none,
+        session, catalog, env, inspector, baseline, extra, projects, None, &none,
     )
 }
 
@@ -259,6 +259,7 @@ pub fn classify_custom(
     baseline: ExclusionList,
     extra: &[String],
     projects: Option<ProjectSearch<'_>>,
+    orphans: Option<&dyn OrphanFinder>,
     custom: &UserCustomizationDto,
 ) -> Result<ClassificationDto, ErrorDto> {
     let rules: Vec<CatalogRule> = custom
@@ -279,6 +280,10 @@ pub fn classify_custom(
         .with_duplicates(&duplicates);
     if let Some(search) = projects {
         service = service.with_projects(search.finder, search.roots);
+    }
+    // Sobras de apps: opt-in nas Configurações (heurística com falsos positivos).
+    if let (true, Some(finder)) = (custom.find_orphans, orphans) {
+        service = service.with_orphans(finder);
     }
     let report = service.run(baseline, extra)?;
     let dto = ClassificationDto::from(&report);

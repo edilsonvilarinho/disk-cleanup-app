@@ -120,6 +120,14 @@ impl FsProjectFinder {
     }
 }
 
+/// Dias desde o arquivo mais recente até dois níveis abaixo de `dir`
+/// (sem descer em link nem pasta oculta). Usado pela busca de sobras de apps.
+pub(crate) fn idle_days_of(dir: &Path, now: SystemTime) -> Option<u32> {
+    let newest = newest_file(dir, 0, &HashSet::new())?;
+    let age = now.duration_since(newest).unwrap_or_default();
+    Some(u32::try_from(age.as_secs() / 86_400).unwrap_or(u32::MAX))
+}
+
 fn modified(path: &Path) -> Option<SystemTime> {
     fs::symlink_metadata(path).ok()?.modified().ok()
 }

@@ -414,3 +414,22 @@ fn bundled_path_rules_pass_the_safety_guard() {
         }
     }
 }
+
+#[test]
+fn catalog_reads_orphan_roots_and_ignore_list() {
+    let windows = catalog_for("windows").unwrap().load().unwrap();
+    assert_eq!(
+        windows.orphan_roots,
+        vec!["%APPDATA%".to_string(), "%LOCALAPPDATA%".to_string()]
+    );
+    assert!(windows.orphan_ignore.iter().any(|n| n == "Microsoft"));
+    // Linux e macOS: sem fonte de programas instalados, sem pastas de sobras
+    for os in ["linux", "macos"] {
+        assert!(catalog_for(os)
+            .unwrap()
+            .load()
+            .unwrap()
+            .orphan_roots
+            .is_empty());
+    }
+}

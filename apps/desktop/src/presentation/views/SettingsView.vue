@@ -163,12 +163,22 @@ function addRoot() {
       <p v-if="!settings.userRules.length" class="muted" data-test="no-user-rules">{{ t('settings.noUserRules') }}</p>
     </section>
 
-    <section v-if="system.info?.projectProfiles.length" class="card" data-test="profiles-settings">
-      <h2>{{ t('settings.profiles') }}</h2>
-      <p class="small muted">{{ t('settings.profilesHint') }}</p>
-      <label v-for="p in system.info.projectProfiles" :key="p.id" class="option" :data-test="`profile-${p.id}`">
-        <input type="checkbox" :checked="!settings.disabledProfiles.includes(p.id)" @change="settings.toggleProfile(p.id)" />
-        <span>{{ txt(p.label) }}</span>
+    <section class="card" data-test="profiles-settings">
+      <template v-if="system.info?.projectProfiles.length">
+        <h2>{{ t('settings.profiles') }}</h2>
+        <p class="small muted">{{ t('settings.profilesHint') }}</p>
+        <label v-for="p in system.info.projectProfiles" :key="p.id" class="option" :data-test="`profile-${p.id}`">
+          <input type="checkbox" :checked="!settings.disabledProfiles.includes(p.id)" @change="settings.toggleProfile(p.id)" />
+          <span>{{ txt(p.label) }}</span>
+        </label>
+        <div class="divider" />
+      </template>
+      <label class="option" data-test="find-orphans">
+        <input type="checkbox" :checked="settings.findOrphans" @change="settings.setFindOrphans(checked($event))" />
+        <span>
+          <strong>{{ t('settings.orphans') }}</strong>
+          <span class="small muted" style="display: block">{{ t('settings.orphansHint') }}</span>
+        </span>
       </label>
     </section>
 

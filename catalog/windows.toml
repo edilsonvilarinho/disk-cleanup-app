@@ -12,6 +12,23 @@
 # Fora desta versão: tier B (desinstaladores), DISM, %TEMP% com filtro de
 # idade, Android SDK/NDK (devem sair via sdkmanager).
 
+# ------------------------------------------------------------------ sobras
+# Pastas de dados de apps onde procurar sobras de programas desinstalados.
+# Sobra = sem programa correspondente no registro de desinstalação, parada há
+# 90+ dias e fora de `ignore` (sistema e ferramentas que não se registram).
+[orphans]
+roots = ['%APPDATA%', '%LOCALAPPDATA%']
+ignore = [
+  "Microsoft", "Packages", "Temp", "Programs", "Comms", "ConnectedDevicesPlatform",
+  "D3DSCache", "CrashDumps", "Publishers", "PeerDistRepub", "IsolatedStorage",
+  "VirtualStore", "History", "ElevatedDiagnostics", "PlaceholderTileLogoFolder",
+  "SquirrelTemp", "Application Data", "fontconfig", "cache", "Downloaded Installations",
+  "npm", "npm-cache", "pnpm", "pnpm-cache", "pnpm-state", "Yarn", "pip", "pypoetry",
+  "uv", "nvm", "NuGet", "go-build", "gradle", "Docker", "Docker Desktop", "wsl",
+  "Sun", "Oracle", "Adobe", "Mozilla", "Google", "Apple", "Intel", "NVIDIA",
+  "NVIDIA Corporation", "AMD", "Realtek", "OneDrive", "Claude", "claude-cli-nodejs",
+]
+
 [[exclusion]]
 pattern = '%USERPROFILE%\.claude\projects'
 reason = "histórico de conversa do Claude Code"

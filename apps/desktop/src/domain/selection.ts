@@ -13,9 +13,9 @@ export function isSelectable(candidate: CandidateDto): boolean {
   return candidate.blocked === null
 }
 
-/** Arquivo grande e cópia duplicada são dados do usuário: só entram marcados um a um. */
+/** Arquivo grande, cópia duplicada e sobra de app são dados do usuário: só entram marcados um a um. */
 export function isUserData(c: CandidateDto): boolean {
-  return c.origin === 'file' || c.origin === 'duplicate'
+  return c.origin === 'file' || c.origin === 'duplicate' || c.origin === 'orphan'
 }
 
 /** Artefato de projeto só conta como parado com idade conhecida ≥ `minIdleDays`. */

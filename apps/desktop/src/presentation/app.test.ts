@@ -1011,6 +1011,7 @@ describe('Configurações', () => {
       minIdleDays: 90,
       userRules: [],
       disabledProfiles: [],
+      findOrphans: false,
     })
   })
 
@@ -1036,10 +1037,13 @@ describe('Configurações', () => {
     expect(saved.at(-1)!.userRules).toEqual([{ label: 'Teams', path: 'C:\\Users\\u\\Teams\\Cache', tier: 'A' }])
     await wrapper.get('[data-test="profile-node"] input').setValue(false)
     expect(saved.at(-1)!.disabledProfiles).toEqual(['node'])
+    expect((wrapper.get('[data-test="find-orphans"] input').element as HTMLInputElement).checked).toBe(false)
+    await wrapper.get('[data-test="find-orphans"] input').setValue(true)
+    expect(saved.at(-1)!.findOrphans).toBe(true)
     await router.push('/classificacao')
     await flushPromises()
     expect(gateway.classify).toHaveBeenCalledWith(
-      expect.objectContaining({ disabledProfiles: ['node'], userRules: [expect.objectContaining({ label: 'Teams' })] }),
+      expect.objectContaining({ disabledProfiles: ['node'], findOrphans: true, userRules: [expect.objectContaining({ label: 'Teams' })] }),
     )
     await router.push('/configuracoes')
     await flushPromises()

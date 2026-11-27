@@ -344,3 +344,58 @@ mod projects {
             .is_empty());
     }
 }
+
+mod orphans {
+    use std::fs;
+    use std::time::{Duration, SystemTime};
+
+    use disk_cleanup_application::OrphanFinder;
+    use disk_cleanup_infrastructure::RegistryOrphanFinder;
+
+    #[test]
+    fn lists_data_folders_with_idle_days_and_never_follows_links() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = SystemTime::now();
+        let old = dir.path().join("Postman");
+        fs::create_dir_all(old.join("logs")).unwrap();
+        let f = old.join("logs").join("a.log");
+        fs::write(&f, b"x").unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&f)
+            .unwrap()
+            .set_modified(now - Duration::from_secs(86_400 * 200))
+            .unwrap();
+        fs::create_dir_all(dir.path().join("Vazio")).unwrap();
+        fs::write(dir.path().join("solto.txt"), b"x").unwrap();
+        let finder = RegistryOrphanFinder::at(now);
+        let got: Vec<_> = finder
+            .folders(&dir.path().to_string_lossy())
+            .into_iter()
+            .map(|f| (f.name, f.idle_days))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                ("Postman".to_string(), Some(200)),
+                ("Vazio".to_string(), None)
+            ]
+        );
+        assert!(finder
+            .folders(&dir.path().join("nada").to_string_lossy())
+            .is_empty());
+        let _ = RegistryOrphanFinder::default();
+    }
+
+    /// No Windows o registro sempre tem programas; fora dele, nenhuma fonte.
+    #[test]
+    fn installed_apps_come_from_the_registry_only_on_windows() {
+        let apps = RegistryOrphanFinder::default().installed();
+        if cfg!(windows) {
+            let apps = apps.expect("registro sem programas");
+            assert!(apps.iter().all(|a| !a.name.is_empty()));
+        } else {
+            assert!(apps.is_none());
+        }
+    }
+}

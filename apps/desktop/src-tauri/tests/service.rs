@@ -67,6 +67,8 @@ impl CatalogRepository for Catalogue {
         Ok(Catalog {
             projects: Vec::new(),
             project_roots: Vec::new(),
+            orphan_roots: Vec::new(),
+            orphan_ignore: Vec::new(),
             rules: vec![
                 rule("npm", Tier::A, r"C:\L\npm-cache"),
                 rule("cuda", Tier::C, r"C:\cuda"),
@@ -322,6 +324,7 @@ fn every_skip_and_block_code_is_mapped() {
         projects: vec![],
         large_files: vec![],
         duplicates: vec![],
+        orphans: vec![],
         candidates: vec![],
         skipped: vec![
             SkippedRule {
@@ -521,6 +524,7 @@ fn user_rules_and_disabled_profiles_reach_the_classification() {
             rule("", r"D:\unity\Library", "C"),
         ],
         disabled_profiles: vec!["node".into()],
+        find_orphans: false,
     };
     let dto = classify_custom(
         &Session::default(),
@@ -529,6 +533,7 @@ fn user_rules_and_disabled_profiles_reach_the_classification() {
         &Inspector,
         ExclusionList::default(),
         &[],
+        None,
         None,
         &custom,
     )
@@ -565,6 +570,7 @@ fn user_rules_and_disabled_profiles_reach_the_classification() {
             &Inspector,
             ExclusionList::default(),
             &[],
+            None,
             None,
             &custom,
         )
@@ -678,4 +684,58 @@ fn duplicates_found_in_the_profile_become_duplicate_candidates() {
         .candidates
         .iter()
         .any(|c| c.id.contains(r"\a\x.zip")));
+}
+
+#[test]
+fn orphans_only_when_enabled_in_the_settings() {
+    use disk_cleanup_application::{FolderInfo, OrphanFinder};
+    use disk_cleanup_desktop_lib::{classify_custom, UserCustomizationDto};
+    use disk_cleanup_domain::InstalledApp;
+    struct One;
+    impl OrphanFinder for One {
+        fn installed(&self) -> Option<Vec<InstalledApp>> {
+            Some(Vec::new())
+        }
+        fn folders(&self, root: &str) -> Vec<FolderInfo> {
+            vec![FolderInfo {
+                name: "Postman".into(),
+                path: format!(r"{root}\Postman"),
+                idle_days: Some(300),
+            }]
+        }
+    }
+    struct WithRoots;
+    impl CatalogRepository for WithRoots {
+        fn load(&self) -> Result<Catalog, PortError> {
+            Ok(Catalog {
+                orphan_roots: vec![r"C:\Users\u\AppData\Roaming".into()],
+                ..Catalog::default()
+            })
+        }
+    }
+    let run = |on: bool| {
+        let custom = UserCustomizationDto {
+            find_orphans: on,
+            ..UserCustomizationDto::default()
+        };
+        classify_custom(
+            &Session::default(),
+            &WithRoots,
+            &env(),
+            &Inspector,
+            ExclusionList::default(),
+            &[],
+            None,
+            Some(&One),
+            &custom,
+        )
+        .unwrap()
+    };
+    assert!(run(false).candidates.is_empty());
+    let on = run(true);
+    let c = &on.candidates[0];
+    assert_eq!(
+        (c.origin, c.idle_days, c.tier.as_str()),
+        ("orphan", Some(300), "D")
+    );
 }

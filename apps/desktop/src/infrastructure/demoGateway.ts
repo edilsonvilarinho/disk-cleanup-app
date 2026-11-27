@@ -271,7 +271,17 @@ export class DemoGateway implements DiskCleanupGateway {
         }),
       ),
     )
-    this.custom = [...own, ...projects, ...dups]
+    const orphans = request.findOrphans
+      ? [
+          candidate('orphan:%APPDATA%\\Postman', text('Postman'), 'D', 1.1, '%APPDATA%\\Postman', {
+            origin: 'orphan',
+            idleDays: 520,
+            risk: 'low',
+            note: text('nenhum programa instalado com este nome · sem modificação há 520 dias', 'no installed program with this name · not modified for 520 days'),
+          }),
+        ]
+      : []
+    this.custom = [...own, ...projects, ...dups, ...orphans]
     const extra = this.extra.map((pattern) => ({ pattern, reason: text('excluída nas Configurações', 'excluded in Settings') }))
     const isExcluded = (c: CandidateDto) => this.extra.some((p) => c.target.toLowerCase().startsWith(p.toLowerCase()))
     const candidates = [...CANDIDATES, ...this.custom, ...FILES].filter((c) => !isExcluded(c))

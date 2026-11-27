@@ -107,6 +107,22 @@ pub trait ProjectFinder {
     fn find(&self, roots: &[String], profiles: &[crate::ProjectProfile]) -> Vec<FoundArtifact>;
 }
 
+/// Subpasta de uma pasta de dados de apps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FolderInfo {
+    pub name: String,
+    pub path: String,
+    /// Dias desde o arquivo mais recente dentro dela.
+    pub idle_days: Option<u32>,
+}
+
+/// Programas instalados e pastas de dados de apps. `installed` devolve `None`
+/// quando a plataforma não tem fonte confiável (aí não se procura sobra).
+pub trait OrphanFinder {
+    fn installed(&self) -> Option<Vec<disk_cleanup_domain::InstalledApp>>;
+    fn folders(&self, root: &str) -> Vec<FolderInfo>;
+}
+
 /// Executa as ações de um plano aprovado. `remove_path` e `trash_path` devolvem
 /// `PortError::NotFound` se o caminho não existe.
 pub trait ActionRunner {

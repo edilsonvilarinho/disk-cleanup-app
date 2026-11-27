@@ -42,8 +42,12 @@ export class TauriGateway implements DiskCleanupGateway {
   }
 
   classify(request: ClassifyRequest): Promise<ClassificationDto> {
-    const { extraExclusions, projectRoots, userRules, disabledProfiles } = request
-    return this.call<ClassificationDto>('classify', { extraExclusions, projectRoots, customization: { userRules, disabledProfiles } })
+    const { extraExclusions, projectRoots, userRules, disabledProfiles, findOrphans } = request
+    return this.call<ClassificationDto>('classify', {
+      extraExclusions,
+      projectRoots,
+      customization: { userRules, disabledProfiles, findOrphans },
+    })
   }
 
   findDuplicates(): Promise<DuplicatesDto> {

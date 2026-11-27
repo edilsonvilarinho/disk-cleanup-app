@@ -59,6 +59,17 @@ struct FileModel {
     project: Vec<ProjectModel>,
     #[serde(default)]
     project_root: Vec<RootModel>,
+    #[serde(default)]
+    orphans: OrphansModel,
+}
+
+/// Onde procurar sobras de apps e que nomes de pasta nunca são sobra.
+#[derive(Debug, Default, Deserialize)]
+struct OrphansModel {
+    #[serde(default)]
+    roots: Vec<String>,
+    #[serde(default)]
+    ignore: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -225,6 +236,8 @@ impl CatalogRepository for TomlCatalogRepository {
             exclusions,
             projects,
             project_roots: model.project_root.into_iter().map(|r| r.path).collect(),
+            orphan_roots: model.orphans.roots,
+            orphan_ignore: model.orphans.ignore,
         })
     }
 }

@@ -23,6 +23,8 @@ export interface Settings {
   userRules: UserRule[]
   /** Perfis de projeto desligados (`node`, `rust`...). */
   disabledProfiles: string[]
+  /** Procurar sobras de apps desinstalados (experimental). */
+  findOrphans: boolean
 }
 
 export const MIN_IDLE_OPTIONS = [30, 90, 180, 365] as const
@@ -39,6 +41,7 @@ export const DEFAULT_SETTINGS: Settings = {
   minIdleDays: 90,
   userRules: [],
   disabledProfiles: [],
+  findOrphans: false,
 }
 
 /** Porta de persistência das preferências. */
@@ -85,6 +88,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     minIdleDays: pick(r.minIdleDays, MIN_IDLE_OPTIONS, DEFAULT_SETTINGS.minIdleDays),
     userRules: rules(r.userRules),
     disabledProfiles: paths(r.disabledProfiles),
+    findOrphans: flag(r.findOrphans, DEFAULT_SETTINGS.findOrphans),
   }
 }
 

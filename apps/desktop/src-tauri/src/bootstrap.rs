@@ -14,8 +14,8 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 use disk_cleanup_application::Environment;
 use disk_cleanup_infrastructure::{
     catalog_for, exclusions_for, FsActionRunner, FsProjectFinder, JwalkFileWalker,
-    SkillPlanJsonCodec, SnapshotEnvironment, StdContentHasher, SysinfoVolumeInfo,
-    TomlCatalogRepository, WalkerPathInspector,
+    RegistryOrphanFinder, SkillPlanJsonCodec, SnapshotEnvironment, StdContentHasher,
+    SysinfoVolumeInfo, TomlCatalogRepository, WalkerPathInspector,
 };
 
 use crate::dto::{
@@ -141,6 +141,7 @@ async fn classify(
                 finder: &finder,
                 roots: &project_roots,
             }),
+            Some(&RegistryOrphanFinder::default()),
             &customization,
         )
     })

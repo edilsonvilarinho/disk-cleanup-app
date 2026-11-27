@@ -14,7 +14,7 @@ mod template;
 pub use catalog::{Catalog, CatalogExclusion, CatalogRule, ProjectProfile, RuleTarget};
 pub use classify::{
     effective_exclusions, ClassificationReport, ClassifyService, DuplicateInfo, LargeFileInfo,
-    ProjectInfo, SkipReason, SkippedRule,
+    OrphanInfo, ProjectInfo, SkipReason, SkippedRule,
 };
 pub use duplicates::{
     ContentHasher, DuplicateGroup, DuplicateReport, DuplicateService, DuplicateStats,
@@ -24,8 +24,8 @@ pub use execute::{protected_paths_guard, ExecuteService, PlannedStep};
 pub use plan::export_plan;
 pub use ports::{
     ActionRunner, CatalogRepository, CommandOutcome, Environment, ExecutionProgress, FileRecord,
-    FileWalker, FoundArtifact, PathInspector, PlanCodec, PortError, ProjectFinder, RemovalOutcome,
-    ScanProgress, VolumeInfo, WalkStats,
+    FileWalker, FolderInfo, FoundArtifact, OrphanFinder, PathInspector, PlanCodec, PortError,
+    ProjectFinder, RemovalOutcome, ScanProgress, VolumeInfo, WalkStats,
 };
 pub use survey::{SurveyReport, SurveyRequest, SurveyService};
 pub use template::expand_template;

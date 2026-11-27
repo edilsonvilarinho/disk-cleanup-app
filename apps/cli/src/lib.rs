@@ -15,8 +15,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use disk_cleanup_application::{
     protected_paths_guard, ActionRunner, CatalogRepository, ClassificationReport, ClassifyService,
-    Environment, ExecuteService, ExecutionProgress, FileWalker, PathInspector, PlanCodec,
-    ProjectFinder, ScanProgress, SurveyRequest, SurveyService, VolumeInfo,
+    Environment, ExecuteService, ExecutionProgress, FileWalker, OrphanFinder, PathInspector,
+    PlanCodec, ProjectFinder, ScanProgress, SurveyRequest, SurveyService, VolumeInfo,
 };
 use disk_cleanup_domain::{
     approve, ByteSize, Disposal, ExclusionList, ItemResult, ItemStatus, Plan, Tier,
@@ -40,6 +40,7 @@ pub struct Ports<'a> {
     pub catalog: &'a dyn CatalogRepository,
     pub baseline: ExclusionList,
     pub finder: &'a dyn ProjectFinder,
+    pub orphans: &'a dyn OrphanFinder,
     pub runner: &'a dyn ActionRunner,
     pub codec: &'a dyn PlanCodec,
     pub files: &'a dyn TextFiles,
@@ -68,7 +69,7 @@ impl<E: fmt::Display> From<E> for Failure {
 
 const USAGE: &str = "uso:
   disk-cleanup-cli survey [--root <raiz>] [--depth 1|2]
-  disk-cleanup-cli classify [--project-root <pasta>]... [--out plan.json]
+  disk-cleanup-cli classify [--project-root <pasta>]... [--orphans] [--out plan.json]
   disk-cleanup-cli execute --plan plan.json --approve <tiers> [--disposal A=trash,C=permanent] --yes [--dry-run]";
 
 /// Roda um comando e devolve o código de saída (0 ok, 1 erro, 2 uso).
@@ -209,15 +210,20 @@ fn survey(args: &[String], ports: &Ports<'_>, out: &mut dyn Write) -> Result<(),
 }
 
 fn classify(args: &[String], ports: &Ports<'_>, out: &mut dyn Write) -> Result<(), Failure> {
-    let opts = Options::parse(args, &[], &["project-root", "out"])?;
+    let opts = Options::parse(args, &["orphans"], &["project-root", "out"])?;
     let roots = opts.all("project-root");
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
-    let report = ClassifyService::new(ports.catalog, ports.env, ports.inspector)
+    let mut service = ClassifyService::new(ports.catalog, ports.env, ports.inspector)
         .with_projects(ports.finder, &roots)
-        .with_large_files(&[], now)
-        .run(ports.baseline.clone(), &[])?;
+        .with_large_files(&[], now);
+    // Sobras de apps: heurística com falsos positivos (saves de jogos, apps
+    // que não se registram). Só com --orphans, e nunca no plano padrão.
+    if opts.flag("orphans") {
+        service = service.with_orphans(ports.orphans);
+    }
+    let report = service.run(ports.baseline.clone(), &[])?;
     for tier in Tier::ALL {
         let items: Vec<_> = report
             .candidates
@@ -277,7 +283,10 @@ fn default_selection(report: &ClassificationReport) -> Vec<String> {
         .candidates
         .iter()
         .filter(|c| c.availability.is_selectable())
+        // Dados do usuário só entram marcados um a um: nunca no plano padrão.
         .filter(|c| !report.large_files.iter().any(|f| f.id == c.id))
+        .filter(|c| !report.duplicates.iter().any(|d| d.id == c.id))
+        .filter(|c| !report.orphans.iter().any(|o| o.id == c.id))
         .filter(|c| match report.projects.iter().find(|p| p.id == c.id) {
             Some(p) => p.idle_days.is_some_and(|d| d >= MIN_IDLE_DAYS),
             None => true,

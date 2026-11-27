@@ -15,6 +15,7 @@ describe('TauriGateway', () => {
       projectRoots: ['D:\\dev'],
       userRules: [{ label: 'T', path: 'C:\\t', tier: 'A' }],
       disabledProfiles: ['node'],
+      findOrphans: true,
     })
     await gateway.checkRule(['C:\\Projetos'], 'C:\\x')
     await gateway.findDuplicates()
@@ -22,7 +23,7 @@ describe('TauriGateway', () => {
     expect(invoke).toHaveBeenCalledWith('classify', {
       extraExclusions: ['C:\\Projetos'],
       projectRoots: ['D:\\dev'],
-      customization: { userRules: [{ label: 'T', path: 'C:\\t', tier: 'A' }], disabledProfiles: ['node'] },
+      customization: { userRules: [{ label: 'T', path: 'C:\\t', tier: 'A' }], disabledProfiles: ['node'], findOrphans: true },
     })
     expect(invoke).toHaveBeenCalledWith('check_rule', { extraExclusions: ['C:\\Projetos'], path: 'C:\\x' })
     expect(invoke).toHaveBeenCalledWith('find_duplicates')
@@ -175,6 +176,9 @@ describe('DemoGateway · regras próprias e perfis', () => {
     expect(all.candidates.filter((c) => c.origin === 'project').length).toBeGreaterThan(0)
     const plan = await gateway.buildPlan('C:', ['user:D:\\unity\\Library'])
     expect(plan.itemCount).toBe(1)
+    expect(all.candidates.some((c) => c.origin === 'orphan')).toBe(false)
+    const withOrphans = await gateway.classify({ ...EMPTY_CLASSIFY_REQUEST, findOrphans: true })
+    expect(withOrphans.candidates.filter((c) => c.origin === 'orphan')).toHaveLength(1)
     const dups = await gateway.findDuplicates()
     expect(dups.groups.length).toBe(2)
     const after = await gateway.classify(EMPTY_CLASSIFY_REQUEST)
@@ -205,6 +209,7 @@ describe('browserTheme', () => {
       minIdleDays: 90 as const,
       userRules: [{ label: 'x', path: '/x/y/z', tier: 'C' as const }],
       disabledProfiles: ['rust'],
+      findOrphans: false,
     }
     localStorageSettingsStorage.save(settings)
     expect(localStorageSettingsStorage.load()).toEqual(settings)

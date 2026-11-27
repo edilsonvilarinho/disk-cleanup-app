@@ -60,6 +60,8 @@ pub struct UserRuleDto {
 pub struct UserCustomizationDto {
     pub user_rules: Vec<UserRuleDto>,
     pub disabled_profiles: Vec<String>,
+    /// Procurar sobras de apps desinstalados (desligado por padrão).
+    pub find_orphans: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -390,6 +392,9 @@ impl From<&ClassificationReport> for ClassificationDto {
                         dto.idle_days = f.age_days;
                     } else if r.duplicates.iter().any(|d| d.id == c.id) {
                         dto.origin = "duplicate";
+                    } else if let Some(o) = r.orphans.iter().find(|o| o.id == c.id) {
+                        dto.origin = "orphan";
+                        dto.idle_days = o.idle_days;
                     }
                     dto
                 })
