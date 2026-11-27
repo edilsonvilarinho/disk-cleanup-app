@@ -70,6 +70,14 @@ export interface SurveyDto {
   unreadable: number
   unattributedBytes: number
   elapsedMs: number
+  /** Mapa do volume por espaço alocado; `name` vazio = "outros". */
+  tree: TreeNodeDto
+}
+
+export interface TreeNodeDto {
+  name: string
+  bytes: number
+  children: TreeNodeDto[]
 }
 
 export interface ScanProgressDto {

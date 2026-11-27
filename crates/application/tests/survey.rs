@@ -174,3 +174,22 @@ fn survey_keeps_the_largest_files_inside_the_profile_only() {
     .unwrap();
     assert!(report.largest.is_empty());
 }
+
+#[test]
+fn survey_builds_the_volume_map_by_allocated_space() {
+    let report = SurveyService::new(
+        &walker(),
+        &volume(10_000, 1_000),
+        &RecordingProgress::default(),
+    )
+    .run(&request(2))
+    .unwrap();
+    let attributed: u64 = report.roots.iter().map(|e| e.allocated.bytes()).sum();
+    assert_eq!(report.tree.size.bytes(), attributed);
+    assert!(!report.tree.children.is_empty());
+    assert!(report
+        .tree
+        .children
+        .windows(2)
+        .all(|w| w[0].size >= w[1].size || w[1].name.is_empty()));
+}

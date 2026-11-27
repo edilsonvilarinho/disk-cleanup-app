@@ -1,6 +1,6 @@
 use disk_cleanup_domain::{
-    path_components, AggregateEntry, ByteSize, FocusRoot, LargeFile, SizeAggregator, TopFiles,
-    VolumeUsage,
+    path_components, AggregateEntry, ByteSize, FocusRoot, LargeFile, SizeAggregator, SizeTree,
+    TopFiles, TreeNode, VolumeUsage,
 };
 
 use crate::{AppError, FileWalker, ScanProgress, VolumeInfo};
@@ -12,6 +12,9 @@ const PROFILE: &str = "profile";
 /// Arquivos grandes: só dentro do perfil, a partir de 512 MiB, os 30 maiores.
 const LARGE_FILE_MIN: ByteSize = ByteSize::from_bytes(512 * 1024 * 1024);
 const LARGE_FILE_LIMIT: usize = 30;
+/// Mapa do volume: 4 níveis de pasta, 10 maiores filhos por nó (≤ 10⁴ nós).
+const TREE_DEPTH: usize = 4;
+const TREE_KEEP: usize = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SurveyRequest {
@@ -38,6 +41,8 @@ pub struct SurveyReport {
     pub unattributed: ByteSize,
     /// Maiores arquivos do perfil do usuário, por espaço alocado.
     pub largest: Vec<LargeFile>,
+    /// Mapa do volume por espaço alocado (treemap).
+    pub tree: TreeNode,
 }
 
 /// Levantamento somente leitura: uma única varredura alimenta todas as visões.
@@ -80,6 +85,7 @@ impl<'a> SurveyService<'a> {
         let mut count = 0u64;
         let mut logical = ByteSize::ZERO;
         let mut top = TopFiles::new(LARGE_FILE_LIMIT, LARGE_FILE_MIN);
+        let mut tree = SizeTree::new(&request.volume_root, TREE_DEPTH, TREE_KEEP);
         let profile: Option<Vec<String>> = request.profile.as_deref().map(|p| {
             path_components(p)
                 .iter()
@@ -88,6 +94,7 @@ impl<'a> SurveyService<'a> {
         });
         let stats = self.walker.walk(&request.volume_root, &mut |file| {
             aggregator.add_file(&file.components, file.logical, file.allocated);
+            tree.add_file(&file.components, file.allocated);
             if let Some(profile) = &profile {
                 let inside = file.components.len() > profile.len()
                     && profile
@@ -133,6 +140,7 @@ impl<'a> SurveyService<'a> {
             files: stats.files,
             unreadable: stats.unreadable,
             largest: top.into_sorted(),
+            tree: tree.into_root(),
         })
     }
 

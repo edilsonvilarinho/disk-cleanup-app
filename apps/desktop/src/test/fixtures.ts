@@ -55,6 +55,21 @@ export const survey: SurveyDto = {
   unreadable: 12,
   unattributedBytes: 56.4 * GIB,
   elapsedMs: 222_000,
+  tree: {
+    name: 'C:\\',
+    bytes: 451.5 * GIB,
+    children: [
+      {
+        name: 'Users',
+        bytes: 412.6 * GIB,
+        children: [
+          { name: 'u', bytes: 400 * GIB, children: [] },
+          { name: '', bytes: 12.6 * GIB, children: [] },
+        ],
+      },
+      { name: 'Windows', bytes: 38.9 * GIB, children: [] },
+    ],
+  },
 }
 
 export const candidate = (

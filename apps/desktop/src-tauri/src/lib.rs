@@ -13,7 +13,7 @@ pub use dto::{
     ApprovalDto, BlockDto, CandidateDto, CauseDto, ClassificationDto, ExclusionDto,
     ExecutionEventDto, ItemResultDto, PlanDto, PlanTierDto, ProfileDto, ReportDto, RuleCheckDto,
     SkippedDto, StepDto, SurveyDto, SurveyRequestDto, SystemInfoDto, TextDto, TierRunDto,
-    UsageEntryDto, UserCustomizationDto, UserRuleDto, VolumeDto,
+    TreeNodeDto, UsageEntryDto, UserCustomizationDto, UserRuleDto, VolumeDto,
 };
 pub use error::ErrorDto;
 pub use export::{

@@ -380,6 +380,35 @@ describe('Projetos na Classificação', () => {
   })
 })
 
+describe('Mapa do volume', () => {
+  it('entra na pasta, volta pela trilha e não abre "outros" nem folha', async () => {
+    const { wrapper } = await mountApp('/')
+    await wrapper.get('[data-test="start-survey"]').trigger('click')
+    await flushPromises()
+    const cells = () => wrapper.findAll('[data-test="tm-cell"]')
+    expect(cells().map((c) => c.attributes('aria-label'))).toEqual(['Users · 412,6 GB', 'Windows · 38,9 GB'])
+    await cells()[1]!.trigger('click')
+    expect(cells()).toHaveLength(2)
+    await cells()[0]!.trigger('click')
+    expect(wrapper.get('[data-test="crumb-1"]').text()).toBe('Users')
+    expect(cells().map((c) => c.attributes('aria-label'))).toEqual(['u · 400,0 GB', 'outros · 12,6 GB'])
+    await cells()[1]!.trigger('click')
+    expect(wrapper.find('[data-test="crumb-2"]').exists()).toBe(false)
+    await cells()[0]!.trigger('click')
+    expect(wrapper.find('[data-test="crumb-2"]').exists()).toBe(false)
+    await wrapper.get('[data-test="crumb-0"]').trigger('click')
+    expect(cells()).toHaveLength(2)
+  })
+
+  it('volume sem subpastas medidas explica em vez de desenhar vazio', async () => {
+    const runSurvey = vi.fn(async () => ({ ...survey, tree: { name: 'C:\\', bytes: 1, children: [] } }))
+    const { wrapper } = await mountApp('/', fakeGateway({ runSurvey }))
+    await wrapper.get('[data-test="start-survey"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="treemap-empty"]').text()).toContain('Sem subpastas')
+  })
+})
+
 describe('Arquivos grandes na Classificação', () => {
   it('mostra a idade, avisa que nada vem marcado e deixa marcar um a um', async () => {
     const iso = candidate('file:C:\\Users\\u\\Downloads\\ubuntu.iso', 'D', 4.9, {

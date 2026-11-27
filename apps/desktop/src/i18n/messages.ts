@@ -30,6 +30,11 @@ export const pt = {
   health: { healthy: 'Saudável', warning: 'Atenção', critical: 'Crítico' },
   common: { copied: 'Copiado', copyFailed: 'Falha ao copiar: {detail}', retry: 'Tentar de novo', items: '{n} itens', item: '{n} item' },
   survey: {
+    map: 'Mapa do volume',
+    mapHint: 'área = espaço alocado · clique numa pasta para entrar',
+    mapPath: 'Caminho no mapa',
+    mapEmpty: 'Sem subpastas medidas aqui.',
+    others: 'outros',
     eyebrow: 'Etapa 1 de 5 · somente leitura',
     title: 'Varredura do volume',
     depth: 'Profundidade',
@@ -460,6 +465,11 @@ export const en: Messages = {
   health: { healthy: 'Healthy', warning: 'Warning', critical: 'Critical' },
   common: { copied: 'Copied', copyFailed: 'Copy failed: {detail}', retry: 'Try again', items: '{n} items', item: '{n} item' },
   survey: {
+    map: 'Volume map',
+    mapHint: 'area = allocated space · click a folder to open it',
+    mapPath: 'Path in the map',
+    mapEmpty: 'No measured subfolders here.',
+    others: 'others',
     eyebrow: 'Step 1 of 5 · read-only',
     title: 'Volume survey',
     depth: 'Depth',

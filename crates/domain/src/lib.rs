@@ -16,6 +16,7 @@ mod size;
 mod text;
 mod tier;
 mod top_files;
+mod tree;
 mod volume;
 
 pub use aggregation::{AggregateEntry, FocusRoot, SizeAggregator};
@@ -33,4 +34,5 @@ pub use size::ByteSize;
 pub use text::LocalizedText;
 pub use tier::Tier;
 pub use top_files::{LargeFile, TopFiles};
+pub use tree::{SizeTree, TreeNode};
 pub use volume::{VolumeHealth, VolumeUsage};

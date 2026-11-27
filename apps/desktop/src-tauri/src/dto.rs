@@ -151,6 +151,25 @@ pub struct SurveyDto {
     pub unreadable: u64,
     pub unattributed_bytes: u64,
     pub elapsed_ms: u64,
+    /// Mapa do volume (treemap); `name` vazio = "outros".
+    pub tree: TreeNodeDto,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TreeNodeDto {
+    pub name: String,
+    pub bytes: u64,
+    pub children: Vec<TreeNodeDto>,
+}
+
+impl From<&disk_cleanup_domain::TreeNode> for TreeNodeDto {
+    fn from(n: &disk_cleanup_domain::TreeNode) -> Self {
+        Self {
+            name: n.name.clone(),
+            bytes: n.size.bytes(),
+            children: n.children.iter().map(TreeNodeDto::from).collect(),
+        }
+    }
 }
 
 impl SurveyDto {
@@ -165,6 +184,7 @@ impl SurveyDto {
             unreadable: report.unreadable,
             unattributed_bytes: report.unattributed.bytes(),
             elapsed_ms,
+            tree: TreeNodeDto::from(&report.tree),
         }
     }
 }

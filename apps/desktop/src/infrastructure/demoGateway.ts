@@ -23,6 +23,7 @@ import type {
   TextDto,
   Tier,
   TierRunDto,
+  TreeNodeDto,
   UsageEntryDto,
 } from '../domain/models'
 import { TIERS } from '../domain/selection'
@@ -72,6 +73,28 @@ const project = (name: string, artifact: string, size: number, idleDays: number,
     project: `D:\\dev\\${name}`,
     idleDays,
   })
+
+const node = (name: string, size: number, children: TreeNodeDto[] = []): TreeNodeDto => ({ name, bytes: gb(size), children })
+
+/** Mapa do volume de exemplo (mesmos totais das raízes). */
+const DEMO_TREE: TreeNodeDto = node('C:\\', 822.3, [
+  node('Users', 412.6, [
+    node('demo', 404, [
+      node('AppData', 186.4, [node('Local', 151.2), node('Roaming', 35.2)]),
+      node('OneDrive - Empresa', 9.1),
+      node('workspace', 44.7, [node('api-pagamentos', 9.4), node('loja-vue', 6.1), node('', 29.2)]),
+      node('Downloads', 38.5),
+      node('.gradle', 14.2),
+      node('', 111.1),
+    ]),
+    node('Public', 8.6),
+  ]),
+  node('Program Files', 158.3),
+  node('ProgramData', 96.4),
+  node('Program Files (x86)', 92.1),
+  node('Windows', 38.9, [node('WinSxS', 14.8), node('System32', 12.1), node('', 12)]),
+  node('pagefile.sys', 24),
+])
 
 const PROJECTS: CandidateDto[] = [
   project('api-pagamentos', 'target', 6.8, 203, text('cargo build recria', 'cargo build recreates it')),
@@ -202,6 +225,7 @@ export class DemoGateway implements DiskCleanupGateway {
       unreadable: 37,
       unattributedBytes: gb(56.4),
       elapsedMs: this.delayMs * SCAN_STEPS.length,
+      tree: DEMO_TREE,
     }
   }
 

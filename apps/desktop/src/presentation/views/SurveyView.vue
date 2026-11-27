@@ -8,6 +8,7 @@ import type { Health, UsageEntryDto } from '../../domain/models'
 import { clock, currentRate, pushSample, rates, sparkPath, type ProgressSample } from '../../domain/progress'
 import BarList from '../components/BarList.vue'
 import KpiCard from '../components/KpiCard.vue'
+import TreeMap from '../components/TreeMap.vue'
 import { useI18n } from '../i18n'
 
 const system = useSystemStore()
@@ -171,6 +172,11 @@ function start() {
         <BarList :items="profileBars" />
       </section>
     </div>
+
+    <section v-if="report.tree" class="card" data-test="volume-map">
+      <div class="card-head"><h2>{{ t('survey.map') }}</h2><span class="small muted">{{ t('survey.mapHint') }}</span></div>
+      <TreeMap :tree="report.tree" />
+    </section>
 
     <section v-if="report.cloud.length" class="card" data-test="cloud">
       <h2>{{ t('survey.cloudTitle') }}</h2>
