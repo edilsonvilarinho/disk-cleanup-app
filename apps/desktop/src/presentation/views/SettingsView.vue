@@ -5,13 +5,15 @@ import type { ScanSchedule } from '../../domain/monitor'
 import { useSettingsStore } from '../../application/stores/settings'
 import { useSystemStore } from '../../application/stores/system'
 import type { RuleCheckDto, UserRule } from '../../domain/models'
+import { useReleaseNotesStore } from '../../application/stores/releaseNotes'
 import { useUpdateStore } from '../../application/stores/update'
 import type { LanguagePreference } from '../../i18n/i18n'
 import { useI18n } from '../i18n'
 
 const settings = useSettingsStore()
 const update = useUpdateStore()
-const { t, txt, err, systemLocale } = useI18n()
+const releaseNotes = useReleaseNotesStore()
+const { t, txt, err, systemLocale, day } = useI18n()
 const system = useSystemStore()
 const ruleLabel = ref('')
 const rulePath = ref('')
@@ -261,6 +263,26 @@ function addRoot() {
           <span v-if="updateStatus" :key="update.status" class="small" role="status" data-test="update-status">{{ updateStatus }}</span>
         </Transition>
       </div>
+      <label class="option">
+        <input type="checkbox" data-test="release-notes" :checked="settings.releaseNotes" @change="settings.setReleaseNotes(checked($event))" />
+        <span style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-weight: 600">{{ t('releaseNotes.showAfterUpdate') }}</span>
+          <span class="small muted">{{ t('releaseNotes.showAfterUpdateHint') }}</span>
+        </span>
+      </label>
+      <span class="label-caps">{{ t('releaseNotes.history') }}</span>
+      <ul class="rn-versions" data-test="rn-versions">
+        <li v-for="n in releaseNotes.catalog" :key="n.version">
+          <span class="gi-name">
+            <span>
+              <span class="ver-chip mono">v{{ n.version }}</span>
+              <span v-if="n.version === releaseNotes.installed" class="pill ok"><span class="dot" />{{ t('releaseNotes.installed') }}</span>
+            </span>
+            <span class="small muted">{{ day(n.date) }} · {{ txt(n.headline) }}</span>
+          </span>
+          <button type="button" class="btn" :data-test="`rn-see-${n.version}`" @click="releaseNotes.open(n.version)">{{ t('releaseNotes.seeNotes') }}</button>
+        </li>
+      </ul>
     </section>
   </div>
 </template>

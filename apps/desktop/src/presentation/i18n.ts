@@ -1,6 +1,6 @@
 import { computed, inject, type InjectionKey } from 'vue'
 import { useSettingsStore } from '../application/stores/settings'
-import { formatCount, formatDate, formatDuration, formatGb, formatPercent, formatSignedGb } from '../domain/format'
+import { formatCount, formatDate, formatDay, formatDuration, formatGb, formatPercent, formatSignedGb } from '../domain/format'
 import type { TextDto } from '../domain/models'
 import {
   intlLocale,
@@ -39,5 +39,6 @@ export function useI18n() {
     count: (value: number) => formatCount(value, intl.value),
     duration: (ms: number) => formatDuration(ms, intl.value),
     date: (iso: string, withTime = true) => formatDate(iso, withTime, intl.value),
+    day: (day: string) => formatDay(day, intl.value),
   }
 }

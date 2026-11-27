@@ -79,6 +79,11 @@ jobs:
             exit 1
           fi
           version="${tag#v}"
+          # Notas de versão empacotadas: quem atualiza vê o que mudou (pt/en).
+          if ! grep -Fq "version: '$version'," apps/desktop/src/releaseNotes/catalog.ts; then
+            echo "::error::apps/desktop/src/releaseNotes/catalog.ts não tem notas para $version (ver docs/release.md)"
+            exit 1
+          fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"

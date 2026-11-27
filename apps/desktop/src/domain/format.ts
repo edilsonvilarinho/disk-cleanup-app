@@ -42,6 +42,14 @@ export function formatSignedGb(bytes: number, digits = 1, locale = DEFAULT_LOCAL
 }
 
 /** Data local curta (`23/11`) ou completa com hora (`23/11/2026 14:48`). */
+/** Data de calendário `AAAA-MM-DD` (sem hora): montada no fuso local para não voltar um dia. */
+export function formatDay(day: string, locale = DEFAULT_LOCALE): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day)
+  if (!m) return day
+  const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric' }).format(date)
+}
+
 export function formatDate(iso: string, withTime = true, locale = DEFAULT_LOCALE): string {
   const options: Intl.DateTimeFormatOptions = withTime
     ? { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }

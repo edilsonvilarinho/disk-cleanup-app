@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { barWidth, formatCount, formatDuration, formatGb, formatPercent, formatSignedGb, GIB } from './format'
+import { barWidth, formatCount, formatDay, formatDuration, formatGb, formatPercent, formatSignedGb, GIB } from './format'
 
 describe('format', () => {
   it('formata GB em binário (1024³) com vírgula decimal', () => {
@@ -36,5 +36,13 @@ describe('format', () => {
     expect(barWidth(200, 200)).toBe('100%')
     expect(barWidth(5, 0)).toBe('0%')
     expect(barWidth(300, 200)).toBe('100%')
+  })
+})
+
+describe('formatDay', () => {
+  it('data de calendário (AAAA-MM-DD) no dia certo em qualquer fuso, com ano', () => {
+    expect(formatDay('2026-11-27', 'pt-BR')).toBe('27 de nov. de 2026')
+    expect(formatDay('2026-01-01', 'en-US')).toBe('Jan 1, 2026')
+    expect(formatDay('2026-1-1', 'pt-BR')).toBe('2026-1-1')
   })
 })

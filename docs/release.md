@@ -19,6 +19,41 @@ machine. Local work is tests and coverage only.
 - **Beta** = GitHub prerelease, never `latest`: whoever reads `/releases/latest` never sees it.
 - **Dry run**: `gh workflow run release.yml -f tag=vX.Y.Z -f publish=false` builds and verifies without
   publishing.
+- **In-app release notes are mandatory**: `verify-version` fails when
+  `apps/desktop/src/releaseNotes/catalog.ts` has no entry for the tag's version. See below.
+
+## In-app release notes
+
+After an update the app shows a non-blocking notice and a drawer with what changed (design:
+`design/README.md` → *Notas de versão*). The content ships **inside the package** — the CSP allows no
+external domain and the app works offline — so it must land on `main` (normal PR, green CI) **before**
+the tag:
+
+1. Add an entry at the **top** of `RELEASE_NOTES` in `apps/desktop/src/releaseNotes/catalog.ts`:
+   `version` (exactly the tag without `v`), `date` (`YYYY-MM-DD`), `headline`, `summary` and `items`.
+   Every text is `{pt, en}` (`TextDto`: a missing language does not compile). Item `kind`:
+   `new` | `fixed` (optionally `fix` with target, detail, before and after) | `known`. `route` only for
+   always-reachable screens (`survey`, `history`, `settings`). Write for the user, not the commit log.
+   A stable release that promotes a beta series still needs its own entry.
+2. GIFs (optional, newest version only): run the demo build and record the `rn-*` scenarios
+   (add new ones in `scripts/record-readme-media.mjs` for new features):
+   ```bash
+   cd apps/desktop
+   pnpm exec vite build && pnpm exec vite preview --port 4173 &
+   node scripts/record-readme-media.mjs http://localhost:4173 src/releaseNotes/media/X.Y.Z rn-...
+   ```
+   Import each file in `catalog.ts` and set `media: { src, alt: {pt, en} }`. **Delete the previous
+   version's `media/` folder and its `media` fields**: `catalog.test.ts` allows only the newest
+   version's folder, at most 4 MB, with no unused file.
+3. `pnpm coverage` (the catalog test checks order, dates, ids, both languages and the media budget).
+
+Who sees what: a new install records the version and shows nothing; an update shows every catalog
+entry after the last version seen (skipped versions included); an install that predates the feature
+but has saved settings or scan history shows only the installed version. Settings → Updates →
+*Show what's new after updating* turns it off; the version history there keeps every entry.
+
+The GitHub release body still comes from the commit list (`Generate release notes`); generating it
+from the catalog is not done yet.
 
 ## Artifacts
 

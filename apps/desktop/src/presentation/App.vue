@@ -3,9 +3,12 @@ import { useMonitor } from './monitor'
 import { onMounted, watch } from 'vue'
 import { useSettingsStore } from '../application/stores/settings'
 import { useSystemStore } from '../application/stores/system'
+import { useReleaseNotesStore } from '../application/stores/releaseNotes'
 import { useUpdateStore } from '../application/stores/update'
 import AppSidebar from './components/AppSidebar.vue'
 import FlowTabs from './components/FlowTabs.vue'
+import ReleaseNotesDrawer from './components/ReleaseNotesDrawer.vue'
+import ReleaseNotesNotice from './components/ReleaseNotesNotice.vue'
 import StatusBar from './components/StatusBar.vue'
 import { useI18n } from './i18n'
 import { isFlowStep } from './router'
@@ -14,11 +17,14 @@ import { useTheme } from './theme'
 const system = useSystemStore()
 const settings = useSettingsStore()
 const update = useUpdateStore()
+const releaseNotes = useReleaseNotesStore()
 const theme = useTheme()
 const { locale } = useI18n()
 
 watch(() => settings.theme, (mode) => theme.setMode(mode), { immediate: true })
 watch(locale, (value) => document.documentElement.setAttribute('lang', value === 'pt' ? 'pt-BR' : 'en'), { immediate: true })
+// Notas de versão: decididas quando a versão instalada chega (uma vez por sessão).
+watch(() => update.version, (version) => releaseNotes.startup(version))
 onMounted(() => {
   system.load()
   update.startup(settings.autoUpdate, settings.betaUpdates)
@@ -46,4 +52,6 @@ useMonitor()
     </main>
   </div>
   <StatusBar />
+  <ReleaseNotesNotice />
+  <ReleaseNotesDrawer />
 </template>

@@ -40,6 +40,8 @@ describe('sanitizeSettings', () => {
       backgroundEnabled: false,
       lowSpaceGb: 15,
       schedule: 'off',
+      releaseNotes: true,
+      seenVersion: null,
     })
     expect(
       sanitizeSettings({
@@ -64,6 +66,8 @@ describe('sanitizeSettings', () => {
         backgroundEnabled: false,
         lowSpaceGb: 15,
         schedule: 'off',
+        releaseNotes: false,
+        seenVersion: '0.1.0-beta.7',
       }),
     ).toEqual({
       language: 'en',
@@ -83,9 +87,11 @@ describe('sanitizeSettings', () => {
       backgroundEnabled: false,
       lowSpaceGb: 15,
       schedule: 'off',
+      releaseNotes: false,
+      seenVersion: '0.1.0-beta.7',
     })
     expect(
-      sanitizeSettings({ language: 'fr', theme: 'roxo', extraExclusions: 'x', defaultDepth: 7, autoUpdate: 'sim', betaUpdates: 1, projectRoots: 'x', minIdleDays: 45 }),
+      sanitizeSettings({ language: 'fr', theme: 'roxo', extraExclusions: 'x', defaultDepth: 7, autoUpdate: 'sim', betaUpdates: 1, projectRoots: 'x', minIdleDays: 45, releaseNotes: 'x', seenVersion: 'v1' }),
     ).toEqual(DEFAULT_SETTINGS)
   })
 })
@@ -103,6 +109,8 @@ describe('settings store', () => {
     store.setAutoUpdate(false)
     store.setBetaUpdates(true)
     store.setMinIdleDays(365)
+    store.setReleaseNotes(false)
+    store.setSeenVersion('0.1.0-beta.7')
     expect(storage.saved.at(-1)).toEqual({
       language: 'en',
       theme: 'dark',
@@ -118,7 +126,19 @@ describe('settings store', () => {
       backgroundEnabled: false,
       lowSpaceGb: 15,
       schedule: 'off',
+      releaseNotes: false,
+      seenVersion: '0.1.0-beta.7',
     })
+  })
+
+  it('versão vista só grava quando muda', () => {
+    const storage = memory({ seenVersion: '0.1.0' })
+    const store = setup(storage)
+    store.load()
+    store.setSeenVersion('0.1.0')
+    expect(storage.saved).toHaveLength(0)
+    store.setSeenVersion('0.2.0')
+    expect(storage.saved).toHaveLength(1)
   })
 
   it('exclusões extras: aparam espaço, ignoram vazia e repetida (sem diferenciar maiúsculas) e podem ser removidas', () => {
