@@ -24,7 +24,8 @@
     ['11-extra-vidro.html', 'Extra · Vidro e aurora'],
     ['12-extra-ilha.html', 'Extra · Ilha flutuante'],
     ['estados.html', 'Estados em andamento'],
-    ['08b-fluxo-otimizado.html', '08b · Barra de status + fluxo otimizado']
+    ['08b-fluxo-otimizado.html', '08b · Barra de status + fluxo otimizado'],
+    ['13-funcionalidades.html', '13 · Novas funcionalidades']
   ];
 
   /* ================= Ícones ================= */
