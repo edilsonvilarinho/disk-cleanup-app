@@ -57,6 +57,7 @@ const candidate = (
   risk: tier === 'C' ? 'redownload' : 'none',
   note: text(''),
   blocked: null,
+  origin: 'rule',
   project: null,
   idleDays: null,
   ...extra,
@@ -66,6 +67,7 @@ const candidate = (
 const project = (name: string, artifact: string, size: number, idleDays: number, note: TextDto): CandidateDto =>
   candidate(`project:D:\\dev\\${name}\\${artifact}`, text(`${name} · ${artifact}`), 'C', size, `D:\\dev\\${name}\\${artifact}`, {
     note,
+    origin: 'project',
     project: `D:\\dev\\${name}`,
     idleDays,
   })
@@ -75,6 +77,16 @@ const PROJECTS: CandidateDto[] = [
   project('ml-notebook', '.venv', 3.4, 131, text('recriar o ambiente (pip/uv) antes de usar', 'recreate the environment (pip/uv) before use')),
   project('loja-vue', 'node_modules', 1.9, 412, text('npm/pnpm/yarn install recria', 'npm/pnpm/yarn install recreates it')),
   project('site-pessoal', 'node_modules', 0.6, 12, text('npm/pnpm/yarn install recria', 'npm/pnpm/yarn install recreates it')),
+]
+
+/** Arquivo grande do perfil (tier D), nunca pré-marcado. */
+const file = (path: string, size: number, idleDays: number): CandidateDto =>
+  candidate(`file:${path}`, text(path.split('\\').pop()!), 'D', size, path, { origin: 'file', idleDays, risk: 'low' })
+
+const FILES: CandidateDto[] = [
+  file('%USERPROFILE%\\Downloads\\Win11_24H2_x64.iso', 5.8, 150),
+  file('%USERPROFILE%\\Downloads\\ubuntu-22.04.4-desktop-amd64.iso', 4.9, 420),
+  file('%USERPROFILE%\\Videos\\gravacao-reuniao-2025-03.mp4', 3.6, 240),
 ]
 
 const CANDIDATES: CandidateDto[] = [
@@ -171,7 +183,7 @@ export class DemoGateway implements DiskCleanupGateway {
     this.extra = [...extraExclusions]
     const extra = this.extra.map((pattern) => ({ pattern, reason: text('excluída nas Configurações', 'excluded in Settings') }))
     const isExcluded = (c: CandidateDto) => this.extra.some((p) => c.target.toLowerCase().startsWith(p.toLowerCase()))
-    const candidates = [...CANDIDATES, ...PROJECTS].filter((c) => !isExcluded(c))
+    const candidates = [...CANDIDATES, ...PROJECTS, ...FILES].filter((c) => !isExcluded(c))
     return {
       candidates,
       skipped: [
@@ -184,7 +196,7 @@ export class DemoGateway implements DiskCleanupGateway {
   }
 
   async buildPlan(volumeName: string, selected: string[]): Promise<PlanDto> {
-    const items = [...CANDIDATES, ...PROJECTS].filter((c) => selected.includes(c.id))
+    const items = [...CANDIDATES, ...PROJECTS, ...FILES].filter((c) => selected.includes(c.id))
     if (items.length === 0) throw fail('plan_empty')
     this.planned = items
     this.approved = []

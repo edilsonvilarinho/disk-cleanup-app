@@ -1,8 +1,8 @@
 use std::fmt;
 
 use disk_cleanup_domain::{
-    path_components, Action, Availability, ByteSize, Candidate, ExclusionList, LocalizedText, Risk,
-    Tier, ToolchainGuard,
+    path_components, Action, Availability, ByteSize, Candidate, ExclusionList, LargeFile,
+    LocalizedText, Risk, Tier, ToolchainGuard,
 };
 
 use crate::{
@@ -48,6 +48,15 @@ pub struct ProjectInfo {
     pub idle_days: Option<u32>,
 }
 
+/// Dados de um candidato que veio dos arquivos grandes da varredura.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LargeFileInfo {
+    /// `id` do candidato.
+    pub id: String,
+    /// Dias desde a última modificação.
+    pub age_days: Option<u32>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClassificationReport {
     /// Na ordem do catálogo; os artefatos de projeto vêm depois das regras.
@@ -55,6 +64,7 @@ pub struct ClassificationReport {
     pub skipped: Vec<SkippedRule>,
     pub exclusions: ExclusionList,
     pub projects: Vec<ProjectInfo>,
+    pub large_files: Vec<LargeFileInfo>,
 }
 
 impl ClassificationReport {
@@ -74,6 +84,7 @@ pub struct ClassifyService<'a> {
     env: &'a dyn Environment,
     inspector: &'a dyn PathInspector,
     projects: Option<(&'a dyn ProjectFinder, Vec<String>)>,
+    large_files: (&'a [LargeFile], u64),
 }
 
 impl<'a> ClassifyService<'a> {
@@ -87,7 +98,15 @@ impl<'a> ClassifyService<'a> {
             env,
             inspector,
             projects: None,
+            large_files: (&[], 0),
         }
+    }
+
+    /// Oferece os arquivos grandes da última varredura como candidatos do tier D.
+    /// `now_secs`: agora em segundos Unix, para a idade.
+    pub fn with_large_files(mut self, files: &'a [LargeFile], now_secs: u64) -> Self {
+        self.large_files = (files, now_secs);
+        self
     }
 
     /// Liga a busca de artefatos de projeto. `extra_roots`: pastas de projetos
@@ -123,6 +142,7 @@ impl<'a> ClassifyService<'a> {
             skipped: Vec::new(),
             exclusions,
             projects: Vec::new(),
+            large_files: Vec::new(),
         };
         for rule in &catalog.rules {
             match self.evaluate(rule, &report.exclusions, &guard) {
@@ -151,6 +171,40 @@ impl<'a> ClassifyService<'a> {
                 Err(SkipReason::Empty) => {}
                 Err(reason) => report.skipped.push(SkippedRule { id, reason }),
             }
+        }
+        let (files, now) = self.large_files;
+        for file in files {
+            let id = format!("file:{}", file.path);
+            if let Some(ex) = report.exclusions.matching(&file.path) {
+                report.skipped.push(SkippedRule {
+                    id,
+                    reason: SkipReason::Excluded(ex.reason.clone()),
+                });
+                continue;
+            }
+            let availability = match guard.blocking_reason(&file.path, &[]) {
+                Some(reason) => Availability::Blocked { reason },
+                None => Availability::Selectable,
+            };
+            let name = path_components(&file.path).pop().unwrap_or_default();
+            report.large_files.push(LargeFileInfo {
+                id: id.clone(),
+                age_days: file
+                    .modified
+                    .map(|m| u32::try_from(now.saturating_sub(m) / 86_400).unwrap_or(u32::MAX)),
+            });
+            report.candidates.push(Candidate {
+                id,
+                label: LocalizedText::same(&name),
+                tier: Tier::D,
+                action: Action::RemovePath {
+                    path: file.path.clone(),
+                },
+                size: file.size,
+                risk: Risk::Low,
+                note: LocalizedText::default(),
+                availability,
+            });
         }
         Ok(report)
     }

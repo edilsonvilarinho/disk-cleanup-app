@@ -169,9 +169,11 @@ pub struct CandidateDto {
     pub risk: &'static str,
     pub note: TextDto,
     pub blocked: Option<BlockDto>,
+    /// `rule` (catálogo) | `project` (artefato de projeto) | `file` (arquivo grande).
+    pub origin: &'static str,
     /// Raiz do projeto, quando o candidato é artefato de projeto.
     pub project: Option<String>,
-    /// Dias sem atividade no projeto (fora dos artefatos).
+    /// Dias sem atividade no projeto, ou desde a modificação do arquivo grande.
     pub idle_days: Option<u32>,
 }
 
@@ -207,6 +209,7 @@ impl From<&Candidate> for CandidateDto {
                 Availability::Selectable => None,
                 Availability::Blocked { reason } => Some(BlockDto::from(reason)),
             },
+            origin: "rule",
             project: None,
             idle_days: None,
         }
@@ -275,8 +278,12 @@ impl From<&ClassificationReport> for ClassificationDto {
                 .map(|c| {
                     let mut dto = CandidateDto::from(c);
                     if let Some(p) = r.projects.iter().find(|p| p.id == c.id) {
+                        dto.origin = "project";
                         dto.project = Some(p.project.clone());
                         dto.idle_days = p.idle_days;
+                    } else if let Some(f) = r.large_files.iter().find(|f| f.id == c.id) {
+                        dto.origin = "file";
+                        dto.idle_days = f.age_days;
                     }
                     dto
                 })

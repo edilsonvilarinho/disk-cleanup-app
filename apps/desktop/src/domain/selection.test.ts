@@ -13,7 +13,7 @@ import {
 
 function candidate(id: string, tier: Tier, sizeBytes: number, blockedBy: string | null = null): CandidateDto {
   const blocked = blockedBy ? { code: 'env_var' as const, value: blockedBy } : null
-  return { id, label: { pt: id, en: id }, tier, kind: 'path', target: id, sizeBytes, risk: 'none', note: { pt: '', en: '' }, blocked, project: null, idleDays: null }
+  return { id, label: { pt: id, en: id }, tier, kind: 'path', target: id, sizeBytes, risk: 'none', note: { pt: '', en: '' }, blocked, origin: 'rule', project: null, idleDays: null }
 }
 
 const candidates = [
@@ -31,6 +31,15 @@ describe('selection', () => {
   it('seleciona por padrão só o que não está bloqueado', () => {
     expect(isSelectable(candidates[2]!)).toBe(false)
     expect(defaultSelection(candidates)).toEqual(['npm', 'pip', 'gradle'])
+  })
+
+  it('arquivo grande nunca vem marcado nem entra no "marcar tier inteiro"', () => {
+    const iso: CandidateDto = { ...candidates[0]!, id: 'file:iso', tier: 'D', origin: 'file' }
+    const dump: CandidateDto = { ...candidates[0]!, id: 'dism', tier: 'D' }
+    const all = [...candidates, iso, dump]
+    expect(defaultSelection(all)).toEqual(['npm', 'pip', 'gradle', 'dism'])
+    expect(toggleTier([], all, 'D')).toEqual(['dism'])
+    expect(toggleTier(['dism', 'file:iso'], all, 'D')).toEqual(['file:iso'])
   })
 
   it('alterna um item sem mutar a seleção original', () => {

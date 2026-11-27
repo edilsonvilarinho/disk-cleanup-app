@@ -70,7 +70,14 @@ async fn run_survey(app: AppHandle, request: SurveyRequestDto) -> Result<SurveyD
                 },
             );
         });
-        service::run_survey(&JwalkFileWalker, &SysinfoVolumeInfo, &progress, &request)
+        let session = app.state::<Session>();
+        service::run_survey_in(
+            &session,
+            &JwalkFileWalker,
+            &SysinfoVolumeInfo,
+            &progress,
+            &request,
+        )
     })
     .await
     .map_err(join_error)?

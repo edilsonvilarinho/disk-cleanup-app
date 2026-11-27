@@ -74,11 +74,15 @@ export interface CandidateDto {
   risk: Risk
   note: TextDto
   blocked: BlockDto | null
+  /** `rule` (catálogo) | `project` (artefato de projeto) | `file` (arquivo grande do perfil). */
+  origin: CandidateOrigin
   /** Raiz do projeto, quando o candidato é artefato de projeto. */
   project: string | null
-  /** Dias sem atividade no projeto (fora dos artefatos); `null` = desconhecido. */
+  /** Dias sem atividade no projeto, ou desde a modificação do arquivo grande; `null` = desconhecido. */
   idleDays: number | null
 }
+
+export type CandidateOrigin = 'rule' | 'project' | 'file'
 
 export type SkipCode = 'not_found' | 'empty' | 'unresolved_variable' | 'excluded' | 'unmeasurable'
 

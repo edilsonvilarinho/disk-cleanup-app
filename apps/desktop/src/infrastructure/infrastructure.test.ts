@@ -87,6 +87,9 @@ describe('DemoGateway', () => {
     expect(projects.length).toBeGreaterThan(1)
     expect(projects.every((c) => c.tier === 'C' && c.idleDays !== null)).toBe(true)
     expect(projects.some((c) => c.idleDays! < 90)).toBe(true)
+    const files = classification.candidates.filter((c) => c.origin === 'file')
+    expect(files.length).toBeGreaterThan(0)
+    expect(files.every((c) => c.tier === 'D')).toBe(true)
 
     const ids = classification.candidates.filter((c) => c.tier === 'A').map((c) => c.id)
     const plan = await gateway.buildPlan('C:', ids)

@@ -74,6 +74,9 @@ ele é substituído por um fake.
    por nível, e para após 5 erros. Os testes usam uma Lixeira falsa; a real só roda com `-- --ignored`.
 8. A sessão desktop executa cada tier uma única vez por aprovação; remontar o plano descarta aprovação
    e execuções.
+9. Arquivo grande (`TopFiles`, os 30 maiores ≥ 512 MiB da varredura) só é oferecido **dentro do perfil do
+   usuário**, como tier D, nunca pré-marcado e fora do "marcar tier inteiro"; o destino padrão do tier D
+   é a Lixeira.
 
 ## Idioma, erros e plataformas
 

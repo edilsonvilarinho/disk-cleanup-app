@@ -131,3 +131,46 @@ fn survey_service_has_debug_representation() {
         "SurveyService"
     );
 }
+
+#[test]
+fn survey_keeps_the_largest_files_inside_the_profile_only() {
+    let gib = 1024 * 1024 * 1024;
+    let mut w = FakeWalker::with(&[
+        (r"C:\Users\u\Downloads\ubuntu.iso", 5 * gib, 5 * gib),
+        (r"C:\Users\u\Videos\aula.mp4", 3 * gib, 3 * gib),
+        (r"C:\Users\u\OneDrive\filme.mkv", 4 * gib, 0),
+        (r"C:\Users\u\pequeno.txt", 10, 10),
+        (r"C:\pagefile.sys", 8 * gib, 8 * gib),
+    ]);
+    w.modified = Some(1_700_000_000);
+    let report = SurveyService::new(
+        &w,
+        &volume(1000 * gib, 100 * gib),
+        &RecordingProgress::default(),
+    )
+    .run(&request(1))
+    .unwrap();
+    let got: Vec<_> = report
+        .largest
+        .iter()
+        .map(|f| (f.path.as_str(), f.size.bytes() / gib, f.modified))
+        .collect();
+    // placeholder de nuvem (alocado 0) e arquivo fora do perfil não entram
+    assert_eq!(
+        got,
+        vec![
+            (r"C:\Users\u\Downloads\ubuntu.iso", 5, Some(1_700_000_000)),
+            (r"C:\Users\u\Videos\aula.mp4", 3, Some(1_700_000_000)),
+        ]
+    );
+    let mut no_profile = request(1);
+    no_profile.profile = None;
+    let report = SurveyService::new(
+        &w,
+        &volume(1000 * gib, 100 * gib),
+        &RecordingProgress::default(),
+    )
+    .run(&no_profile)
+    .unwrap();
+    assert!(report.largest.is_empty());
+}

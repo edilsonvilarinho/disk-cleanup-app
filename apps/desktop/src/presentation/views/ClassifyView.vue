@@ -15,6 +15,7 @@ const { t, txt, err, gb, num } = useI18n()
 onMounted(() => store.ensureLoaded(settings.extraExclusions, settings.projectRoots, settings.minIdleDays))
 const reload = () => store.load(settings.extraExclusions, settings.projectRoots, settings.minIdleDays)
 const hasProjects = computed(() => store.visible.some((c) => c.project !== null))
+const hasFiles = computed(() => store.visible.some((c) => c.origin === 'file'))
 
 function onMinIdle(event: Event) {
   const days = Number((event.target as HTMLSelectElement).value) as MinIdleDays
@@ -24,6 +25,7 @@ function onMinIdle(event: Event) {
 
 function idleText(c: CandidateDto): string {
   if (c.idleDays === null) return t('classify.idleUnknown')
+  if (c.origin === 'file') return t('classify.modified', { n: c.idleDays })
   return c.idleDays === 0 ? t('classify.idleToday') : t('classify.idle', { n: c.idleDays })
 }
 
@@ -107,7 +109,7 @@ function skipText(s: SkippedDto): string {
       </template>
       <template v-else>
         <div class="card-head">
-          <p class="small muted">{{ hasProjects ? t('classify.projectsHint') : t('classify.blockedHint') }}</p>
+          <p class="small muted">{{ hasFiles ? t('classify.filesHint') : hasProjects ? t('classify.projectsHint') : t('classify.blockedHint') }}</p>
           <div class="actions">
             <template v-if="hasProjects">
               <label class="small muted" for="min-idle">{{ t('classify.minIdleLabel') }}</label>
@@ -150,7 +152,7 @@ function skipText(s: SkippedDto): string {
                 <td>
                   <span v-if="c.blocked" class="pill warn"><span class="dot" />{{ t('classify.blocked', { reason: t(`block.${c.blocked.code}`, { value: c.blocked.value }) }) }}</span>
                   <span v-else class="small muted">{{ txt(c.note) }}</span>
-                  <span v-if="c.project !== null" class="small muted" style="display: block" data-test="idle">{{ idleText(c) }}</span>
+                  <span v-if="c.origin !== 'rule'" class="small muted" style="display: block" data-test="idle">{{ idleText(c) }}</span>
                 </td>
               </tr>
             </tbody>

@@ -15,6 +15,7 @@ mod safety;
 mod size;
 mod text;
 mod tier;
+mod top_files;
 mod volume;
 
 pub use aggregation::{AggregateEntry, FocusRoot, SizeAggregator};
@@ -31,4 +32,5 @@ pub use safety::{SafetyGuard, SafetyViolation};
 pub use size::ByteSize;
 pub use text::LocalizedText;
 pub use tier::Tier;
+pub use top_files::{LargeFile, TopFiles};
 pub use volume::{VolumeHealth, VolumeUsage};

@@ -359,7 +359,7 @@ describe('Plano', () => {
 describe('Projetos na Classificação', () => {
   it('mostra a idade, filtra por idade mínima e guarda a escolha', async () => {
     const project = (name: string, idle: number | null) =>
-      candidate(`project:D:\\dev\\${name}\\node_modules`, 'C', 1, { project: `D:\\dev\\${name}`, idleDays: idle, label: { pt: `${name} · node_modules`, en: `${name} · node_modules` } })
+      candidate(`project:D:\\dev\\${name}\\node_modules`, 'C', 1, { origin: 'project', project: `D:\\dev\\${name}`, idleDays: idle, label: { pt: `${name} · node_modules`, en: `${name} · node_modules` } })
     const withProjects = { ...classification, candidates: [...classification.candidates, project('loja', 412), project('novo', 0), project('x', null)] }
     const { wrapper, saved } = await mountApp('/classificacao', fakeGateway({ classify: vi.fn(async () => withProjects) }))
     await wrapper.get('[data-test="tab-C"]').trigger('click')
@@ -377,6 +377,29 @@ describe('Projetos na Classificação', () => {
     // tier sem projetos não mostra o filtro
     await wrapper.get('[data-test="tab-A"]').trigger('click')
     expect(wrapper.find('[data-test="min-idle"]').exists()).toBe(false)
+  })
+})
+
+describe('Arquivos grandes na Classificação', () => {
+  it('mostra a idade, avisa que nada vem marcado e deixa marcar um a um', async () => {
+    const iso = candidate('file:C:\\Users\\u\\Downloads\\ubuntu.iso', 'D', 4.9, {
+      origin: 'file',
+      idleDays: 420,
+      label: { pt: 'ubuntu.iso', en: 'ubuntu.iso' },
+      risk: 'low',
+    })
+    const novo = candidate('file:C:\\Users\\u\\x.bin', 'D', 1, { origin: 'file', idleDays: null, label: { pt: 'x.bin', en: 'x.bin' } })
+    const withFiles = { ...classification, candidates: [...classification.candidates, iso, novo] }
+    const { wrapper } = await mountApp('/classificacao', fakeGateway({ classify: vi.fn(async () => withFiles) }))
+    await wrapper.get('[data-test="tab-D"]').trigger('click')
+    expect(wrapper.text()).toContain('nada vem marcado')
+    const rows = wrapper.findAll('[data-test="row"]')
+    expect(rows[0]!.text()).toContain('modificado há 420 dias')
+    expect(rows[1]!.text()).toContain('idade desconhecida')
+    const box = rows[0]!.get('input')
+    expect((box.element as HTMLInputElement).checked).toBe(false)
+    await box.trigger('change')
+    expect((box.element as HTMLInputElement).checked).toBe(true)
   })
 })
 

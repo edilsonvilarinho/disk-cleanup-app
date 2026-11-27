@@ -19,6 +19,7 @@ pub struct FakeWalker {
     pub files: Vec<(String, u64, u64)>,
     pub unreadable: u64,
     pub fail: bool,
+    pub modified: Option<u64>,
 }
 
 impl FakeWalker {
@@ -43,6 +44,7 @@ impl FileWalker for FakeWalker {
                 components: path_components(path),
                 logical: ByteSize::from_bytes(*logical),
                 allocated: ByteSize::from_bytes(*allocated),
+                modified: self.modified,
             });
         }
         Ok(WalkStats {

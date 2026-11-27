@@ -435,3 +435,47 @@ fn without_a_finder_or_profiles_there_are_no_project_candidates() {
     assert!(report.candidates.is_empty());
     assert!(finder.roots.borrow().is_empty());
 }
+
+// ---------- Arquivos grandes ----------
+
+#[test]
+fn large_files_become_tier_d_candidates_with_age_and_respect_exclusions() {
+    use disk_cleanup_domain::{ByteSize, LargeFile};
+    let files = vec![
+        LargeFile {
+            path: r"C:\Users\u\Downloads\ubuntu.iso".into(),
+            size: ByteSize::from_bytes(5_000),
+            modified: Some(100_000_000 - 86_400 * 400),
+        },
+        LargeFile {
+            path: r"D:\Backups\velho.tar".into(),
+            size: ByteSize::from_bytes(2_000),
+            modified: None,
+        },
+        LargeFile {
+            path: r"C:\Users\u\futuro.bin".into(),
+            size: ByteSize::from_bytes(1_000),
+            modified: Some(200_000_000),
+        },
+    ];
+    let catalog = FakeCatalog(Ok(Catalog::default()));
+    let baseline = ExclusionList::default().with(r"D:\Backups", LocalizedText::same("backup"));
+    let report = ClassifyService::new(&catalog, &env(), &FakeInspector::default())
+        .with_large_files(&files, 100_000_000)
+        .run(baseline, &[])
+        .unwrap();
+    let iso = &report.candidates[0];
+    assert_eq!(iso.id, r"file:C:\Users\u\Downloads\ubuntu.iso");
+    assert_eq!(iso.label, LocalizedText::same("ubuntu.iso"));
+    assert_eq!(
+        (iso.tier, iso.risk, iso.size.bytes()),
+        (Tier::D, Risk::Low, 5_000)
+    );
+    assert_eq!(report.candidates.len(), 2);
+    let ages: Vec<_> = report.large_files.iter().map(|f| f.age_days).collect();
+    // data no futuro (relógio adiantado) conta como hoje
+    assert_eq!(ages, vec![Some(400), Some(0)]);
+    assert!(report.skipped.iter().any(
+        |s| s.id == r"file:D:\Backups\velho.tar" && matches!(s.reason, SkipReason::Excluded(_))
+    ));
+}

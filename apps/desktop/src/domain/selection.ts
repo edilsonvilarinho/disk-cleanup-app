@@ -18,9 +18,12 @@ export function isIdleEnough(c: CandidateDto, minIdleDays: number): boolean {
   return c.idleDays !== null && c.idleDays >= minIdleDays
 }
 
-/** Tudo o que é selecionável, exceto projeto com atividade recente ou idade desconhecida. */
+/** Tudo o que é selecionável, exceto projeto recente ou de idade desconhecida e
+ *  arquivo grande (dado do usuário: só entra marcado um a um). */
 export function defaultSelection(candidates: readonly CandidateDto[], minIdleDays = 0): string[] {
-  return candidates.filter((c) => isSelectable(c) && (c.project === null || isIdleEnough(c, minIdleDays))).map((c) => c.id)
+  return candidates
+    .filter((c) => isSelectable(c) && c.origin !== 'file' && (c.project === null || isIdleEnough(c, minIdleDays)))
+    .map((c) => c.id)
 }
 
 export function toggle(selected: readonly string[], id: string): string[] {
@@ -29,7 +32,8 @@ export function toggle(selected: readonly string[], id: string): string[] {
 
 /** Marca o tier inteiro; se já estiver todo marcado, desmarca. Bloqueados nunca entram. */
 export function toggleTier(selected: readonly string[], candidates: readonly CandidateDto[], tier: Tier): string[] {
-  const ids = candidates.filter((c) => c.tier === tier && isSelectable(c)).map((c) => c.id)
+  // Arquivo grande fica fora do "marcar tier inteiro".
+  const ids = candidates.filter((c) => c.tier === tier && isSelectable(c) && c.origin !== 'file').map((c) => c.id)
   const allOn = ids.every((id) => selected.includes(id))
   if (allOn) return selected.filter((s) => !ids.includes(s))
   return [...selected, ...ids.filter((id) => !selected.includes(id))]

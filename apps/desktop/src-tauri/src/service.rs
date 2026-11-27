@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, MutexGuard};
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use disk_cleanup_application::{
     export_plan, ActionRunner, CatalogRepository, ClassificationReport, ClassifyService,
@@ -11,8 +11,8 @@ use disk_cleanup_application::{
     ProjectFinder, ScanProgress, SurveyRequest, SurveyService, VolumeInfo,
 };
 use disk_cleanup_domain::{
-    approve, ApprovedPlan, ByteSize, CleanupReport, Disposal, ExclusionList, ItemResult, Plan,
-    SafetyGuard, Tier, TierRun, VolumeUsage,
+    approve, ApprovedPlan, ByteSize, CleanupReport, Disposal, ExclusionList, ItemResult, LargeFile,
+    Plan, SafetyGuard, Tier, TierRun, VolumeUsage,
 };
 
 use crate::dto::{
@@ -28,6 +28,8 @@ struct SessionState {
     approved: Option<ApprovedPlan>,
     /// Volume antes do primeiro tier executado.
     initial: Option<VolumeUsage>,
+    /// Maiores arquivos do perfil na última varredura (viram candidatos do tier D).
+    largest: Vec<LargeFile>,
     runs: Vec<TierRun>,
 }
 
@@ -128,6 +130,18 @@ pub fn run_survey(
     progress: &dyn ScanProgress,
     request: &SurveyRequestDto,
 ) -> Result<SurveyDto, ErrorDto> {
+    run_survey_in(&Session::default(), walker, volumes, progress, request)
+}
+
+/// Como `run_survey`, guardando na sessão os arquivos grandes do perfil para a
+/// classificação seguinte.
+pub fn run_survey_in(
+    session: &Session,
+    walker: &dyn FileWalker,
+    volumes: &dyn VolumeInfo,
+    progress: &dyn ScanProgress,
+    request: &SurveyRequestDto,
+) -> Result<SurveyDto, ErrorDto> {
     let started = Instant::now();
     let report = SurveyService::new(walker, volumes, progress).run(&SurveyRequest {
         volume_root: request.volume_root.clone(),
@@ -135,6 +149,7 @@ pub fn run_survey(
         depth: request.depth,
     })?;
     let elapsed = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    session.lock().largest = report.largest.clone();
     Ok(SurveyDto::from_report(&report, elapsed))
 }
 
@@ -175,7 +190,11 @@ pub fn classify_projects(
     extra: &[String],
     projects: Option<ProjectSearch<'_>>,
 ) -> Result<ClassificationDto, ErrorDto> {
-    let mut service = ClassifyService::new(catalog, env, inspector);
+    let largest = session.lock().largest.clone();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let mut service = ClassifyService::new(catalog, env, inspector).with_large_files(&largest, now);
     if let Some(search) = projects {
         service = service.with_projects(search.finder, search.roots);
     }

@@ -26,6 +26,8 @@ pub struct FileRecord {
     pub logical: ByteSize,
     /// Espaço realmente alocado (≈0 para placeholder de nuvem).
     pub allocated: ByteSize,
+    /// Última modificação (segundos Unix), quando o sistema informa.
+    pub modified: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

@@ -25,6 +25,7 @@ impl FileWalker for Walker {
                 components: path_components(p),
                 logical: ByteSize::from_bytes(l),
                 allocated: ByteSize::from_bytes(a),
+                modified: None,
             });
         }
         Ok(WalkStats {
@@ -314,6 +315,7 @@ fn every_skip_and_block_code_is_mapped() {
 
     let report = ClassificationReport {
         projects: vec![],
+        large_files: vec![],
         candidates: vec![],
         skipped: vec![
             SkippedRule {
@@ -399,4 +401,51 @@ fn project_artifacts_carry_project_root_and_idle_days() {
     assert_eq!(c.project.as_deref(), Some(r"D:\dev\loja"));
     assert_eq!((c.idle_days, c.tier.as_str()), (Some(412), "C"));
     assert_eq!(c.label.pt, "loja · node_modules");
+}
+
+#[test]
+fn large_files_from_the_survey_become_file_candidates() {
+    use disk_cleanup_desktop_lib::run_survey_in;
+    struct Big;
+    impl FileWalker for Big {
+        fn walk(&self, _: &str, sink: &mut dyn FnMut(FileRecord)) -> Result<WalkStats, PortError> {
+            sink(FileRecord {
+                components: path_components(r"C:\Users\u\Downloads\ubuntu.iso"),
+                logical: ByteSize::from_bytes(1 << 30),
+                allocated: ByteSize::from_bytes(1 << 30),
+                modified: None,
+            });
+            Ok(WalkStats {
+                files: 1,
+                unreadable: 0,
+            })
+        }
+    }
+    let session = Session::default();
+    let request = SurveyRequestDto {
+        volume_root: r"C:\".into(),
+        profile: Some(r"C:\Users\u".into()),
+        depth: 1,
+    };
+    run_survey_in(
+        &session,
+        &Big,
+        &Volume,
+        &CallbackProgress::new(|_, _| {}),
+        &request,
+    )
+    .unwrap();
+    let dto = classify(
+        &session,
+        &Catalogue,
+        &env(),
+        &Inspector,
+        ExclusionList::default(),
+        &[],
+    )
+    .unwrap();
+    assert_eq!(dto.candidates[0].origin, "rule");
+    let file = dto.candidates.iter().find(|c| c.origin == "file").unwrap();
+    assert_eq!(file.id, r"file:C:\Users\u\Downloads\ubuntu.iso");
+    assert_eq!((file.tier.as_str(), file.idle_days), ("D", None));
 }
