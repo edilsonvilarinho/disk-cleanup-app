@@ -57,8 +57,25 @@ const candidate = (
   risk: tier === 'C' ? 'redownload' : 'none',
   note: text(''),
   blocked: null,
+  project: null,
+  idleDays: null,
   ...extra,
 })
+
+/** Artefato de projeto de exemplo (tier C), com raiz e dias sem atividade. */
+const project = (name: string, artifact: string, size: number, idleDays: number, note: TextDto): CandidateDto =>
+  candidate(`project:D:\\dev\\${name}\\${artifact}`, text(`${name} · ${artifact}`), 'C', size, `D:\\dev\\${name}\\${artifact}`, {
+    note,
+    project: `D:\\dev\\${name}`,
+    idleDays,
+  })
+
+const PROJECTS: CandidateDto[] = [
+  project('api-pagamentos', 'target', 6.8, 203, text('cargo build recria', 'cargo build recreates it')),
+  project('ml-notebook', '.venv', 3.4, 131, text('recriar o ambiente (pip/uv) antes de usar', 'recreate the environment (pip/uv) before use')),
+  project('loja-vue', 'node_modules', 1.9, 412, text('npm/pnpm/yarn install recria', 'npm/pnpm/yarn install recreates it')),
+  project('site-pessoal', 'node_modules', 0.6, 12, text('npm/pnpm/yarn install recria', 'npm/pnpm/yarn install recreates it')),
+]
 
 const CANDIDATES: CandidateDto[] = [
   candidate('npm-cache', text('npm cache'), 'A', 6.4, 'npm cache clean --force', {
@@ -149,12 +166,12 @@ export class DemoGateway implements DiskCleanupGateway {
     }
   }
 
-  async classify(extraExclusions: string[]): Promise<ClassificationDto> {
+  async classify(extraExclusions: string[], _projectRoots: string[]): Promise<ClassificationDto> {
     await this.wait()
     this.extra = [...extraExclusions]
     const extra = this.extra.map((pattern) => ({ pattern, reason: text('excluída nas Configurações', 'excluded in Settings') }))
     const isExcluded = (c: CandidateDto) => this.extra.some((p) => c.target.toLowerCase().startsWith(p.toLowerCase()))
-    const candidates = CANDIDATES.filter((c) => !isExcluded(c))
+    const candidates = [...CANDIDATES, ...PROJECTS].filter((c) => !isExcluded(c))
     return {
       candidates,
       skipped: [
@@ -167,7 +184,7 @@ export class DemoGateway implements DiskCleanupGateway {
   }
 
   async buildPlan(volumeName: string, selected: string[]): Promise<PlanDto> {
-    const items = CANDIDATES.filter((c) => selected.includes(c.id))
+    const items = [...CANDIDATES, ...PROJECTS].filter((c) => selected.includes(c.id))
     if (items.length === 0) throw fail('plan_empty')
     this.planned = items
     this.approved = []

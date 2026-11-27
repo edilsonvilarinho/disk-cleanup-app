@@ -64,6 +64,8 @@ impl CatalogRepository for Catalogue {
             watch_env: vec!["CUDA_PATH".into()],
         };
         Ok(Catalog {
+            projects: Vec::new(),
+            project_roots: Vec::new(),
             rules: vec![
                 rule("npm", Tier::A, r"C:\L\npm-cache"),
                 rule("cuda", Tier::C, r"C:\cuda"),
@@ -311,6 +313,7 @@ fn every_skip_and_block_code_is_mapped() {
     );
 
     let report = ClassificationReport {
+        projects: vec![],
         candidates: vec![],
         skipped: vec![
             SkippedRule {
@@ -341,4 +344,59 @@ fn every_skip_and_block_code_is_mapped() {
             ("unmeasurable", Some("e".into()))
         ]
     );
+}
+
+#[test]
+fn project_artifacts_carry_project_root_and_idle_days() {
+    use disk_cleanup_application::{FoundArtifact, ProjectFinder, ProjectProfile};
+    use disk_cleanup_desktop_lib::{classify_projects, ProjectSearch};
+
+    struct Finder;
+    impl ProjectFinder for Finder {
+        fn find(&self, roots: &[String], _: &[ProjectProfile]) -> Vec<FoundArtifact> {
+            assert_eq!(roots, [r"D:\dev".to_string()]);
+            vec![FoundArtifact {
+                profile: "node".into(),
+                project: r"D:\dev\loja".into(),
+                path: r"D:\dev\loja\node_modules".into(),
+                idle_days: Some(412),
+            }]
+        }
+    }
+    struct WithProjects;
+    impl CatalogRepository for WithProjects {
+        fn load(&self) -> Result<Catalog, PortError> {
+            Ok(Catalog {
+                projects: vec![ProjectProfile {
+                    id: "node".into(),
+                    label: LocalizedText::same("Node.js"),
+                    markers: vec!["package.json".into()],
+                    artifacts: vec!["node_modules".into()],
+                    note: LocalizedText::new("npm install recria", "npm install recreates it"),
+                }],
+                ..Catalog::default()
+            })
+        }
+    }
+    let roots = [r"D:\dev".to_string()];
+    let search = ProjectSearch {
+        finder: &Finder,
+        roots: &roots,
+    };
+    assert!(format!("{search:?}").contains("dev"));
+    let dto = classify_projects(
+        &Session::default(),
+        &WithProjects,
+        &env(),
+        &Inspector,
+        ExclusionList::default(),
+        &[],
+        Some(search),
+    )
+    .unwrap();
+    let c = &dto.candidates[0];
+    assert_eq!(c.id, r"project:D:\dev\loja\node_modules");
+    assert_eq!(c.project.as_deref(), Some(r"D:\dev\loja"));
+    assert_eq!((c.idle_days, c.tier.as_str()), (Some(412), "C"));
+    assert_eq!(c.label.pt, "loja · node_modules");
 }

@@ -13,8 +13,14 @@ export function isSelectable(candidate: CandidateDto): boolean {
   return candidate.blocked === null
 }
 
-export function defaultSelection(candidates: readonly CandidateDto[]): string[] {
-  return candidates.filter(isSelectable).map((c) => c.id)
+/** Artefato de projeto só conta como parado com idade conhecida ≥ `minIdleDays`. */
+export function isIdleEnough(c: CandidateDto, minIdleDays: number): boolean {
+  return c.idleDays !== null && c.idleDays >= minIdleDays
+}
+
+/** Tudo o que é selecionável, exceto projeto com atividade recente ou idade desconhecida. */
+export function defaultSelection(candidates: readonly CandidateDto[], minIdleDays = 0): string[] {
+  return candidates.filter((c) => isSelectable(c) && (c.project === null || isIdleEnough(c, minIdleDays))).map((c) => c.id)
 }
 
 export function toggle(selected: readonly string[], id: string): string[] {

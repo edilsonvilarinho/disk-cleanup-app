@@ -23,7 +23,8 @@ export interface SurveyRequest {
 export interface DiskCleanupGateway {
   systemInfo(): Promise<SystemInfoDto>
   runSurvey(request: SurveyRequest, onProgress: (progress: ScanProgressDto) => void): Promise<SurveyDto>
-  classify(extraExclusions: string[]): Promise<ClassificationDto>
+  /** `projectRoots`: pastas de projetos das Configurações, somadas às do catálogo. */
+  classify(extraExclusions: string[], projectRoots: string[]): Promise<ClassificationDto>
   buildPlan(volume: string, selected: string[]): Promise<PlanDto>
   /** `disposals`: destino de cada tier; tier ausente usa o padrão do núcleo. */
   approvePlan(tiers: Tier[], disposals: Partial<Record<Tier, Disposal>>, acknowledged: boolean): Promise<ApprovalDto>

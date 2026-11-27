@@ -8,7 +8,7 @@ use std::time::Instant;
 use disk_cleanup_application::{
     export_plan, ActionRunner, CatalogRepository, ClassificationReport, ClassifyService,
     Environment, ExecuteService, ExecutionProgress, FileWalker, PathInspector, PlanCodec,
-    ScanProgress, SurveyRequest, SurveyService, VolumeInfo,
+    ProjectFinder, ScanProgress, SurveyRequest, SurveyService, VolumeInfo,
 };
 use disk_cleanup_domain::{
     approve, ApprovedPlan, ByteSize, CleanupReport, Disposal, ExclusionList, ItemResult, Plan,
@@ -147,7 +147,39 @@ pub fn classify(
     baseline: ExclusionList,
     extra: &[String],
 ) -> Result<ClassificationDto, ErrorDto> {
-    let report = ClassifyService::new(catalog, env, inspector).run(baseline, extra)?;
+    classify_projects(session, catalog, env, inspector, baseline, extra, None)
+}
+
+/// Busca de artefatos de projeto: o finder e as pastas das Configurações.
+#[derive(Clone, Copy)]
+pub struct ProjectSearch<'a> {
+    pub finder: &'a dyn ProjectFinder,
+    pub roots: &'a [String],
+}
+
+impl std::fmt::Debug for ProjectSearch<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProjectSearch")
+            .field("roots", &self.roots)
+            .finish()
+    }
+}
+
+/// Como `classify`, somando os artefatos de projeto (tier C) quando `projects` vem.
+pub fn classify_projects(
+    session: &Session,
+    catalog: &dyn CatalogRepository,
+    env: &dyn Environment,
+    inspector: &dyn PathInspector,
+    baseline: ExclusionList,
+    extra: &[String],
+    projects: Option<ProjectSearch<'_>>,
+) -> Result<ClassificationDto, ErrorDto> {
+    let mut service = ClassifyService::new(catalog, env, inspector);
+    if let Some(search) = projects {
+        service = service.with_projects(search.finder, search.roots);
+    }
+    let report = service.run(baseline, extra)?;
     let dto = ClassificationDto::from(&report);
     session.lock().classification = Some(report);
     Ok(dto)

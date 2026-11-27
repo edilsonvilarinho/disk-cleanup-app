@@ -244,3 +244,76 @@ fn plan_json_decode_accepts_skill_files_without_estimates_and_rejects_bad_input(
         matches!(codec.decode(r#"{"volume":"C:","tiers":{"Z":[]}}"#), Err(PortError::InvalidData(m)) if m.contains("Z"))
     );
 }
+
+#[test]
+fn toml_catalog_parses_project_profiles_and_roots() {
+    let text = r#"
+[[project_root]]
+path = '%USERPROFILE%\workspace'
+
+[[project]]
+id = "node"
+label = "Node.js"
+markers = ["package.json"]
+artifacts = ["node_modules", ".next"]
+note = "npm install recria"
+note_en = "npm install recreates"
+"#;
+    let catalog = TomlCatalogRepository::from_text(text).load().unwrap();
+    assert_eq!(
+        catalog.project_roots,
+        vec![r"%USERPROFILE%\workspace".to_string()]
+    );
+    let node = &catalog.projects[0];
+    assert_eq!(
+        (node.id.as_str(), node.label.en.as_str()),
+        ("node", "Node.js")
+    );
+    assert_eq!(node.markers, vec!["package.json".to_string()]);
+    assert_eq!(
+        node.artifacts,
+        vec!["node_modules".to_string(), ".next".to_string()]
+    );
+    assert_eq!(node.note.en, "npm install recreates");
+
+    let bad = |text: &str| match TomlCatalogRepository::from_text(text).load() {
+        Err(PortError::InvalidData(msg)) => msg,
+        other => panic!("esperava InvalidData, veio {other:?}"),
+    };
+    let p = |markers: &str, artifacts: &str| {
+        format!("[[project]]\nid = \"p\"\nlabel = \"P\"\nmarkers = {markers}\nartifacts = {artifacts}\n")
+    };
+    assert!(bad(&p("[]", "[\"x\"]")).contains("marcador"));
+    assert!(bad(&p("[\"m\"]", "[]")).contains("artefato"));
+    // Artefato é um nome dentro da raiz: nunca caminho, nunca "..".
+    for evil in ["\"..\"", "\"a/b\"", "'a\\b'", "\".\"", "\"\""] {
+        assert!(
+            bad(&p("[\"m\"]", &format!("[{evil}]"))).contains("artefato"),
+            "{evil}"
+        );
+    }
+    let ok = p("[\"m\"]", "[\"x\"]");
+    assert!(bad(&format!("{ok}{ok}")).contains("duplicado"));
+}
+
+#[test]
+fn bundled_catalogs_have_project_profiles_and_roots() {
+    for os in ["windows", "linux", "macos"] {
+        let catalog = catalog_for(os).unwrap().load().unwrap();
+        let ids: Vec<_> = catalog.projects.iter().map(|p| p.id.as_str()).collect();
+        for id in ["node", "rust", "python", "gradle", "maven", "dotnet"] {
+            assert!(ids.contains(&id), "{os} sem perfil {id}");
+        }
+        assert!(
+            !catalog.project_roots.is_empty(),
+            "{os} sem pastas de projetos"
+        );
+        for p in &catalog.projects {
+            assert!(
+                !p.note.en.is_empty() && p.note.en != p.note.pt,
+                "{os}/{}: nota sem inglês",
+                p.id
+            );
+        }
+    }
+}

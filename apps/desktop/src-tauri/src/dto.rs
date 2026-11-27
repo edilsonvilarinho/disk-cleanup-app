@@ -169,6 +169,10 @@ pub struct CandidateDto {
     pub risk: &'static str,
     pub note: TextDto,
     pub blocked: Option<BlockDto>,
+    /// Raiz do projeto, quando o candidato é artefato de projeto.
+    pub project: Option<String>,
+    /// Dias sem atividade no projeto (fora dos artefatos).
+    pub idle_days: Option<u32>,
 }
 
 fn risk_name(risk: Risk) -> &'static str {
@@ -203,6 +207,8 @@ impl From<&Candidate> for CandidateDto {
                 Availability::Selectable => None,
                 Availability::Blocked { reason } => Some(BlockDto::from(reason)),
             },
+            project: None,
+            idle_days: None,
         }
     }
 }
@@ -263,7 +269,18 @@ pub struct ClassificationDto {
 impl From<&ClassificationReport> for ClassificationDto {
     fn from(r: &ClassificationReport) -> Self {
         Self {
-            candidates: r.candidates.iter().map(CandidateDto::from).collect(),
+            candidates: r
+                .candidates
+                .iter()
+                .map(|c| {
+                    let mut dto = CandidateDto::from(c);
+                    if let Some(p) = r.projects.iter().find(|p| p.id == c.id) {
+                        dto.project = Some(p.project.clone());
+                        dto.idle_days = p.idle_days;
+                    }
+                    dto
+                })
+                .collect(),
             skipped: r.skipped.iter().map(SkippedDto::from).collect(),
             exclusions: r
                 .exclusions

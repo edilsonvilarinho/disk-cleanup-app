@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createApp } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { GIB } from '../domain/format'
-import { classification, plan, survey, systemInfo } from '../test/fixtures'
+import { candidate, classification, plan, survey, systemInfo } from '../test/fixtures'
 import { fakeGateway } from '../test/fakeGateway'
 import type { DiskCleanupGateway } from './gateway'
 import { gatewayPlugin } from './gatewayPlugin'
@@ -109,12 +109,27 @@ describe('classification store', () => {
   it('envia as exclusões das Configurações e aceita erro do núcleo com código', async () => {
     const gateway = setup()
     const store = useClassificationStore()
-    await store.load(['C:\Projetos'])
-    expect(gateway.classify).toHaveBeenCalledWith(['C:\Projetos'])
+    await store.load(['C:\Projetos'], ['D:\dev'])
+    expect(gateway.classify).toHaveBeenCalledWith(['C:\Projetos'], ['D:\dev'])
     setup(fakeGateway({ classify: vi.fn(async () => Promise.reject({ code: 'invalid_data', params: { detail: 'toml' } })) }))
     const failing = useClassificationStore()
     await failing.load()
     expect(failing.error).toEqual({ code: 'invalid_data', params: { detail: 'toml' } })
+  })
+
+  it('projeto só começa marcado com a idade mínima; trocar a idade remarca só os projetos', async () => {
+    const old = candidate('project:D:\\dev\\loja\\node_modules', 'C', 1.9, { project: 'D:\\dev\\loja', idleDays: 412 })
+    const fresh = candidate('project:D:\\dev\\novo\\node_modules', 'C', 0.8, { project: 'D:\\dev\\novo', idleDays: 3 })
+    const unknown = candidate('project:D:\\dev\\x\\target', 'C', 0.5, { project: 'D:\\dev\\x', idleDays: null })
+    setup(fakeGateway({ classify: vi.fn(async () => ({ ...classification, candidates: [...classification.candidates, old, fresh, unknown] })) }))
+    const store = useClassificationStore()
+    await store.load([], [], 90)
+    expect(store.selected).toEqual(['npm-cache', 'nvidia-dxcache', 'gradle-caches', old.id])
+    store.toggle('npm-cache')
+    store.applyMinIdle(1)
+    expect(store.selected).toEqual(['nvidia-dxcache', 'gradle-caches', old.id, fresh.id])
+    store.applyMinIdle(1000)
+    expect(store.selected).toEqual(['nvidia-dxcache', 'gradle-caches'])
   })
 
   it('ensureLoaded só busca quando ainda não carregou', async () => {

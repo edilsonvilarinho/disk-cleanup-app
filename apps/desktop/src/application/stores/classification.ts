@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { markRaw } from 'vue'
 import type { CandidateDto, ClassificationDto, Tier } from '../../domain/models'
-import { countByTier, defaultSelection, selectionTotal, toggle, toggleTier, totalsByTier } from '../../domain/selection'
+import { countByTier, defaultSelection, isIdleEnough, selectionTotal, toggle, toggleTier, totalsByTier } from '../../domain/selection'
 import { errorInfo, type ErrorInfo } from '../../i18n/i18n'
 import type { AsyncStatus } from './survey'
 
@@ -33,20 +33,26 @@ export const useClassificationStore = defineStore('classification', {
     },
   },
   actions: {
-    async load(extraExclusions: string[] = []) {
+    async load(extraExclusions: string[] = [], projectRoots: string[] = [], minIdleDays = 90) {
       this.status = 'running'
       this.error = null
       try {
-        this.report = markRaw(await this.gateway.classify([...extraExclusions]))
-        this.selected = defaultSelection(this.report.candidates)
+        this.report = markRaw(await this.gateway.classify([...extraExclusions], [...projectRoots]))
+        this.selected = defaultSelection(this.report.candidates, minIdleDays)
         this.status = 'done'
       } catch (e) {
         this.error = errorInfo(e)
         this.status = 'error'
       }
     },
-    async ensureLoaded(extraExclusions: string[] = []) {
-      if (this.status === 'idle') await this.load(extraExclusions)
+    async ensureLoaded(extraExclusions: string[] = [], projectRoots: string[] = [], minIdleDays = 90) {
+      if (this.status === 'idle') await this.load(extraExclusions, projectRoots, minIdleDays)
+    },
+    /** Remarca só os projetos pela idade mínima; o resto da seleção fica. */
+    applyMinIdle(minIdleDays: number) {
+      this.selected = this.candidates
+        .filter((c) => (c.project === null ? this.selected.includes(c.id) : !c.blocked && isIdleEnough(c, minIdleDays)))
+        .map((c) => c.id)
     },
     toggle(id: string) {
       this.selected = toggle(this.selected, id)

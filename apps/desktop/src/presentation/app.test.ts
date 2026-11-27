@@ -15,7 +15,7 @@ import { ThemeController } from '../application/theme'
 import { updaterPlugin, type UpdaterPort } from '../application/updater'
 import { fakeGateway } from '../test/fakeGateway'
 import { fakeUpdater, updateInfo } from '../test/fakeUpdater'
-import { approval, classification, report, runA, runCTrash, stepsA, survey } from '../test/fixtures'
+import { approval, candidate, classification, report, runA, runCTrash, stepsA, survey } from '../test/fixtures'
 import { GIB } from '../domain/format'
 import { toSnapshot, type ScanSnapshot } from '../domain/history'
 import App from './App.vue'
@@ -353,6 +353,30 @@ describe('Plano', () => {
     await router.push('/plano')
     await flushPromises()
     expect(wrapper.get('[data-test="plan-error"]').text()).toContain('nenhum item selecionado')
+  })
+})
+
+describe('Projetos na Classificação', () => {
+  it('mostra a idade, filtra por idade mínima e guarda a escolha', async () => {
+    const project = (name: string, idle: number | null) =>
+      candidate(`project:D:\\dev\\${name}\\node_modules`, 'C', 1, { project: `D:\\dev\\${name}`, idleDays: idle, label: { pt: `${name} · node_modules`, en: `${name} · node_modules` } })
+    const withProjects = { ...classification, candidates: [...classification.candidates, project('loja', 412), project('novo', 0), project('x', null)] }
+    const { wrapper, saved } = await mountApp('/classificacao', fakeGateway({ classify: vi.fn(async () => withProjects) }))
+    await wrapper.get('[data-test="tab-C"]').trigger('click')
+    const rows = () => wrapper.findAll('[data-test="row"]').filter((r) => r.text().includes('node_modules'))
+    expect(rows()[0]!.text()).toContain('sem atividade há 412 dias')
+    expect(rows()[1]!.text()).toContain('atividade hoje')
+    expect(rows()[2]!.text()).toContain('idade desconhecida')
+    const checked = () => rows().map((r) => (r.get('input').element as HTMLInputElement).checked)
+    expect(checked()).toEqual([true, false, false])
+    await wrapper.get('[data-test="min-idle"]').setValue('30')
+    expect(saved.at(-1)!.minIdleDays).toBe(30)
+    expect(checked()).toEqual([true, false, false])
+    await wrapper.get('[data-test="min-idle"]').setValue('365')
+    expect(checked()).toEqual([true, false, false])
+    // tier sem projetos não mostra o filtro
+    await wrapper.get('[data-test="tab-A"]').trigger('click')
+    expect(wrapper.find('[data-test="min-idle"]').exists()).toBe(false)
   })
 })
 
@@ -888,7 +912,25 @@ describe('Configurações', () => {
       defaultDepth: 1,
       autoUpdate: true,
       betaUpdates: false,
+      projectRoots: [],
+      minIdleDays: 90,
     })
+  })
+
+  it('adiciona e remove pastas de projetos, que vão para a classificação', async () => {
+    const { wrapper, gateway, router } = await mountApp('/configuracoes')
+    expect(wrapper.find('[data-test="no-project-roots"]').exists()).toBe(true)
+    await wrapper.get('[data-test="new-project-root"]').setValue('D:\\dev')
+    await wrapper.get('[data-test="project-roots-form"]').trigger('submit')
+    expect(wrapper.findAll('[data-test="project-root"]')).toHaveLength(1)
+    expect((wrapper.get('[data-test="new-project-root"]').element as HTMLInputElement).value).toBe('')
+    await router.push('/classificacao')
+    await flushPromises()
+    expect(gateway.classify).toHaveBeenCalledWith([], ['D:\\dev'])
+    await router.push('/configuracoes')
+    await flushPromises()
+    await wrapper.get('[data-test="project-root"] button').trigger('click')
+    expect(wrapper.find('[data-test="no-project-roots"]').exists()).toBe(true)
   })
 
   it('adiciona e remove pastas extras, que vão para a classificação', async () => {
@@ -902,7 +944,7 @@ describe('Configurações', () => {
     expect((wrapper.get('[data-test="new-exclusion"]').element as HTMLInputElement).value).toBe('c:\\projetos')
     await router.push('/classificacao')
     await flushPromises()
-    expect(gateway.classify).toHaveBeenCalledWith(['C:\\Projetos'])
+    expect(gateway.classify).toHaveBeenCalledWith(['C:\\Projetos'], [])
     await router.push('/configuracoes')
     await flushPromises()
     await wrapper.get('[data-test="exclusion"] button').trigger('click')

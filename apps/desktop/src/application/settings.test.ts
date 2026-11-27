@@ -32,6 +32,8 @@ describe('sanitizeSettings', () => {
       defaultDepth: 2,
       autoUpdate: true,
       betaUpdates: false,
+      projectRoots: [],
+      minIdleDays: 90,
     })
     expect(
       sanitizeSettings({
@@ -41,10 +43,21 @@ describe('sanitizeSettings', () => {
         defaultDepth: 1,
         autoUpdate: false,
         betaUpdates: true,
+        projectRoots: [' D:\\dev ', 'D:\\dev', 7],
+        minIdleDays: 180,
       }),
-    ).toEqual({ language: 'en', theme: 'dark', extraExclusions: ['/a'], defaultDepth: 1, autoUpdate: false, betaUpdates: true })
+    ).toEqual({
+      language: 'en',
+      theme: 'dark',
+      extraExclusions: ['/a'],
+      defaultDepth: 1,
+      autoUpdate: false,
+      betaUpdates: true,
+      projectRoots: ['D:\\dev'],
+      minIdleDays: 180,
+    })
     expect(
-      sanitizeSettings({ language: 'fr', theme: 'roxo', extraExclusions: 'x', defaultDepth: 7, autoUpdate: 'sim', betaUpdates: 1 }),
+      sanitizeSettings({ language: 'fr', theme: 'roxo', extraExclusions: 'x', defaultDepth: 7, autoUpdate: 'sim', betaUpdates: 1, projectRoots: 'x', minIdleDays: 45 }),
     ).toEqual(DEFAULT_SETTINGS)
   })
 })
@@ -61,6 +74,7 @@ describe('settings store', () => {
     store.setDefaultDepth(1)
     store.setAutoUpdate(false)
     store.setBetaUpdates(true)
+    store.setMinIdleDays(365)
     expect(storage.saved.at(-1)).toEqual({
       language: 'en',
       theme: 'dark',
@@ -68,6 +82,8 @@ describe('settings store', () => {
       defaultDepth: 1,
       autoUpdate: false,
       betaUpdates: true,
+      projectRoots: [],
+      minIdleDays: 365,
     })
   })
 
@@ -81,6 +97,19 @@ describe('settings store', () => {
     expect(store.extraExclusions).toEqual(['C:\\Projetos'])
     store.removeExclusion('C:\\Projetos')
     expect(store.extraExclusions).toEqual([])
+    expect(storage.saved).toHaveLength(2)
+  })
+
+  it('pastas de projetos seguem a mesma regra das exclusões', () => {
+    const storage = memory()
+    const store = setup(storage)
+    store.load()
+    expect(store.addProjectRoot('  D:\\dev ')).toBe(true)
+    expect(store.addProjectRoot('d:\\DEV')).toBe(false)
+    expect(store.addProjectRoot('')).toBe(false)
+    expect(store.projectRoots).toEqual(['D:\\dev'])
+    store.removeProjectRoot('D:\\dev')
+    expect(store.projectRoots).toEqual([])
     expect(storage.saved).toHaveLength(2)
   })
 })

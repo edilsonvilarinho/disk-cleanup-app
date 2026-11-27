@@ -14,7 +14,14 @@ export interface Settings {
   autoUpdate: boolean
   /** Inclui as versões beta (prereleases) na busca. */
   betaUpdates: boolean
+  /** Pastas de projetos além das padrão do catálogo. */
+  projectRoots: string[]
+  /** Projeto só começa marcado com ao menos estes dias sem atividade. */
+  minIdleDays: MinIdleDays
 }
+
+export const MIN_IDLE_OPTIONS = [30, 90, 180, 365] as const
+export type MinIdleDays = (typeof MIN_IDLE_OPTIONS)[number]
 
 export const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
@@ -23,6 +30,8 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultDepth: 2,
   autoUpdate: true,
   betaUpdates: false,
+  projectRoots: [],
+  minIdleDays: 90,
 }
 
 /** Porta de persistência das preferências. */
@@ -39,10 +48,11 @@ const pick = <T>(value: unknown, allowed: readonly T[], fallback: T): T =>
 /** Valida o que veio do armazenamento: campo inválido volta ao padrão. */
 export function sanitizeSettings(raw: unknown): Settings {
   const r = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
-  const list = Array.isArray(r.extraExclusions) ? r.extraExclusions : []
-  const exclusions = [
-    ...new Set(list.filter((p): p is string => typeof p === 'string').map((p) => p.trim()).filter(Boolean)),
-  ]
+  const paths = (value: unknown): string[] => {
+    const list = Array.isArray(value) ? value : []
+    return [...new Set(list.filter((p): p is string => typeof p === 'string').map((p) => p.trim()).filter(Boolean))]
+  }
+  const exclusions = paths(r.extraExclusions)
   return {
     language: pick(r.language, ['auto', 'pt', 'en'] as const, DEFAULT_SETTINGS.language),
     theme: pick(r.theme, ['system', 'light', 'dark'] as const, DEFAULT_SETTINGS.theme),
@@ -50,6 +60,8 @@ export function sanitizeSettings(raw: unknown): Settings {
     defaultDepth: pick(r.defaultDepth, [1, 2] as const, DEFAULT_SETTINGS.defaultDepth),
     autoUpdate: flag(r.autoUpdate, DEFAULT_SETTINGS.autoUpdate),
     betaUpdates: flag(r.betaUpdates, DEFAULT_SETTINGS.betaUpdates),
+    projectRoots: paths(r.projectRoots),
+    minIdleDays: pick(r.minIdleDays, MIN_IDLE_OPTIONS, DEFAULT_SETTINGS.minIdleDays),
   }
 }
 

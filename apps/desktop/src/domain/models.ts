@@ -74,6 +74,10 @@ export interface CandidateDto {
   risk: Risk
   note: TextDto
   blocked: BlockDto | null
+  /** Raiz do projeto, quando o candidato é artefato de projeto. */
+  project: string | null
+  /** Dias sem atividade no projeto (fora dos artefatos); `null` = desconhecido. */
+  idleDays: number | null
 }
 
 export type SkipCode = 'not_found' | 'empty' | 'unresolved_variable' | 'excluded' | 'unmeasurable'

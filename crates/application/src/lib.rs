@@ -10,15 +10,15 @@ mod ports;
 mod survey;
 mod template;
 
-pub use catalog::{Catalog, CatalogExclusion, CatalogRule, RuleTarget};
-pub use classify::{ClassificationReport, ClassifyService, SkipReason, SkippedRule};
+pub use catalog::{Catalog, CatalogExclusion, CatalogRule, ProjectProfile, RuleTarget};
+pub use classify::{ClassificationReport, ClassifyService, ProjectInfo, SkipReason, SkippedRule};
 pub use error::AppError;
 pub use execute::{ExecuteService, PlannedStep};
 pub use plan::export_plan;
 pub use ports::{
     ActionRunner, CatalogRepository, CommandOutcome, Environment, ExecutionProgress, FileRecord,
-    FileWalker, PathInspector, PlanCodec, PortError, RemovalOutcome, ScanProgress, VolumeInfo,
-    WalkStats,
+    FileWalker, FoundArtifact, PathInspector, PlanCodec, PortError, ProjectFinder, RemovalOutcome,
+    ScanProgress, VolumeInfo, WalkStats,
 };
 pub use survey::{SurveyReport, SurveyRequest, SurveyService};
 pub use template::expand_template;

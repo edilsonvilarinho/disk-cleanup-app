@@ -13,7 +13,7 @@ import {
 
 function candidate(id: string, tier: Tier, sizeBytes: number, blockedBy: string | null = null): CandidateDto {
   const blocked = blockedBy ? { code: 'env_var' as const, value: blockedBy } : null
-  return { id, label: { pt: id, en: id }, tier, kind: 'path', target: id, sizeBytes, risk: 'none', note: { pt: '', en: '' }, blocked }
+  return { id, label: { pt: id, en: id }, tier, kind: 'path', target: id, sizeBytes, risk: 'none', note: { pt: '', en: '' }, blocked, project: null, idleDays: null }
 }
 
 const candidates = [

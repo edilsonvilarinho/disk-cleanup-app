@@ -72,6 +72,8 @@ fn catalog() -> Catalog {
     let mut cuda = rule("cuda", Tier::C, path(r"C:\cuda\v11.8"));
     cuda.watch_env = vec!["CUDA_PATH".into()];
     Catalog {
+        projects: Vec::new(),
+        project_roots: Vec::new(),
         rules: vec![
             rule(
                 "npm",
@@ -246,6 +248,8 @@ fn tilde_followed_by_a_name_is_literal() {
 #[test]
 fn catalog_exclusion_with_unresolved_variable_is_kept_literally() {
     let catalog = Catalog {
+        projects: Vec::new(),
+        project_roots: Vec::new(),
         rules: vec![],
         exclusions: vec![CatalogExclusion {
             pattern: r"%SEM_VAR%\x".into(),
@@ -286,4 +290,148 @@ fn settings_exclusions_are_added_on_top_of_the_baseline_and_blank_ones_ignored()
         ))
     );
     assert_eq!(report.exclusions.len(), 2);
+}
+
+// ---------- Artefatos de projeto ----------
+
+use disk_cleanup_application::{FoundArtifact, ProjectFinder, ProjectProfile};
+use std::cell::RefCell;
+
+/// Finder falso: devolve artefatos prontos e registra as pastas pedidas.
+struct FakeFinder {
+    found: Vec<FoundArtifact>,
+    roots: RefCell<Vec<String>>,
+}
+
+impl ProjectFinder for FakeFinder {
+    fn find(&self, roots: &[String], profiles: &[ProjectProfile]) -> Vec<FoundArtifact> {
+        assert_eq!(profiles.len(), 1);
+        self.roots.borrow_mut().extend(roots.iter().cloned());
+        self.found.clone()
+    }
+}
+
+fn artifact(project: &str, name: &str, idle: Option<u32>) -> FoundArtifact {
+    FoundArtifact {
+        profile: "node".into(),
+        project: project.into(),
+        path: format!(r"{project}\{name}"),
+        idle_days: idle,
+    }
+}
+
+fn project_catalog() -> Catalog {
+    Catalog {
+        projects: vec![ProjectProfile {
+            id: "node".into(),
+            label: LocalizedText::same("Node.js"),
+            markers: vec!["package.json".into()],
+            artifacts: vec!["node_modules".into()],
+            note: LocalizedText::new("npm install recria", "npm install recreates"),
+        }],
+        project_roots: vec![r"%USERPROFILE%\workspace".into(), r"%SEM_VAR%\x".into()],
+        ..Catalog::default()
+    }
+}
+
+#[test]
+fn project_artifacts_become_tier_c_candidates_with_idle_days() {
+    let mut env = env();
+    env.path = vec![r"C:\Users\u\workspace\cli\node_modules\.bin".into()];
+    let finder = FakeFinder {
+        found: vec![
+            artifact(r"C:\Users\u\workspace\loja", "node_modules", Some(412)),
+            artifact(r"C:\Users\u\workspace\novo", "node_modules", Some(0)),
+            artifact(r"C:\Users\u\workspace\vazio", "node_modules", None),
+            artifact(r"D:\Backups\velho", "node_modules", Some(900)),
+            artifact(r"C:\Users\u\workspace\cli", "node_modules", Some(200)),
+        ],
+        roots: RefCell::default(),
+    };
+    let inspector = FakeInspector::with(&[
+        (r"C:\Users\u\workspace\loja\node_modules", 1_900),
+        (r"C:\Users\u\workspace\novo\node_modules", 800),
+        (r"C:\Users\u\workspace\vazio\node_modules", 0),
+        (r"D:\Backups\velho\node_modules", 50),
+        (r"C:\Users\u\workspace\cli\node_modules", 70),
+    ]);
+    let catalog = FakeCatalog(Ok(project_catalog()));
+    let baseline = ExclusionList::default().with(r"D:\Backups", LocalizedText::same("backup"));
+    let report = ClassifyService::new(&catalog, &env, &inspector)
+        .with_projects(&finder, &[r" D:\dev ".into(), String::new()])
+        .run(baseline, &[])
+        .unwrap();
+
+    // pastas do catálogo (variável ausente é ignorada) + as das Configurações
+    assert_eq!(
+        *finder.roots.borrow(),
+        vec![r"C:\Users\u\workspace".to_string(), r"D:\dev".to_string()]
+    );
+    let ids: Vec<_> = report.candidates.iter().map(|c| c.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        [
+            r"project:C:\Users\u\workspace\loja\node_modules",
+            r"project:C:\Users\u\workspace\novo\node_modules",
+            r"project:C:\Users\u\workspace\cli\node_modules",
+        ]
+    );
+    let loja = &report.candidates[0];
+    assert_eq!(loja.label, LocalizedText::same("loja · node_modules"));
+    assert_eq!(loja.note.en, "npm install recreates");
+    assert_eq!((loja.tier, loja.risk), (Tier::C, Risk::Redownload));
+    assert_eq!(
+        loja.action,
+        Action::RemovePath {
+            path: r"C:\Users\u\workspace\loja\node_modules".into()
+        }
+    );
+    // binário no PATH dentro do artefato: bloqueado, como qualquer regra
+    assert!(matches!(
+        report.candidates[2].availability,
+        Availability::Blocked {
+            reason: BlockReason::PathEntry { .. }
+        }
+    ));
+    // idade fica no relatório, por candidato
+    let idle: Vec<_> = report
+        .projects
+        .iter()
+        .map(|p| (p.id.as_str(), p.idle_days))
+        .collect();
+    assert_eq!(
+        idle[0],
+        (r"project:C:\Users\u\workspace\loja\node_modules", Some(412))
+    );
+    assert_eq!(idle[1].1, Some(0));
+    assert_eq!(report.projects[0].project, r"C:\Users\u\workspace\loja");
+    // excluído aparece em "sem candidato"; vazio some sem ruído
+    assert!(report
+        .skipped
+        .iter()
+        .any(|s| s.id == r"project:D:\Backups\velho\node_modules"
+            && matches!(s.reason, SkipReason::Excluded(_))));
+    assert!(!report.skipped.iter().any(|s| s.id.contains("vazio")));
+}
+
+#[test]
+fn without_a_finder_or_profiles_there_are_no_project_candidates() {
+    let finder = FakeFinder {
+        found: vec![artifact(r"C:\p", "node_modules", Some(1))],
+        roots: RefCell::default(),
+    };
+    let inspector = FakeInspector::with(&[(r"C:\p\node_modules", 10)]);
+    let catalog = FakeCatalog(Ok(project_catalog()));
+    let report = ClassifyService::new(&catalog, &env(), &inspector)
+        .run(ExclusionList::default(), &[])
+        .unwrap();
+    assert!(report.candidates.is_empty() && report.projects.is_empty());
+
+    let no_profiles = FakeCatalog(Ok(Catalog::default()));
+    let report = ClassifyService::new(&no_profiles, &env(), &inspector)
+        .with_projects(&finder, &[r"C:\p".into()])
+        .run(ExclusionList::default(), &[])
+        .unwrap();
+    assert!(report.candidates.is_empty());
+    assert!(finder.roots.borrow().is_empty());
 }

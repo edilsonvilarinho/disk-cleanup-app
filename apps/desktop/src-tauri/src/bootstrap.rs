@@ -12,8 +12,8 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 use disk_cleanup_infrastructure::{
-    catalog_for, exclusions_for, FsActionRunner, JwalkFileWalker, SkillPlanJsonCodec,
-    SnapshotEnvironment, SysinfoVolumeInfo, WalkerPathInspector,
+    catalog_for, exclusions_for, FsActionRunner, FsProjectFinder, JwalkFileWalker,
+    SkillPlanJsonCodec, SnapshotEnvironment, SysinfoVolumeInfo, WalkerPathInspector,
 };
 
 use crate::dto::{
@@ -80,17 +80,23 @@ async fn run_survey(app: AppHandle, request: SurveyRequestDto) -> Result<SurveyD
 async fn classify(
     app: AppHandle,
     extra_exclusions: Vec<String>,
+    project_roots: Vec<String>,
 ) -> Result<ClassificationDto, ErrorDto> {
     tauri::async_runtime::spawn_blocking(move || {
         let env = SnapshotEnvironment::from_process();
         let session = app.state::<Session>();
-        service::classify(
+        let finder = FsProjectFinder::default();
+        service::classify_projects(
             &session,
             &catalog_for(OS)?,
             &env,
             &WalkerPathInspector::new(JwalkFileWalker),
             exclusions_for(OS, &env),
             &extra_exclusions,
+            Some(service::ProjectSearch {
+                finder: &finder,
+                roots: &project_roots,
+            }),
         )
     })
     .await

@@ -9,9 +9,9 @@ describe('TauriGateway', () => {
     const invoke = vi.fn(async (cmd: string) => ({ cmd }))
     const gateway = new TauriGateway(invoke as never, vi.fn() as never)
     expect(await gateway.systemInfo()).toEqual({ cmd: 'system_info' })
-    await gateway.classify(['C:\\Projetos'])
+    await gateway.classify(['C:\\Projetos'], ['D:\\dev'])
     await gateway.buildPlan('C:', ['a'])
-    expect(invoke).toHaveBeenCalledWith('classify', { extraExclusions: ['C:\\Projetos'] })
+    expect(invoke).toHaveBeenCalledWith('classify', { extraExclusions: ['C:\\Projetos'], projectRoots: ['D:\\dev'] })
     expect(invoke).toHaveBeenCalledWith('build_plan', { volume: 'C:', selected: ['a'] })
   })
 
@@ -80,8 +80,13 @@ describe('DemoGateway', () => {
     expect(survey.volume.usedBytes + survey.volume.freeBytes).toBe(survey.volume.totalBytes)
     expect(survey.cloud.every((c) => c.isCloud)).toBe(true)
 
-    const classification = await gateway.classify([])
+    const classification = await gateway.classify([], [])
     expect(classification.candidates.some((c) => c.blocked !== null)).toBe(true)
+    // Projetos de exemplo: tier C, com raiz e idade; um recente (começa desmarcado).
+    const projects = classification.candidates.filter((c) => c.project !== null)
+    expect(projects.length).toBeGreaterThan(1)
+    expect(projects.every((c) => c.tier === 'C' && c.idleDays !== null)).toBe(true)
+    expect(projects.some((c) => c.idleDays! < 90)).toBe(true)
 
     const ids = classification.candidates.filter((c) => c.tier === 'A').map((c) => c.id)
     const plan = await gateway.buildPlan('C:', ids)
@@ -96,7 +101,7 @@ describe('DemoGateway', () => {
     await expect(gateway.report()).rejects.toMatchObject({ code: 'no_execution' })
     await expect(gateway.previewTier('A')).rejects.toMatchObject({ code: 'not_approved' })
     await expect(gateway.approvePlan(['A'], {}, true)).rejects.toMatchObject({ code: 'plan_required' })
-    const classification = await gateway.classify(['%USERPROFILE%\\.m2'])
+    const classification = await gateway.classify(['%USERPROFILE%\\.m2'], [])
     expect(classification.candidates.some((c) => c.id === 'maven-repository')).toBe(false)
     expect(classification.skipped.some((s) => s.id === 'maven-repository' && s.code === 'excluded')).toBe(true)
     const ids = classification.candidates.filter((c) => c.tier !== 'B' && !c.blocked).map((c) => c.id)
@@ -140,7 +145,16 @@ describe('browserTheme', () => {
 
   it('persiste as Configurações no localStorage e tolera storage bloqueado', () => {
     expect(localStorageSettingsStorage.load()).toBeNull()
-    const settings = { language: 'en' as const, theme: 'dark' as const, extraExclusions: ['/a'], defaultDepth: 1 as const, autoUpdate: true, betaUpdates: false }
+    const settings = {
+      language: 'en' as const,
+      theme: 'dark' as const,
+      extraExclusions: ['/a'],
+      defaultDepth: 1 as const,
+      autoUpdate: true,
+      betaUpdates: false,
+      projectRoots: ['/dev'],
+      minIdleDays: 90 as const,
+    }
     localStorageSettingsStorage.save(settings)
     expect(localStorageSettingsStorage.load()).toEqual(settings)
     vi.stubGlobal('localStorage', {

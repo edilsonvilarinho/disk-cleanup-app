@@ -87,6 +87,24 @@ pub struct CommandOutcome {
     pub output: String,
 }
 
+/// Artefato regenerável encontrado dentro de um projeto.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FoundArtifact {
+    /// `id` do `ProjectProfile` que o reconheceu.
+    pub profile: String,
+    /// Raiz do projeto (onde está o marcador).
+    pub project: String,
+    /// Diretório do artefato.
+    pub path: String,
+    /// Dias desde a atividade mais recente no projeto, fora dos artefatos.
+    pub idle_days: Option<u32>,
+}
+
+/// Procura projetos nas pastas dadas. Somente leitura; nunca segue link.
+pub trait ProjectFinder {
+    fn find(&self, roots: &[String], profiles: &[crate::ProjectProfile]) -> Vec<FoundArtifact>;
+}
+
 /// Executa as ações de um plano aprovado. `remove_path` e `trash_path` devolvem
 /// `PortError::NotFound` se o caminho não existe.
 pub trait ActionRunner {

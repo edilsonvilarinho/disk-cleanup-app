@@ -18,8 +18,8 @@ apps/desktop/src (Vue)  ──IPC──▶  apps/desktop/src-tauri (comandos, DT
 | Crate | Responsabilidade | Depende de |
 |---|---|---|
 | `domain` | `ByteSize`, `VolumeUsage`, `Tier`, `ExclusionList`, `ToolchainGuard`, `SafetyGuard`, `SizeAggregator`, `Candidate`, `Plan`, `approve`, `ItemResult`, `TierRun`, `CleanupReport` | nada (só `thiserror`) |
-| `application` | Portas (`FileWalker`, `VolumeInfo`, `Environment`, `PathInspector`, `CatalogRepository`, `PlanCodec`, `ScanProgress`, `ActionRunner`, `ExecutionProgress`) e casos de uso (`SurveyService`, `ClassifyService`, `export_plan`, `ExecuteService`) | `domain` |
-| `infrastructure` | `JwalkFileWalker`, `allocated_size` (Win32/POSIX), `SysinfoVolumeInfo`, `SnapshotEnvironment`, `TomlCatalogRepository`, `SkillPlanJsonCodec`, `platform_exclusions`, `FsActionRunner` (remoção best-effort sem seguir link/junção, envio para a Lixeira via `Recycler`/`SystemRecycler` com o crate `trash`, comandos pelo shell da plataforma) | `application`, `domain` |
+| `application` | Portas (`FileWalker`, `VolumeInfo`, `Environment`, `PathInspector`, `CatalogRepository`, `PlanCodec`, `ScanProgress`, `ActionRunner`, `ExecutionProgress`, `ProjectFinder`) e casos de uso (`SurveyService`, `ClassifyService`, `export_plan`, `ExecuteService`) | `domain` |
+| `infrastructure` | `JwalkFileWalker`, `allocated_size` (Win32/POSIX), `SysinfoVolumeInfo`, `SnapshotEnvironment`, `TomlCatalogRepository`, `SkillPlanJsonCodec`, `platform_exclusions`, `FsProjectFinder` (projetos por marcador, sem seguir link nem descer em artefato ou pasta oculta; idade pela atividade fora dos artefatos e pelo `.git/index`), `FsActionRunner` (remoção best-effort sem seguir link/junção, envio para a Lixeira via `Recycler`/`SystemRecycler` com o crate `trash`, comandos pelo shell da plataforma) | `application`, `domain` |
 | `src-tauri` | `service` (lógica dos comandos, testada) + `dto` (mapeamento camelCase) + `bootstrap` (raiz de composição) | todos |
 
 ## Frontend (Vue 3 + TypeScript)

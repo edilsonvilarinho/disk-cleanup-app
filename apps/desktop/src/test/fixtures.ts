@@ -68,6 +68,8 @@ export const candidate = (
   risk: 'none',
   note: text(''),
   blocked: null,
+  project: null,
+  idleDays: null,
   ...extra,
 })
 

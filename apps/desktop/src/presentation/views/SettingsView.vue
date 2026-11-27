@@ -37,6 +37,11 @@ const updateStatus = computed(() => {
 function add() {
   if (settings.addExclusion(newPath.value)) newPath.value = ''
 }
+
+const newRoot = ref('')
+function addRoot() {
+  if (settings.addProjectRoot(newRoot.value)) newRoot.value = ''
+}
 </script>
 
 <template>
@@ -99,6 +104,32 @@ function add() {
       </TransitionGroup>
       <Transition name="fade">
         <p v-if="!settings.extraExclusions.length" class="muted" data-test="no-exclusions">{{ t('settings.noExclusions') }}</p>
+      </Transition>
+    </section>
+
+    <section class="card" data-test="project-roots-settings">
+      <h2>{{ t('settings.projectRoots') }}</h2>
+      <p class="small muted">{{ t('settings.projectRootsHint') }}</p>
+      <form class="actions" style="flex-wrap: nowrap" data-test="project-roots-form" @submit.prevent="addRoot">
+        <label class="sr-only" for="new-project-root">{{ t('settings.projectRootPlaceholder') }}</label>
+        <input
+          id="new-project-root"
+          v-model="newRoot"
+          class="select mono"
+          style="flex: 1; min-width: 0"
+          :placeholder="t('settings.projectRootPlaceholder')"
+          data-test="new-project-root"
+        />
+        <button type="submit" class="btn" data-test="add-project-root">{{ t('settings.add') }}</button>
+      </form>
+      <TransitionGroup tag="ul" name="list" class="checklist small" style="position: relative">
+        <li v-for="path in settings.projectRoots" :key="path" class="kv" data-test="project-root">
+          <span class="mono" style="word-break: break-all">{{ path }}</span>
+          <button type="button" class="btn" :aria-label="t('settings.remove', { path })" @click="settings.removeProjectRoot(path)">×</button>
+        </li>
+      </TransitionGroup>
+      <Transition name="fade">
+        <p v-if="!settings.projectRoots.length" class="muted" data-test="no-project-roots">{{ t('settings.noProjectRoots') }}</p>
       </Transition>
     </section>
 
