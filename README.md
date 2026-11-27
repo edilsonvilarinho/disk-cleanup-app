@@ -3,11 +3,17 @@
 </h1>
 
 <p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-F59E0B?style=flat-square" alt="MIT License" /></a>
+  <a href="https://github.com/edilsonvilarinho/disk-cleanup-app/releases"><img src="https://img.shields.io/github/v/release/edilsonvilarinho/disk-cleanup-app?include_prereleases&sort=semver&style=flat-square" alt="Latest release" /></a>
+  <a href="https://github.com/edilsonvilarinho/disk-cleanup-app/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/edilsonvilarinho/disk-cleanup-app/ci.yml?branch=main&style=flat-square&label=CI" alt="CI status" /></a>
+  <img src="https://img.shields.io/badge/coverage-Rust%2098.9%25%20%C2%B7%20UI%2099.1%25-10B981?style=flat-square" alt="Line coverage: Rust 98.9%, UI 99.1%" />
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/Windows%20%7C%20Linux%20%7C%20macOS-4493F8?style=flat-square" alt="Supported platforms: Windows, Linux and macOS" />
   <img src="https://img.shields.io/badge/Tauri-2-24C8DB?style=flat-square&logo=tauri&logoColor=white" alt="Tauri 2" />
   <img src="https://img.shields.io/badge/Rust-stable-000000?style=flat-square&logo=rust&logoColor=white" alt="Rust stable" />
   <img src="https://img.shields.io/badge/Vue-3%20%2B%20TypeScript-42B883?style=flat-square&logo=vuedotjs&logoColor=white" alt="Vue 3 and TypeScript" />
-  <img src="https://img.shields.io/badge/coverage-Rust%2098%25%20%C2%B7%20UI%20100%25-10B981?style=flat-square" alt="Line coverage: Rust 98%, UI 100%" />
 </p>
 
 <p align="center">
@@ -195,6 +201,20 @@ only when you click **Restart and update**. Every update is verified against a m
 Beta versions are opt-in (Settings → Updates → *Receive beta versions*). Details:
 [docs/release.md](docs/release.md).
 
+## Related projects
+
+Disk Cleanup sits between disk-usage analyzers and cleaners. Projects worth knowing, and where they
+differ:
+
+| Project | Focus | Difference from Disk Cleanup |
+|---|---|---|
+| [tw93/Mole](https://github.com/tw93/Mole) | macOS/Windows cleaner, CLI + native apps | Deletes per command with `--dry-run`; no approvable plan or per-tier report |
+| [qarmin/czkawka](https://github.com/qarmin/czkawka) | Duplicates, empty folders, similar images | Finds redundant user files; does not classify caches or toolchains |
+| [bootandy/dust](https://github.com/bootandy/dust) · [Byron/dua-cli](https://github.com/Byron/dua-cli) · [dundee/gdu](https://github.com/dundee/gdu) | Terminal disk-usage analyzers | Measure and (dua/gdu) delete by hand; no safety catalog |
+| [voidcosmos/npkill](https://github.com/voidcosmos/npkill) · [tbillington/kondo](https://github.com/tbillington/kondo) | Project artifacts (`node_modules`, `target`…) | Scoped to project folders, not the whole volume |
+| [bleachbit/bleachbit](https://github.com/bleachbit/bleachbit) | System cleaner for Windows and Linux | Cleaner definitions in XML (CleanerML); no approved per-tier plan |
+| [windirstat/windirstat](https://github.com/windirstat/windirstat) · [adileo/squirreldisk](https://github.com/adileo/squirreldisk) | Treemap / sunburst visualization | Visual exploration first; cleanup is manual |
+
 ## License
 
-Proprietary — all rights reserved.
+[MIT](LICENSE) © 2026 Edilson Souza.

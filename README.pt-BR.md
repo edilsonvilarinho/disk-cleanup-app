@@ -3,11 +3,17 @@
 </h1>
 
 <p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-F59E0B?style=flat-square" alt="Licença MIT" /></a>
+  <a href="https://github.com/edilsonvilarinho/disk-cleanup-app/releases"><img src="https://img.shields.io/github/v/release/edilsonvilarinho/disk-cleanup-app?include_prereleases&sort=semver&style=flat-square" alt="Última versão" /></a>
+  <a href="https://github.com/edilsonvilarinho/disk-cleanup-app/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/edilsonvilarinho/disk-cleanup-app/ci.yml?branch=main&style=flat-square&label=CI" alt="Status do CI" /></a>
+  <img src="https://img.shields.io/badge/cobertura-Rust%2098.9%25%20%C2%B7%20UI%2099.1%25-10B981?style=flat-square" alt="Cobertura de linhas: Rust 98,9%, UI 99,1%" />
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/Windows%20%7C%20Linux%20%7C%20macOS-4493F8?style=flat-square" alt="Plataformas: Windows, Linux e macOS" />
   <img src="https://img.shields.io/badge/Tauri-2-24C8DB?style=flat-square&logo=tauri&logoColor=white" alt="Tauri 2" />
   <img src="https://img.shields.io/badge/Rust-stable-000000?style=flat-square&logo=rust&logoColor=white" alt="Rust stable" />
   <img src="https://img.shields.io/badge/Vue-3%20%2B%20TypeScript-42B883?style=flat-square&logo=vuedotjs&logoColor=white" alt="Vue 3 e TypeScript" />
-  <img src="https://img.shields.io/badge/cobertura-Rust%2098%25%20%C2%B7%20UI%20100%25-10B981?style=flat-square" alt="Cobertura de linhas: Rust 98%, UI 100%" />
 </p>
 
 <p align="center">
@@ -189,6 +195,20 @@ A **atualização automática** vem ligada: o app verifica ao abrir, baixa em se
 quando você clica em **Reiniciar e atualizar**. Toda atualização é conferida por assinatura minisign.
 Versões beta são opcionais (Configurações → Atualizações → *Receber versões beta*).
 
+## Projetos relacionados
+
+O Disk Cleanup fica entre os analisadores de uso de disco e os limpadores. Projetos que vale
+conhecer, e onde diferem:
+
+| Projeto | Foco | Diferença para o Disk Cleanup |
+|---|---|---|
+| [tw93/Mole](https://github.com/tw93/Mole) | Limpador macOS/Windows, CLI + apps nativos | Apaga por comando com `--dry-run`; sem plano aprovável nem relatório por tier |
+| [qarmin/czkawka](https://github.com/qarmin/czkawka) | Duplicados, pastas vazias, imagens parecidas | Acha arquivos redundantes do usuário; não classifica caches nem toolchains |
+| [bootandy/dust](https://github.com/bootandy/dust) · [Byron/dua-cli](https://github.com/Byron/dua-cli) · [dundee/gdu](https://github.com/dundee/gdu) | Analisadores de uso no terminal | Medem e (dua/gdu) apagam à mão; sem catálogo de segurança |
+| [voidcosmos/npkill](https://github.com/voidcosmos/npkill) · [tbillington/kondo](https://github.com/tbillington/kondo) | Artefatos de projeto (`node_modules`, `target`…) | Restritos a pastas de projeto, não ao volume inteiro |
+| [bleachbit/bleachbit](https://github.com/bleachbit/bleachbit) | Limpador de sistema para Windows e Linux | Definições de limpeza em XML (CleanerML); sem plano aprovado por tier |
+| [windirstat/windirstat](https://github.com/windirstat/windirstat) · [adileo/squirreldisk](https://github.com/adileo/squirreldisk) | Visualização em treemap / sunburst | Exploração visual primeiro; a limpeza é manual |
+
 ## Licença
 
-Proprietário — todos os direitos reservados.
+[MIT](LICENSE) © 2026 Edilson Souza.
