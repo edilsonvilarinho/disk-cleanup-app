@@ -105,7 +105,7 @@ describe('shell', () => {
   })
 
   it('a barra de status mostra o catálogo quando difere do sistema e leva a versão às Configurações', async () => {
-    const systemInfo = vi.fn(async () => ({ os: 'linux', volumeRoot: '/', profile: '/home/u', catalog: 'macos' }))
+    const systemInfo = vi.fn(async () => ({ os: 'linux', volumeRoot: '/', profile: '/home/u', catalog: 'macos', projectProfiles: [] }))
     const { wrapper, router } = await mountApp('/', fakeGateway({ systemInfo }))
     expect(wrapper.get('[data-test="env-catalog"]').text()).toContain('macos')
     await wrapper.get('[data-test="app-version"]').trigger('click')
@@ -937,7 +937,42 @@ describe('Configurações', () => {
       betaUpdates: false,
       projectRoots: [],
       minIdleDays: 90,
+      userRules: [],
+      disabledProfiles: [],
     })
+  })
+
+  it('regra própria passa pela validação do núcleo antes de salvar; perfis ligam e desligam', async () => {
+    const checkRule = vi
+      .fn()
+      .mockResolvedValueOnce({ code: 'excluded', detail: 'C:\\Windows\\Installer', reason: { pt: 'cache do MSI', en: 'MSI cache' } })
+      .mockResolvedValueOnce({ code: 'ok', detail: 'C:\\Users\\u\\Teams\\Cache', reason: null })
+    const { wrapper, gateway, router, saved } = await mountApp('/configuracoes', fakeGateway({ checkRule }))
+    expect(wrapper.find('[data-test="no-user-rules"]').exists()).toBe(true)
+    await wrapper.get('[data-test="rule-path"]').setValue('C:\\Windows')
+    await wrapper.get('[data-test="user-rule-form"]').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('[data-test="rule-error"]').text()).toContain('C:\\Windows\\Installer')
+    expect(wrapper.get('[data-test="rule-error"]').text()).toContain('cache do MSI')
+    expect(wrapper.findAll('[data-test="user-rule"]')).toHaveLength(0)
+    await wrapper.get('[data-test="rule-label"]').setValue('Teams')
+    await wrapper.get('[data-test="rule-path"]').setValue('C:\\Users\\u\\Teams\\Cache')
+    await wrapper.get('[data-test="user-rule-form"]').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('[data-test="rule-error"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="user-rule"]').text()).toContain('Teams')
+    expect(saved.at(-1)!.userRules).toEqual([{ label: 'Teams', path: 'C:\\Users\\u\\Teams\\Cache', tier: 'A' }])
+    await wrapper.get('[data-test="profile-node"] input').setValue(false)
+    expect(saved.at(-1)!.disabledProfiles).toEqual(['node'])
+    await router.push('/classificacao')
+    await flushPromises()
+    expect(gateway.classify).toHaveBeenCalledWith(
+      expect.objectContaining({ disabledProfiles: ['node'], userRules: [expect.objectContaining({ label: 'Teams' })] }),
+    )
+    await router.push('/configuracoes')
+    await flushPromises()
+    await wrapper.get('[data-test="user-rule"] button').trigger('click')
+    expect(wrapper.find('[data-test="no-user-rules"]').exists()).toBe(true)
   })
 
   it('adiciona e remove pastas de projetos, que vão para a classificação', async () => {
@@ -949,7 +984,7 @@ describe('Configurações', () => {
     expect((wrapper.get('[data-test="new-project-root"]').element as HTMLInputElement).value).toBe('')
     await router.push('/classificacao')
     await flushPromises()
-    expect(gateway.classify).toHaveBeenCalledWith([], ['D:\\dev'])
+    expect(gateway.classify).toHaveBeenCalledWith(expect.objectContaining({ projectRoots: ['D:\\dev'] }))
     await router.push('/configuracoes')
     await flushPromises()
     await wrapper.get('[data-test="project-root"] button').trigger('click')
@@ -967,7 +1002,7 @@ describe('Configurações', () => {
     expect((wrapper.get('[data-test="new-exclusion"]').element as HTMLInputElement).value).toBe('c:\\projetos')
     await router.push('/classificacao')
     await flushPromises()
-    expect(gateway.classify).toHaveBeenCalledWith(['C:\\Projetos'], [])
+    expect(gateway.classify).toHaveBeenCalledWith(expect.objectContaining({ extraExclusions: ['C:\\Projetos'] }))
     await router.push('/configuracoes')
     await flushPromises()
     await wrapper.get('[data-test="exclusion"] button').trigger('click')

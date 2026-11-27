@@ -1,7 +1,7 @@
 // Gateway de demonstração: permite abrir a interface no navegador (`pnpm dev`)
 // sem o núcleo Rust. Dados baseados no caso documentado na skill; mesmo
 // contrato do núcleo (textos `{pt, en}`, motivos e erros como código).
-import type { DiskCleanupGateway, SurveyRequest } from '../application/gateway'
+import type { ClassifyRequest, DiskCleanupGateway, SurveyRequest } from '../application/gateway'
 import { defaultDisposal } from '../domain/disposal'
 import { GIB } from '../domain/format'
 import type {
@@ -10,6 +10,7 @@ import type {
   ClassificationDto,
   Disposal,
   ErrorDto,
+  RuleCheckDto,
   ExclusionDto,
   ExecutionEventDto,
   ItemResultDto,
@@ -138,6 +139,8 @@ export class DemoGateway implements DiskCleanupGateway {
   private extra: string[] = []
   private approved: Tier[] = []
   private disposals: Partial<Record<Tier, Disposal>> = {}
+  /** Regras próprias e projetos dos perfis ligados, da última classificação. */
+  private custom: CandidateDto[] = []
   private runs: TierRunDto[] = []
   private free = INITIAL_FREE
 
@@ -148,7 +151,31 @@ export class DemoGateway implements DiskCleanupGateway {
   }
 
   async systemInfo(): Promise<SystemInfoDto> {
-    return { os: 'demo', volumeRoot: 'C:\\', profile: 'C:\\Users\\demo', catalog: 'windows' }
+    return {
+      os: 'demo',
+      volumeRoot: 'C:\\',
+      profile: 'C:\\Users\\demo',
+      catalog: 'windows',
+      projectProfiles: [
+        { id: 'node', label: text('Node.js') },
+        { id: 'rust', label: text('Rust') },
+        { id: 'python', label: text('Python') },
+      ],
+    }
+  }
+
+  /** Mesmos códigos do núcleo, com regras simplificadas para a demonstração. */
+  async checkRule(extraExclusions: string[], path: string): Promise<RuleCheckDto> {
+    const value = path.trim()
+    if (!value) return { code: 'empty', detail: null, reason: null }
+    const lower = value.toLowerCase()
+    const hit = [...EXCLUSIONS.map((e) => e.pattern), ...extraExclusions].find((p) => {
+      const pl = p.toLowerCase()
+      return lower.startsWith(pl) || pl.startsWith(lower)
+    })
+    if (hit) return { code: 'excluded', detail: hit, reason: text('exclusão obrigatória', 'mandatory exclusion') }
+    if (value.split(/[\\/]/).filter(Boolean).length < 3) return { code: 'too_broad', detail: value, reason: null }
+    return { code: 'ok', detail: value, reason: null }
   }
 
   async runSurvey(_request: SurveyRequest, onProgress: (p: ScanProgressDto) => void): Promise<SurveyDto> {
@@ -178,12 +205,18 @@ export class DemoGateway implements DiskCleanupGateway {
     }
   }
 
-  async classify(extraExclusions: string[], _projectRoots: string[]): Promise<ClassificationDto> {
+  async classify(request: ClassifyRequest): Promise<ClassificationDto> {
     await this.wait()
-    this.extra = [...extraExclusions]
+    this.extra = [...request.extraExclusions]
+    const own = request.userRules.map((r) =>
+      candidate(`user:${r.path}`, text(r.label || r.path), r.tier, 1.2, r.path, { note: text('regra própria', 'own rule') }),
+    )
+    const profileOf = (c: CandidateDto) => (c.target.endsWith('node_modules') ? 'node' : c.target.endsWith('target') ? 'rust' : 'python')
+    const projects = PROJECTS.filter((c) => !request.disabledProfiles.includes(profileOf(c)))
+    this.custom = [...own, ...projects]
     const extra = this.extra.map((pattern) => ({ pattern, reason: text('excluída nas Configurações', 'excluded in Settings') }))
     const isExcluded = (c: CandidateDto) => this.extra.some((p) => c.target.toLowerCase().startsWith(p.toLowerCase()))
-    const candidates = [...CANDIDATES, ...PROJECTS, ...FILES].filter((c) => !isExcluded(c))
+    const candidates = [...CANDIDATES, ...this.custom, ...FILES].filter((c) => !isExcluded(c))
     return {
       candidates,
       skipped: [
@@ -196,7 +229,7 @@ export class DemoGateway implements DiskCleanupGateway {
   }
 
   async buildPlan(volumeName: string, selected: string[]): Promise<PlanDto> {
-    const items = [...CANDIDATES, ...PROJECTS, ...FILES].filter((c) => selected.includes(c.id))
+    const items = [...CANDIDATES, ...this.custom, ...FILES].filter((c) => selected.includes(c.id))
     if (items.length === 0) throw fail('plan_empty')
     this.planned = items
     this.approved = []

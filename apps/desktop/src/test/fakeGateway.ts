@@ -11,6 +11,7 @@ export function fakeGateway(overrides: Partial<DiskCleanupGateway> = {}): DiskCl
       return survey
     }),
     classify: vi.fn(async () => classification),
+    checkRule: vi.fn(async (_extra: string[], path: string) => ({ code: 'ok' as const, detail: path, reason: null })),
     buildPlan: vi.fn(async () => plan),
     approvePlan: vi.fn(async () => approval),
     previewTier: vi.fn(async () => stepsA),

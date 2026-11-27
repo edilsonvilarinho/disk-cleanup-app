@@ -95,7 +95,7 @@ fn env() -> SnapshotEnvironment {
 
 #[test]
 fn system_info_derives_volume_root_and_profile_per_os() {
-    let windows = system_info(&env(), "windows");
+    let windows = system_info(&env(), "windows", &Catalogue);
     assert_eq!(
         (windows.os.as_str(), windows.volume_root.as_str()),
         ("windows", r"C:\")
@@ -105,12 +105,17 @@ fn system_info_derives_volume_root_and_profile_per_os() {
     let linux = system_info(
         &SnapshotEnvironment::from_pairs(vec![("HOME".into(), "/home/u".into())]),
         "linux",
+        &Catalogue,
     );
     assert_eq!(
         (linux.volume_root.as_str(), linux.profile.as_deref()),
         ("/", Some("/home/u"))
     );
-    let bare = system_info(&SnapshotEnvironment::from_pairs(vec![]), "windows");
+    let bare = system_info(
+        &SnapshotEnvironment::from_pairs(vec![]),
+        "windows",
+        &Catalogue,
+    );
     assert_eq!((bare.volume_root.as_str(), bare.profile), (r"C:\", None));
 }
 
@@ -448,4 +453,153 @@ fn large_files_from_the_survey_become_file_candidates() {
     let file = dto.candidates.iter().find(|c| c.origin == "file").unwrap();
     assert_eq!(file.id, r"file:C:\Users\u\Downloads\ubuntu.iso");
     assert_eq!((file.tier.as_str(), file.idle_days), ("D", None));
+}
+
+#[test]
+fn check_rule_explains_why_a_folder_cannot_be_a_user_rule() {
+    use disk_cleanup_desktop_lib::check_rule;
+    let env = SnapshotEnvironment::from_pairs(vec![
+        ("USERPROFILE".into(), r"C:\Users\u".into()),
+        ("LOCALAPPDATA".into(), r"C:\Users\u\AppData\Local".into()),
+    ]);
+    let baseline = || {
+        ExclusionList::default().with(
+            r"C:\Windows\Installer",
+            LocalizedText::new("msi", "msi cache"),
+        )
+    };
+    let check =
+        |path: &str| check_rule(&Catalogue, &env, baseline(), &[r"D:\meus".into()], path).unwrap();
+    let ok = check(r"%LOCALAPPDATA%\Teams\Cache");
+    assert_eq!(
+        (ok.code, ok.detail.as_deref()),
+        ("ok", Some(r"C:\Users\u\AppData\Local\Teams\Cache"))
+    );
+    let ex = check(r"C:\Windows");
+    assert_eq!(
+        (ex.code, ex.detail.as_deref()),
+        ("excluded", Some(r"C:\Windows\Installer"))
+    );
+    assert_eq!(ex.reason.unwrap().en, "msi cache");
+    assert_eq!(check(r"D:\meus\x").code, "excluded");
+    assert_eq!(check(r"C:\Users\u\AppData").code, "protected");
+    assert_eq!(check(r"C:\Users").code, "too_broad");
+    let var = check(r"%NAO_EXISTE%\x");
+    assert_eq!(
+        (var.code, var.detail.as_deref()),
+        ("unresolved_variable", Some("NAO_EXISTE"))
+    );
+    assert_eq!(check("   ").code, "empty");
+
+    struct Broken;
+    impl CatalogRepository for Broken {
+        fn load(&self) -> Result<Catalog, PortError> {
+            Err(PortError::InvalidData("x".into()))
+        }
+    }
+    assert_eq!(
+        check_rule(&Broken, &env, baseline(), &[], r"C:\x\y")
+            .unwrap_err()
+            .code,
+        "invalid_data"
+    );
+}
+
+#[test]
+fn user_rules_and_disabled_profiles_reach_the_classification() {
+    use disk_cleanup_application::ProjectProfile;
+    use disk_cleanup_desktop_lib::{classify_custom, UserCustomizationDto, UserRuleDto};
+    let rule = |label: &str, path: &str, tier: &str| UserRuleDto {
+        label: label.into(),
+        path: path.into(),
+        tier: tier.into(),
+    };
+    let custom = UserCustomizationDto {
+        user_rules: vec![
+            rule("Teams", r" C:\Users\u\Teams\Cache ", "a"),
+            rule("", r"D:\unity\Library", "C"),
+        ],
+        disabled_profiles: vec!["node".into()],
+    };
+    let dto = classify_custom(
+        &Session::default(),
+        &Catalogue,
+        &env(),
+        &Inspector,
+        ExclusionList::default(),
+        &[],
+        None,
+        &custom,
+    )
+    .unwrap();
+    let teams = dto
+        .candidates
+        .iter()
+        .find(|c| c.id == r"user:C:\Users\u\Teams\Cache")
+        .unwrap();
+    assert_eq!(
+        (teams.tier.as_str(), teams.risk, teams.label.pt.as_str()),
+        ("A", "none", "Teams")
+    );
+    assert_eq!(teams.note.en, "own rule");
+    let unity = dto
+        .candidates
+        .iter()
+        .find(|c| c.id == r"user:D:\unity\Library")
+        .unwrap();
+    assert_eq!(
+        (unity.risk, unity.label.pt.as_str()),
+        ("redownload", r"D:\unity\Library")
+    );
+
+    let bad = |r: UserRuleDto| {
+        let custom = UserCustomizationDto {
+            user_rules: vec![r],
+            ..UserCustomizationDto::default()
+        };
+        classify_custom(
+            &Session::default(),
+            &Catalogue,
+            &env(),
+            &Inspector,
+            ExclusionList::default(),
+            &[],
+            None,
+            &custom,
+        )
+        .unwrap_err()
+    };
+    assert_eq!(bad(rule("x", " ", "A")).code, "user_rule_path");
+    let d = bad(rule("x", r"C:\x\y", "D"));
+    assert_eq!(
+        (d.code.as_str(), d.params["tier"].as_str()),
+        ("user_rule_tier", "D")
+    );
+    assert_eq!(bad(rule("x", r"C:\x\y", "Q")).code, "unknown_tier");
+
+    // perfis do catálogo chegam ao system_info; catálogo ilegível = nenhum
+    struct WithProfile;
+    impl CatalogRepository for WithProfile {
+        fn load(&self) -> Result<Catalog, PortError> {
+            Ok(Catalog {
+                projects: vec![ProjectProfile {
+                    id: "node".into(),
+                    label: LocalizedText::same("Node.js"),
+                    markers: vec!["package.json".into()],
+                    artifacts: vec!["node_modules".into()],
+                    note: LocalizedText::default(),
+                }],
+                ..Catalog::default()
+            })
+        }
+    }
+    let info = system_info(&env(), "windows", &WithProfile);
+    assert_eq!(info.project_profiles.len(), 1);
+    assert_eq!(
+        (
+            info.project_profiles[0].id.as_str(),
+            info.project_profiles[0].label.en.as_str()
+        ),
+        ("node", "Node.js")
+    );
 }

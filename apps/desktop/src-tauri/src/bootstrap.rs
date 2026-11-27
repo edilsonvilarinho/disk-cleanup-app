@@ -13,12 +13,13 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 
 use disk_cleanup_infrastructure::{
     catalog_for, exclusions_for, FsActionRunner, FsProjectFinder, JwalkFileWalker,
-    SkillPlanJsonCodec, SnapshotEnvironment, SysinfoVolumeInfo, WalkerPathInspector,
+    SkillPlanJsonCodec, SnapshotEnvironment, SysinfoVolumeInfo, TomlCatalogRepository,
+    WalkerPathInspector,
 };
 
 use crate::dto::{
-    ApprovalDto, ClassificationDto, PlanDto, ReportDto, StepDto, SurveyDto, SurveyRequestDto,
-    SystemInfoDto, TierRunDto,
+    ApprovalDto, ClassificationDto, PlanDto, ReportDto, RuleCheckDto, StepDto, SurveyDto,
+    SurveyRequestDto, SystemInfoDto, TierRunDto, UserCustomizationDto,
 };
 use crate::error::ErrorDto;
 use crate::export;
@@ -55,7 +56,11 @@ fn join_error(e: tauri::Error) -> ErrorDto {
 
 #[tauri::command]
 fn system_info() -> SystemInfoDto {
-    service::system_info(&SnapshotEnvironment::from_process(), OS)
+    let env = SnapshotEnvironment::from_process();
+    match catalog_for(OS) {
+        Ok(catalog) => service::system_info(&env, OS, &catalog),
+        Err(_) => service::system_info(&env, OS, &TomlCatalogRepository::from_text("")),
+    }
 }
 
 #[tauri::command]
@@ -84,16 +89,29 @@ async fn run_survey(app: AppHandle, request: SurveyRequestDto) -> Result<SurveyD
 }
 
 #[tauri::command]
+fn check_rule(extra_exclusions: Vec<String>, path: String) -> Result<RuleCheckDto, ErrorDto> {
+    let env = SnapshotEnvironment::from_process();
+    service::check_rule(
+        &catalog_for(OS)?,
+        &env,
+        exclusions_for(OS, &env),
+        &extra_exclusions,
+        &path,
+    )
+}
+
+#[tauri::command]
 async fn classify(
     app: AppHandle,
     extra_exclusions: Vec<String>,
     project_roots: Vec<String>,
+    customization: UserCustomizationDto,
 ) -> Result<ClassificationDto, ErrorDto> {
     tauri::async_runtime::spawn_blocking(move || {
         let env = SnapshotEnvironment::from_process();
         let session = app.state::<Session>();
         let finder = FsProjectFinder::default();
-        service::classify_projects(
+        service::classify_custom(
             &session,
             &catalog_for(OS)?,
             &env,
@@ -104,6 +122,7 @@ async fn classify(
                 finder: &finder,
                 roots: &project_roots,
             }),
+            &customization,
         )
     })
     .await
@@ -323,6 +342,7 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
             system_info,
             run_survey,
             classify,
+            check_rule,
             build_plan,
             approve_plan,
             preview_tier,

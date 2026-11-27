@@ -479,3 +479,66 @@ fn large_files_become_tier_d_candidates_with_age_and_respect_exclusions() {
         |s| s.id == r"file:D:\Backups\velho.tar" && matches!(s.reason, SkipReason::Excluded(_))
     ));
 }
+
+// ---------- Regras próprias e perfis ----------
+
+#[test]
+fn user_rules_follow_the_same_exclusions_and_disabled_profiles_are_not_searched() {
+    let user = vec![
+        rule("user:teams", Tier::A, path(r"%LOCALAPPDATA%\Teams\Cache")),
+        rule("user:dentro", Tier::C, path(r"D:\Backups\x")),
+        rule("user:pai", Tier::C, path(r"D:\")),
+    ];
+    let inspector = FakeInspector::with(&[
+        (r"C:\Users\u\AppData\Local\Teams\Cache", 300),
+        (r"D:\Backups\x", 10),
+        (r"D:\", 10),
+    ]);
+    let catalog = FakeCatalog(Ok(project_catalog()));
+    let finder = FakeFinder {
+        found: vec![],
+        roots: RefCell::default(),
+    };
+    let baseline = ExclusionList::default().with(r"D:\Backups", LocalizedText::same("backup"));
+    let disabled = vec!["node".to_string()];
+    let report = ClassifyService::new(&catalog, &env(), &inspector)
+        .with_projects(&finder, &[r"D:\dev".into()])
+        .with_user_rules(&user, &disabled)
+        .run(baseline, &[])
+        .unwrap();
+    let ids: Vec<_> = report.candidates.iter().map(|c| c.id.as_str()).collect();
+    assert_eq!(ids, ["user:teams"]);
+    // dentro e contendo uma exclusão: os dois recusados
+    for id in ["user:dentro", "user:pai"] {
+        assert!(
+            report
+                .skipped
+                .iter()
+                .any(|s| s.id == id && matches!(s.reason, SkipReason::Excluded(_))),
+            "{id}"
+        );
+    }
+    // único perfil desligado: o finder nem é chamado
+    assert!(finder.roots.borrow().is_empty());
+}
+
+#[test]
+fn effective_exclusions_add_settings_and_catalog_entries() {
+    use disk_cleanup_application::effective_exclusions;
+    let catalog = Catalog {
+        exclusions: vec![CatalogExclusion {
+            pattern: r"%USERPROFILE%\.claude".into(),
+            reason: LocalizedText::same("claude"),
+        }],
+        ..Catalog::default()
+    };
+    let list = effective_exclusions(
+        &catalog,
+        &env(),
+        ExclusionList::default(),
+        &[" D:\\x ".into(), String::new()],
+    );
+    assert!(list.conflicting(r"D:\x\y").is_some());
+    assert!(list.conflicting(r"C:\Users\u\.claude\projects").is_some());
+    assert_eq!(list.len(), 2);
+}

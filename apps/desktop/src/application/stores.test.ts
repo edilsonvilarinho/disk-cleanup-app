@@ -109,8 +109,9 @@ describe('classification store', () => {
   it('envia as exclusões das Configurações e aceita erro do núcleo com código', async () => {
     const gateway = setup()
     const store = useClassificationStore()
-    await store.load(['C:\Projetos'], ['D:\dev'])
-    expect(gateway.classify).toHaveBeenCalledWith(['C:\Projetos'], ['D:\dev'])
+    const request = { extraExclusions: ['C:\\Projetos'], projectRoots: ['D:\\dev'], userRules: [], disabledProfiles: ['node'] }
+    await store.load(request)
+    expect(gateway.classify).toHaveBeenCalledWith(request)
     setup(fakeGateway({ classify: vi.fn(async () => Promise.reject({ code: 'invalid_data', params: { detail: 'toml' } })) }))
     const failing = useClassificationStore()
     await failing.load()
@@ -123,7 +124,7 @@ describe('classification store', () => {
     const unknown = candidate('project:D:\\dev\\x\\target', 'C', 0.5, { project: 'D:\\dev\\x', idleDays: null })
     setup(fakeGateway({ classify: vi.fn(async () => ({ ...classification, candidates: [...classification.candidates, old, fresh, unknown] })) }))
     const store = useClassificationStore()
-    await store.load([], [], 90)
+    await store.load(undefined, 90)
     expect(store.selected).toEqual(['npm-cache', 'nvidia-dxcache', 'gradle-caches', old.id])
     store.toggle('npm-cache')
     store.applyMinIdle(1)

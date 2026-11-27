@@ -12,7 +12,8 @@ mod template;
 
 pub use catalog::{Catalog, CatalogExclusion, CatalogRule, ProjectProfile, RuleTarget};
 pub use classify::{
-    ClassificationReport, ClassifyService, LargeFileInfo, ProjectInfo, SkipReason, SkippedRule,
+    effective_exclusions, ClassificationReport, ClassifyService, LargeFileInfo, ProjectInfo,
+    SkipReason, SkippedRule,
 };
 pub use error::AppError;
 pub use execute::{protected_paths_guard, ExecuteService, PlannedStep};

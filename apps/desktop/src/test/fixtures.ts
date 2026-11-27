@@ -21,6 +21,10 @@ export const systemInfo: SystemInfoDto = {
   os: 'windows',
   volumeRoot: 'C:\\',
   profile: 'C:\\Users\\u',
+  projectProfiles: [
+    { id: 'node', label: text('Node.js') },
+    { id: 'rust', label: text('Rust') },
+  ],
   catalog: 'windows',
 }
 

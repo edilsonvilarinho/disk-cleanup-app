@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import type { LanguagePreference } from '../../i18n/i18n'
+import type { UserRule } from '../../domain/models'
+import type { ClassifyRequest } from '../gateway'
 import { DEFAULT_SETTINGS, sanitizeSettings, type MinIdleDays, type Settings, type ThemeMode } from '../settings'
 
 /** Acrescenta caminho aparado; `null` se vazio ou já existente (sem diferenciar maiúsculas). */
@@ -10,7 +12,18 @@ function addPath(list: readonly string[], path: string): string[] | null {
 }
 
 export const useSettingsStore = defineStore('settings', {
-  state: (): Settings => ({ ...DEFAULT_SETTINGS, extraExclusions: [], projectRoots: [] }),
+  state: (): Settings => ({ ...DEFAULT_SETTINGS, extraExclusions: [], projectRoots: [], userRules: [], disabledProfiles: [] }),
+  getters: {
+    /** O que a classificação recebe destas Configurações. */
+    classifyRequest(): ClassifyRequest {
+      return {
+        extraExclusions: [...this.extraExclusions],
+        projectRoots: [...this.projectRoots],
+        userRules: this.userRules.map((r) => ({ ...r })),
+        disabledProfiles: [...this.disabledProfiles],
+      }
+    },
+  },
   actions: {
     load() {
       this.$patch(sanitizeSettings(this.settingsStorage.load()))
@@ -25,6 +38,8 @@ export const useSettingsStore = defineStore('settings', {
         betaUpdates: this.betaUpdates,
         projectRoots: [...this.projectRoots],
         minIdleDays: this.minIdleDays,
+        userRules: this.userRules.map((r) => ({ ...r })),
+        disabledProfiles: [...this.disabledProfiles],
       })
     },
     setLanguage(language: LanguagePreference) {
@@ -64,6 +79,24 @@ export const useSettingsStore = defineStore('settings', {
     },
     removeProjectRoot(path: string) {
       this.projectRoots = this.projectRoots.filter((p) => p !== path)
+      this.persist()
+    },
+    /** `false` se a pasta já tem regra (sem diferenciar maiúsculas). */
+    addUserRule(rule: UserRule): boolean {
+      const path = rule.path.trim()
+      if (!path || this.userRules.some((r) => r.path.toLowerCase() === path.toLowerCase())) return false
+      this.userRules = [...this.userRules, { label: rule.label.trim(), path, tier: rule.tier }]
+      this.persist()
+      return true
+    },
+    removeUserRule(path: string) {
+      this.userRules = this.userRules.filter((r) => r.path !== path)
+      this.persist()
+    },
+    toggleProfile(id: string) {
+      this.disabledProfiles = this.disabledProfiles.includes(id)
+        ? this.disabledProfiles.filter((p) => p !== id)
+        : [...this.disabledProfiles, id]
       this.persist()
     },
     setMinIdleDays(days: MinIdleDays) {

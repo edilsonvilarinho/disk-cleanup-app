@@ -85,6 +85,28 @@ pub struct ClassifyService<'a> {
     inspector: &'a dyn PathInspector,
     projects: Option<(&'a dyn ProjectFinder, Vec<String>)>,
     large_files: (&'a [LargeFile], u64),
+    user_rules: &'a [CatalogRule],
+    disabled_profiles: &'a [String],
+}
+
+/// Exclusões efetivas: obrigatórias + pastas das Configurações + catálogo.
+/// Só somam; nenhuma fonte remove exclusão de outra.
+pub fn effective_exclusions(
+    catalog: &Catalog,
+    env: &dyn Environment,
+    baseline: ExclusionList,
+    extra: &[String],
+) -> ExclusionList {
+    let settings = LocalizedText::new("excluída nas Configurações", "excluded in Settings");
+    let baseline = extra
+        .iter()
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty())
+        .fold(baseline, |list, p| list.with(p, settings.clone()));
+    catalog.exclusions.iter().fold(baseline, |list, ex| {
+        let pattern = expand_template(&ex.pattern, env).unwrap_or_else(|_| ex.pattern.clone());
+        list.with(&pattern, ex.reason.clone())
+    })
 }
 
 impl<'a> ClassifyService<'a> {
@@ -99,7 +121,21 @@ impl<'a> ClassifyService<'a> {
             inspector,
             projects: None,
             large_files: (&[], 0),
+            user_rules: &[],
+            disabled_profiles: &[],
         }
+    }
+
+    /// Regras próprias do usuário (somadas às do catálogo, com as mesmas
+    /// exclusões e guardas) e perfis de projeto desligados.
+    pub fn with_user_rules(
+        mut self,
+        rules: &'a [CatalogRule],
+        disabled_profiles: &'a [String],
+    ) -> Self {
+        self.user_rules = rules;
+        self.disabled_profiles = disabled_profiles;
+        self
     }
 
     /// Oferece os arquivos grandes da última varredura como candidatos do tier D.
@@ -124,17 +160,7 @@ impl<'a> ClassifyService<'a> {
         extra: &[String],
     ) -> Result<ClassificationReport, AppError> {
         let catalog = self.catalog.load()?;
-        let settings = LocalizedText::new("excluída nas Configurações", "excluded in Settings");
-        let baseline = extra
-            .iter()
-            .map(|p| p.trim())
-            .filter(|p| !p.is_empty())
-            .fold(baseline, |list, p| list.with(p, settings.clone()));
-        let exclusions = catalog.exclusions.iter().fold(baseline, |list, ex| {
-            let pattern =
-                expand_template(&ex.pattern, self.env).unwrap_or_else(|_| ex.pattern.clone());
-            list.with(&pattern, ex.reason.clone())
-        });
+        let exclusions = effective_exclusions(&catalog, self.env, baseline, extra);
         let guard = ToolchainGuard::new(self.env.vars(), self.env.path_entries());
 
         let mut report = ClassificationReport {
@@ -144,7 +170,7 @@ impl<'a> ClassifyService<'a> {
             projects: Vec::new(),
             large_files: Vec::new(),
         };
-        for rule in &catalog.rules {
+        for rule in catalog.rules.iter().chain(self.user_rules) {
             match self.evaluate(rule, &report.exclusions, &guard) {
                 Ok(candidate) => report.candidates.push(candidate),
                 Err(reason) => report.skipped.push(SkippedRule {
@@ -213,7 +239,13 @@ impl<'a> ClassifyService<'a> {
         let Some((finder, extra)) = &self.projects else {
             return Vec::new();
         };
-        if catalog.projects.is_empty() {
+        let profiles: Vec<ProjectProfile> = catalog
+            .projects
+            .iter()
+            .filter(|p| !self.disabled_profiles.contains(&p.id))
+            .cloned()
+            .collect();
+        if profiles.is_empty() {
             return Vec::new();
         }
         let mut roots: Vec<String> = catalog
@@ -224,7 +256,7 @@ impl<'a> ClassifyService<'a> {
             .filter(|r| !r.is_empty())
             .collect();
         roots.dedup();
-        finder.find(&roots, &catalog.projects)
+        finder.find(&roots, &profiles)
     }
 
     fn evaluate_artifact(

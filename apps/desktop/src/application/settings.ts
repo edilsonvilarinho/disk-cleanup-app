@@ -1,5 +1,6 @@
 import { markRaw } from 'vue'
 import type { PiniaPlugin } from 'pinia'
+import type { UserRule } from '../domain/models'
 import type { LanguagePreference } from '../i18n/i18n'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
@@ -18,6 +19,10 @@ export interface Settings {
   projectRoots: string[]
   /** Projeto só começa marcado com ao menos estes dias sem atividade. */
   minIdleDays: MinIdleDays
+  /** Regras próprias (validadas pelo núcleo antes de salvar). */
+  userRules: UserRule[]
+  /** Perfis de projeto desligados (`node`, `rust`...). */
+  disabledProfiles: string[]
 }
 
 export const MIN_IDLE_OPTIONS = [30, 90, 180, 365] as const
@@ -32,6 +37,8 @@ export const DEFAULT_SETTINGS: Settings = {
   betaUpdates: false,
   projectRoots: [],
   minIdleDays: 90,
+  userRules: [],
+  disabledProfiles: [],
 }
 
 /** Porta de persistência das preferências. */
@@ -44,6 +51,20 @@ const flag = (value: unknown, fallback: boolean): boolean => (typeof value === '
 
 const pick = <T>(value: unknown, allowed: readonly T[], fallback: T): T =>
   allowed.includes(value as T) ? (value as T) : fallback
+
+/** Regra própria válida: pasta não vazia, tier A ou C, sem repetir pasta. */
+function rules(value: unknown): UserRule[] {
+  const list = Array.isArray(value) ? value : []
+  const seen = new Set<string>()
+  return list.flatMap((r): UserRule[] => {
+    const o = (typeof r === 'object' && r !== null ? r : {}) as Record<string, unknown>
+    const path = typeof o.path === 'string' ? o.path.trim() : ''
+    const tier = o.tier === 'A' || o.tier === 'C' ? o.tier : null
+    if (!path || !tier || seen.has(path.toLowerCase())) return []
+    seen.add(path.toLowerCase())
+    return [{ label: typeof o.label === 'string' ? o.label.trim() : '', path, tier }]
+  })
+}
 
 /** Valida o que veio do armazenamento: campo inválido volta ao padrão. */
 export function sanitizeSettings(raw: unknown): Settings {
@@ -62,6 +83,8 @@ export function sanitizeSettings(raw: unknown): Settings {
     betaUpdates: flag(r.betaUpdates, DEFAULT_SETTINGS.betaUpdates),
     projectRoots: paths(r.projectRoots),
     minIdleDays: pick(r.minIdleDays, MIN_IDLE_OPTIONS, DEFAULT_SETTINGS.minIdleDays),
+    userRules: rules(r.userRules),
+    disabledProfiles: paths(r.disabledProfiles),
   }
 }
 

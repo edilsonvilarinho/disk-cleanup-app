@@ -6,9 +6,10 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use disk_cleanup_application::{
-    export_plan, ActionRunner, CatalogRepository, ClassificationReport, ClassifyService,
-    Environment, ExecuteService, ExecutionProgress, FileWalker, PathInspector, PlanCodec,
-    ProjectFinder, ScanProgress, SurveyRequest, SurveyService, VolumeInfo,
+    effective_exclusions, expand_template, export_plan, protected_paths_guard, ActionRunner,
+    CatalogRepository, CatalogRule, ClassificationReport, ClassifyService, Environment,
+    ExecuteService, ExecutionProgress, FileWalker, PathInspector, PlanCodec, ProjectFinder,
+    RuleTarget, ScanProgress, SurveyRequest, SurveyService, VolumeInfo,
 };
 use disk_cleanup_domain::{
     approve, ApprovedPlan, ByteSize, CleanupReport, Disposal, ExclusionList, ItemResult, LargeFile,
@@ -16,8 +17,9 @@ use disk_cleanup_domain::{
 };
 
 use crate::dto::{
-    ApprovalDto, ClassificationDto, ExecutionEventDto, ItemResultDto, PlanDto, ReportDto, StepDto,
-    SurveyDto, SurveyRequestDto, SystemInfoDto, TierRunDto,
+    ApprovalDto, ClassificationDto, ExecutionEventDto, ItemResultDto, PlanDto, ProfileDto,
+    ReportDto, RuleCheckDto, StepDto, SurveyDto, SurveyRequestDto, SystemInfoDto, TextDto,
+    TierRunDto, UserCustomizationDto, UserRuleDto,
 };
 use crate::error::ErrorDto;
 
@@ -109,7 +111,12 @@ fn parse_tier(value: &str) -> Result<Tier, ErrorDto> {
 }
 
 /// `os`: valor de `std::env::consts::OS` ("windows", "linux", "macos").
-pub fn system_info(env: &dyn Environment, os: &str) -> SystemInfoDto {
+/// `catalog`: de onde vêm os perfis de projeto (catálogo ilegível = sem perfis).
+pub fn system_info(
+    env: &dyn Environment,
+    os: &str,
+    catalog: &dyn CatalogRepository,
+) -> SystemInfoDto {
     let (volume_root, profile) = if os == "windows" {
         let drive = env.var("SystemDrive").unwrap_or_else(|| "C:".to_string());
         (format!(r"{drive}\"), env.var("USERPROFILE"))
@@ -121,6 +128,18 @@ pub fn system_info(env: &dyn Environment, os: &str) -> SystemInfoDto {
         volume_root,
         profile,
         catalog: os.to_string(),
+        project_profiles: catalog
+            .load()
+            .map(|c| {
+                c.projects
+                    .iter()
+                    .map(|p| ProfileDto {
+                        id: p.id.clone(),
+                        label: TextDto::from(&p.label),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
     }
 }
 
@@ -190,11 +209,67 @@ pub fn classify_projects(
     extra: &[String],
     projects: Option<ProjectSearch<'_>>,
 ) -> Result<ClassificationDto, ErrorDto> {
+    let none = UserCustomizationDto::default();
+    classify_custom(
+        session, catalog, env, inspector, baseline, extra, projects, &none,
+    )
+}
+
+/// Regra própria das Configurações como regra de catálogo: só tier A ou C,
+/// sempre caminho; passa pelas mesmas exclusões e guardas.
+fn user_rule(dto: &UserRuleDto) -> Result<CatalogRule, ErrorDto> {
+    let path = dto.path.trim();
+    if path.is_empty() {
+        return Err(ErrorDto::new("user_rule_path"));
+    }
+    let tier = parse_tier(&dto.tier)?;
+    let risk = match tier {
+        Tier::A => disk_cleanup_domain::Risk::None,
+        Tier::C => disk_cleanup_domain::Risk::Redownload,
+        other => return Err(ErrorDto::new("user_rule_tier").with("tier", other)),
+    };
+    let label = if dto.label.trim().is_empty() {
+        path
+    } else {
+        dto.label.trim()
+    };
+    Ok(CatalogRule {
+        id: format!("user:{path}"),
+        label: disk_cleanup_domain::LocalizedText::same(label),
+        tier,
+        risk,
+        note: disk_cleanup_domain::LocalizedText::new("regra própria", "own rule"),
+        target: RuleTarget::Path {
+            path: path.to_string(),
+        },
+        watch_env: Vec::new(),
+    })
+}
+
+/// Classificação com projetos, regras próprias e perfis desligados.
+#[allow(clippy::too_many_arguments)]
+pub fn classify_custom(
+    session: &Session,
+    catalog: &dyn CatalogRepository,
+    env: &dyn Environment,
+    inspector: &dyn PathInspector,
+    baseline: ExclusionList,
+    extra: &[String],
+    projects: Option<ProjectSearch<'_>>,
+    custom: &UserCustomizationDto,
+) -> Result<ClassificationDto, ErrorDto> {
+    let rules: Vec<CatalogRule> = custom
+        .user_rules
+        .iter()
+        .map(user_rule)
+        .collect::<Result<_, _>>()?;
     let largest = session.lock().largest.clone();
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
-    let mut service = ClassifyService::new(catalog, env, inspector).with_large_files(&largest, now);
+    let mut service = ClassifyService::new(catalog, env, inspector)
+        .with_large_files(&largest, now)
+        .with_user_rules(&rules, &custom.disabled_profiles);
     if let Some(search) = projects {
         service = service.with_projects(search.finder, search.roots);
     }
@@ -202,6 +277,46 @@ pub fn classify_projects(
     let dto = ClassificationDto::from(&report);
     session.lock().classification = Some(report);
     Ok(dto)
+}
+
+/// Valida a pasta de uma regra própria antes de salvar: variável ausente,
+/// exclusão (dentro ou contendo), pasta protegida ou alvo amplo demais.
+pub fn check_rule(
+    catalog: &dyn CatalogRepository,
+    env: &dyn Environment,
+    baseline: ExclusionList,
+    extra: &[String],
+    path: &str,
+) -> Result<RuleCheckDto, ErrorDto> {
+    let result =
+        |code: &'static str, detail: Option<String>, reason: Option<TextDto>| RuleCheckDto {
+            code,
+            detail,
+            reason,
+        };
+    let expanded = match expand_template(path.trim(), env) {
+        Ok(p) if p.is_empty() => return Ok(result("empty", None, None)),
+        Ok(p) => p,
+        Err(var) => return Ok(result("unresolved_variable", Some(var), None)),
+    };
+    let catalog = catalog.load()?;
+    let exclusions = effective_exclusions(&catalog, env, baseline, extra);
+    if let Some(ex) = exclusions.conflicting(&expanded) {
+        return Ok(result(
+            "excluded",
+            Some(ex.pattern.clone()),
+            Some(TextDto::from(&ex.reason)),
+        ));
+    }
+    Ok(match protected_paths_guard(env).check(&expanded) {
+        Ok(()) => result("ok", Some(expanded), None),
+        Err(disk_cleanup_domain::SafetyViolation::TooBroad { target }) => {
+            result("too_broad", Some(target), None)
+        }
+        Err(disk_cleanup_domain::SafetyViolation::Protected { path }) => {
+            result("protected", Some(path), None)
+        }
+    })
 }
 
 pub fn build_plan(

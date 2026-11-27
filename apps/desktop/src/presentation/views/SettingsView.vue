@@ -2,13 +2,40 @@
 import { computed, ref } from 'vue'
 import type { ThemeMode } from '../../application/settings'
 import { useSettingsStore } from '../../application/stores/settings'
+import { useSystemStore } from '../../application/stores/system'
+import type { RuleCheckDto, UserRule } from '../../domain/models'
 import { useUpdateStore } from '../../application/stores/update'
 import type { LanguagePreference } from '../../i18n/i18n'
 import { useI18n } from '../i18n'
 
 const settings = useSettingsStore()
 const update = useUpdateStore()
-const { t, err, systemLocale } = useI18n()
+const { t, txt, err, systemLocale } = useI18n()
+const system = useSystemStore()
+const ruleLabel = ref('')
+const rulePath = ref('')
+const ruleTier = ref<UserRule['tier']>('A')
+const ruleCheck = ref<RuleCheckDto | null>(null)
+const ruleBusy = ref(false)
+
+/** O núcleo valida a pasta (exclusões, pastas protegidas, alvo amplo) antes de salvar. */
+async function addRule() {
+  ruleBusy.value = true
+  try {
+    const check = await settings.gateway.checkRule([...settings.extraExclusions], rulePath.value)
+    ruleCheck.value = check.code === 'ok' ? null : check
+    if (check.code === 'ok' && settings.addUserRule({ label: ruleLabel.value, path: rulePath.value, tier: ruleTier.value })) {
+      ruleLabel.value = ''
+      rulePath.value = ''
+    }
+  } finally {
+    ruleBusy.value = false
+  }
+}
+
+function ruleCheckText(check: RuleCheckDto): string {
+  return t(`settings.ruleCheck.${check.code}`, { detail: check.detail ?? '', reason: check.reason ? txt(check.reason) : '' })
+}
 const newPath = ref('')
 
 const systemName = computed(() => (systemLocale.value === 'pt' ? t('settings.langPt') : t('settings.langEn')))
@@ -105,6 +132,44 @@ function addRoot() {
       <Transition name="fade">
         <p v-if="!settings.extraExclusions.length" class="muted" data-test="no-exclusions">{{ t('settings.noExclusions') }}</p>
       </Transition>
+    </section>
+
+    <section class="card" data-test="user-rules-settings">
+      <h2>{{ t('settings.userRules') }}</h2>
+      <p class="small muted">{{ t('settings.userRulesHint') }}</p>
+      <form class="stack-sm" data-test="user-rule-form" @submit.prevent="addRule">
+        <div class="actions" style="flex-wrap: nowrap">
+          <label class="sr-only" for="rule-label">{{ t('settings.ruleLabel') }}</label>
+          <input id="rule-label" v-model="ruleLabel" class="select" style="flex: 1; min-width: 0" :placeholder="t('settings.ruleLabel')" data-test="rule-label" />
+          <label class="sr-only" for="rule-tier">Tier</label>
+          <select id="rule-tier" v-model="ruleTier" class="select" data-test="rule-tier">
+            <option value="A">A · {{ t('tier.A') }}</option>
+            <option value="C">C · {{ t('tier.C') }}</option>
+          </select>
+        </div>
+        <div class="actions" style="flex-wrap: nowrap">
+          <label class="sr-only" for="rule-path">{{ t('settings.rulePath') }}</label>
+          <input id="rule-path" v-model="rulePath" class="select mono" style="flex: 1; min-width: 0" :placeholder="t('settings.rulePath')" data-test="rule-path" />
+          <button type="submit" class="btn" :disabled="ruleBusy" data-test="add-rule">{{ t('settings.add') }}</button>
+        </div>
+      </form>
+      <p v-if="ruleCheck" class="small err" role="alert" data-test="rule-error">{{ ruleCheckText(ruleCheck) }}</p>
+      <TransitionGroup tag="ul" name="list" class="checklist small" style="position: relative">
+        <li v-for="r in settings.userRules" :key="r.path" class="kv" data-test="user-rule">
+          <span style="min-width: 0"><strong>{{ r.label || r.path }}</strong> <span class="muted">· {{ r.tier }}</span><span class="mono muted" style="display: block; word-break: break-all">{{ r.path }}</span></span>
+          <button type="button" class="btn" :aria-label="t('settings.remove', { path: r.path })" @click="settings.removeUserRule(r.path)">×</button>
+        </li>
+      </TransitionGroup>
+      <p v-if="!settings.userRules.length" class="muted" data-test="no-user-rules">{{ t('settings.noUserRules') }}</p>
+    </section>
+
+    <section v-if="system.info?.projectProfiles.length" class="card" data-test="profiles-settings">
+      <h2>{{ t('settings.profiles') }}</h2>
+      <p class="small muted">{{ t('settings.profilesHint') }}</p>
+      <label v-for="p in system.info.projectProfiles" :key="p.id" class="option" :data-test="`profile-${p.id}`">
+        <input type="checkbox" :checked="!settings.disabledProfiles.includes(p.id)" @change="settings.toggleProfile(p.id)" />
+        <span>{{ txt(p.label) }}</span>
+      </label>
     </section>
 
     <section class="card" data-test="project-roots-settings">

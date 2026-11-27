@@ -21,6 +21,24 @@ export interface SystemInfoDto {
   volumeRoot: string
   profile: string | null
   catalog: string
+  /** Perfis de projeto do catálogo (ligar/desligar nas Configurações). */
+  projectProfiles: { id: string; label: TextDto }[]
+}
+
+/** Regra própria das Configurações: só pasta, tier A ou C. */
+export interface UserRule {
+  label: string
+  path: string
+  tier: 'A' | 'C'
+}
+
+export type RuleCheckCode = 'ok' | 'empty' | 'unresolved_variable' | 'excluded' | 'protected' | 'too_broad'
+
+/** Validação de uma pasta de regra própria, feita pelo núcleo. */
+export interface RuleCheckDto {
+  code: RuleCheckCode
+  detail: string | null
+  reason: TextDto | null
 }
 
 export interface VolumeDto {

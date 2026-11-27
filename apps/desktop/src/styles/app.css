@@ -476,6 +476,8 @@ details[open] summary { margin-bottom: 10px; }
   border: 1px dashed var(--border-strong); transition: border-color 0.2s ease, background 0.2s ease;
 }
 .ack input { margin-top: 2px; }
+/* Formulário empilhado (regra própria: nome em cima, pasta + tier + ação embaixo). */
+.stack-sm { display: flex; flex-direction: column; gap: 8px; }
 /* Destino por tier: segmentado Lixeira | Definitivo, ao lado do tier. */
 .dest-rows { display: flex; flex-wrap: wrap; gap: 8px 20px; }
 .dest-row { display: flex; align-items: center; gap: 8px; }

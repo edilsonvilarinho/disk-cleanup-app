@@ -12,8 +12,8 @@ const store = useClassificationStore()
 const settings = useSettingsStore()
 const { t, txt, err, gb, num } = useI18n()
 
-onMounted(() => store.ensureLoaded(settings.extraExclusions, settings.projectRoots, settings.minIdleDays))
-const reload = () => store.load(settings.extraExclusions, settings.projectRoots, settings.minIdleDays)
+onMounted(() => store.ensureLoaded(settings.classifyRequest, settings.minIdleDays))
+const reload = () => store.load(settings.classifyRequest, settings.minIdleDays)
 const hasProjects = computed(() => store.visible.some((c) => c.project !== null))
 const hasFiles = computed(() => store.visible.some((c) => c.origin === 'file'))
 

@@ -1,3 +1,4 @@
+import { EMPTY_CLASSIFY_REQUEST } from '../application/gateway'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyThemeToDocument, localStorageSettingsStorage, systemPrefersDark, trackPointer, watchSystemTheme } from './browserTheme'
 import { DemoGateway } from './demoGateway'
@@ -9,9 +10,20 @@ describe('TauriGateway', () => {
     const invoke = vi.fn(async (cmd: string) => ({ cmd }))
     const gateway = new TauriGateway(invoke as never, vi.fn() as never)
     expect(await gateway.systemInfo()).toEqual({ cmd: 'system_info' })
-    await gateway.classify(['C:\\Projetos'], ['D:\\dev'])
+    await gateway.classify({
+      extraExclusions: ['C:\\Projetos'],
+      projectRoots: ['D:\\dev'],
+      userRules: [{ label: 'T', path: 'C:\\t', tier: 'A' }],
+      disabledProfiles: ['node'],
+    })
+    await gateway.checkRule(['C:\\Projetos'], 'C:\\x')
     await gateway.buildPlan('C:', ['a'])
-    expect(invoke).toHaveBeenCalledWith('classify', { extraExclusions: ['C:\\Projetos'], projectRoots: ['D:\\dev'] })
+    expect(invoke).toHaveBeenCalledWith('classify', {
+      extraExclusions: ['C:\\Projetos'],
+      projectRoots: ['D:\\dev'],
+      customization: { userRules: [{ label: 'T', path: 'C:\\t', tier: 'A' }], disabledProfiles: ['node'] },
+    })
+    expect(invoke).toHaveBeenCalledWith('check_rule', { extraExclusions: ['C:\\Projetos'], path: 'C:\\x' })
     expect(invoke).toHaveBeenCalledWith('build_plan', { volume: 'C:', selected: ['a'] })
   })
 
@@ -80,7 +92,7 @@ describe('DemoGateway', () => {
     expect(survey.volume.usedBytes + survey.volume.freeBytes).toBe(survey.volume.totalBytes)
     expect(survey.cloud.every((c) => c.isCloud)).toBe(true)
 
-    const classification = await gateway.classify([], [])
+    const classification = await gateway.classify(EMPTY_CLASSIFY_REQUEST)
     expect(classification.candidates.some((c) => c.blocked !== null)).toBe(true)
     // Projetos de exemplo: tier C, com raiz e idade; um recente (começa desmarcado).
     const projects = classification.candidates.filter((c) => c.project !== null)
@@ -104,7 +116,7 @@ describe('DemoGateway', () => {
     await expect(gateway.report()).rejects.toMatchObject({ code: 'no_execution' })
     await expect(gateway.previewTier('A')).rejects.toMatchObject({ code: 'not_approved' })
     await expect(gateway.approvePlan(['A'], {}, true)).rejects.toMatchObject({ code: 'plan_required' })
-    const classification = await gateway.classify(['%USERPROFILE%\\.m2'], [])
+    const classification = await gateway.classify({ ...EMPTY_CLASSIFY_REQUEST, extraExclusions: ['%USERPROFILE%\\.m2'] })
     expect(classification.candidates.some((c) => c.id === 'maven-repository')).toBe(false)
     expect(classification.skipped.some((s) => s.id === 'maven-repository' && s.code === 'excluded')).toBe(true)
     const ids = classification.candidates.filter((c) => c.tier !== 'B' && !c.blocked).map((c) => c.id)
@@ -140,6 +152,30 @@ describe('DemoGateway', () => {
   })
 })
 
+describe('DemoGateway · regras próprias e perfis', () => {
+  it('valida a pasta e aplica regras e perfis desligados', async () => {
+    const gateway = new DemoGateway(0)
+    expect((await gateway.checkRule([], ' ')).code).toBe('empty')
+    expect((await gateway.checkRule([], 'C:\\Windows')).code).toBe('excluded')
+    expect((await gateway.checkRule(['D:\\meus'], 'D:\\meus\\x')).code).toBe('excluded')
+    expect((await gateway.checkRule([], 'D:\\x')).code).toBe('too_broad')
+    expect((await gateway.checkRule([], 'D:\\dev\\cache')).code).toBe('ok')
+    const info = await gateway.systemInfo()
+    expect(info.projectProfiles.map((p) => p.id)).toContain('node')
+    const all = await gateway.classify(EMPTY_CLASSIFY_REQUEST)
+    const custom = await gateway.classify({
+      ...EMPTY_CLASSIFY_REQUEST,
+      userRules: [{ label: '', path: 'D:\\unity\\Library', tier: 'C' }],
+      disabledProfiles: ['node', 'rust', 'python'],
+    })
+    expect(custom.candidates.some((c) => c.id === 'user:D:\\unity\\Library' && c.label.pt === 'D:\\unity\\Library')).toBe(true)
+    expect(custom.candidates.filter((c) => c.origin === 'project')).toHaveLength(0)
+    expect(all.candidates.filter((c) => c.origin === 'project').length).toBeGreaterThan(0)
+    const plan = await gateway.buildPlan('C:', ['user:D:\\unity\\Library'])
+    expect(plan.itemCount).toBe(1)
+  })
+})
+
 describe('browserTheme', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -157,6 +193,8 @@ describe('browserTheme', () => {
       betaUpdates: false,
       projectRoots: ['/dev'],
       minIdleDays: 90 as const,
+      userRules: [{ label: 'x', path: '/x/y/z', tier: 'C' as const }],
+      disabledProfiles: ['rust'],
     }
     localStorageSettingsStorage.save(settings)
     expect(localStorageSettingsStorage.load()).toEqual(settings)

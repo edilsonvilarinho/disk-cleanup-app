@@ -1,10 +1,11 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import type { DiskCleanupGateway, SurveyRequest } from '../application/gateway'
+import type { ClassifyRequest, DiskCleanupGateway, SurveyRequest } from '../application/gateway'
 import type {
   ApprovalDto,
   ClassificationDto,
   Disposal,
+  RuleCheckDto,
   ExecutionEventDto,
   PlanDto,
   ReportDto,
@@ -39,8 +40,13 @@ export class TauriGateway implements DiskCleanupGateway {
     }
   }
 
-  classify(extraExclusions: string[], projectRoots: string[]): Promise<ClassificationDto> {
-    return this.call<ClassificationDto>('classify', { extraExclusions, projectRoots })
+  classify(request: ClassifyRequest): Promise<ClassificationDto> {
+    const { extraExclusions, projectRoots, userRules, disabledProfiles } = request
+    return this.call<ClassificationDto>('classify', { extraExclusions, projectRoots, customization: { userRules, disabledProfiles } })
+  }
+
+  checkRule(extraExclusions: string[], path: string): Promise<RuleCheckDto> {
+    return this.call<RuleCheckDto>('check_rule', { extraExclusions, path })
   }
 
   buildPlan(volume: string, selected: string[]): Promise<PlanDto> {

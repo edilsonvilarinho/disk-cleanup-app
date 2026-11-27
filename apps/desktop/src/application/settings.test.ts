@@ -34,6 +34,8 @@ describe('sanitizeSettings', () => {
       betaUpdates: false,
       projectRoots: [],
       minIdleDays: 90,
+      userRules: [],
+      disabledProfiles: [],
     })
     expect(
       sanitizeSettings({
@@ -45,6 +47,15 @@ describe('sanitizeSettings', () => {
         betaUpdates: true,
         projectRoots: [' D:\\dev ', 'D:\\dev', 7],
         minIdleDays: 180,
+        userRules: [
+          { label: ' Teams ', path: ' C:\\t ', tier: 'A' },
+          { label: 'dup', path: 'c:\\T', tier: 'C' },
+          { path: 'C:\\d', tier: 'D' },
+          { path: '', tier: 'A' },
+          { path: 'C:\\sem-nome', tier: 'C', label: 3 },
+          'x',
+        ],
+        disabledProfiles: ['node', 'node', 1],
       }),
     ).toEqual({
       language: 'en',
@@ -55,6 +66,11 @@ describe('sanitizeSettings', () => {
       betaUpdates: true,
       projectRoots: ['D:\\dev'],
       minIdleDays: 180,
+      userRules: [
+        { label: 'Teams', path: 'C:\\t', tier: 'A' },
+        { label: '', path: 'C:\\sem-nome', tier: 'C' },
+      ],
+      disabledProfiles: ['node'],
     })
     expect(
       sanitizeSettings({ language: 'fr', theme: 'roxo', extraExclusions: 'x', defaultDepth: 7, autoUpdate: 'sim', betaUpdates: 1, projectRoots: 'x', minIdleDays: 45 }),
@@ -84,6 +100,8 @@ describe('settings store', () => {
       betaUpdates: true,
       projectRoots: [],
       minIdleDays: 365,
+      userRules: [],
+      disabledProfiles: [],
     })
   })
 
@@ -98,6 +116,24 @@ describe('settings store', () => {
     store.removeExclusion('C:\\Projetos')
     expect(store.extraExclusions).toEqual([])
     expect(storage.saved).toHaveLength(2)
+  })
+
+  it('regras próprias não repetem pasta; perfis alternam', () => {
+    const storage = memory()
+    const store = setup(storage)
+    store.load()
+    expect(store.addUserRule({ label: ' x ', path: ' C:\\a ', tier: 'C' })).toBe(true)
+    expect(store.addUserRule({ label: 'y', path: 'c:\\A', tier: 'A' })).toBe(false)
+    expect(store.addUserRule({ label: 'y', path: '  ', tier: 'A' })).toBe(false)
+    expect(store.userRules).toEqual([{ label: 'x', path: 'C:\\a', tier: 'C' }])
+    expect(store.classifyRequest.userRules).toEqual(store.userRules)
+    store.toggleProfile('rust')
+    expect(store.disabledProfiles).toEqual(['rust'])
+    store.toggleProfile('rust')
+    expect(store.disabledProfiles).toEqual([])
+    store.removeUserRule('C:\\a')
+    expect(store.userRules).toEqual([])
+    expect(storage.saved).toHaveLength(4)
   })
 
   it('pastas de projetos seguem a mesma regra das exclusões', () => {

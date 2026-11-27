@@ -36,6 +36,41 @@ pub struct SystemInfoDto {
     pub volume_root: String,
     pub profile: Option<String>,
     pub catalog: String,
+    /// Perfis de projeto do catálogo (para ligar/desligar nas Configurações).
+    pub project_profiles: Vec<ProfileDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ProfileDto {
+    pub id: String,
+    pub label: TextDto,
+}
+
+/// Regra própria das Configurações: só caminho, tier `A` ou `C`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct UserRuleDto {
+    pub label: String,
+    pub path: String,
+    pub tier: String,
+}
+
+/// Personalização da classificação vinda das Configurações.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct UserCustomizationDto {
+    pub user_rules: Vec<UserRuleDto>,
+    pub disabled_profiles: Vec<String>,
+}
+
+/// Resultado da validação de uma pasta de regra própria.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RuleCheckDto {
+    /// `ok` | `empty` | `unresolved_variable` | `excluded` | `protected` | `too_broad`.
+    pub code: &'static str,
+    /// Caminho expandido (`ok`), variável, exclusão ou pasta protegida.
+    pub detail: Option<String>,
+    /// Motivo da exclusão, quando `excluded`.
+    pub reason: Option<TextDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]

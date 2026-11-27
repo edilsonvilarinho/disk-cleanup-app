@@ -4,6 +4,8 @@ import type {
   ClassificationDto,
   Disposal,
   ExecutionEventDto,
+  RuleCheckDto,
+  UserRule,
   PlanDto,
   ReportDto,
   ScanProgressDto,
@@ -20,11 +22,22 @@ export interface SurveyRequest {
   depth: 1 | 2
 }
 
+/** O que a classificação recebe das Configurações. */
+export interface ClassifyRequest {
+  extraExclusions: string[]
+  projectRoots: string[]
+  userRules: UserRule[]
+  disabledProfiles: string[]
+}
+
+export const EMPTY_CLASSIFY_REQUEST: ClassifyRequest = { extraExclusions: [], projectRoots: [], userRules: [], disabledProfiles: [] }
+
 export interface DiskCleanupGateway {
   systemInfo(): Promise<SystemInfoDto>
   runSurvey(request: SurveyRequest, onProgress: (progress: ScanProgressDto) => void): Promise<SurveyDto>
-  /** `projectRoots`: pastas de projetos das Configurações, somadas às do catálogo. */
-  classify(extraExclusions: string[], projectRoots: string[]): Promise<ClassificationDto>
+  classify(request: ClassifyRequest): Promise<ClassificationDto>
+  /** Valida a pasta de uma regra própria antes de salvar. */
+  checkRule(extraExclusions: string[], path: string): Promise<RuleCheckDto>
   buildPlan(volume: string, selected: string[]): Promise<PlanDto>
   /** `disposals`: destino de cada tier; tier ausente usa o padrão do núcleo. */
   approvePlan(tiers: Tier[], disposals: Partial<Record<Tier, Disposal>>, acknowledged: boolean): Promise<ApprovalDto>
