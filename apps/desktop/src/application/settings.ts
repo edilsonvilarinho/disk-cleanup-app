@@ -1,6 +1,7 @@
 import { markRaw } from 'vue'
 import type { PiniaPlugin } from 'pinia'
 import type { UserRule } from '../domain/models'
+import type { ScanSchedule } from '../domain/monitor'
 import type { LanguagePreference } from '../i18n/i18n'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
@@ -25,7 +26,17 @@ export interface Settings {
   disabledProfiles: string[]
   /** Procurar sobras de apps desinstalados (experimental). */
   findOrphans: boolean
+  /** Ícone na bandeja; fechar a janela mantém o app nela. */
+  backgroundEnabled: boolean
+  /** Avisar quando o livre ficar abaixo de N GB (0 = desligado). */
+  lowSpaceGb: LowSpaceGb
+  /** Varredura agendada, somente leitura. */
+  schedule: ScanSchedule
 }
+
+export const LOW_SPACE_OPTIONS = [0, 10, 15, 25, 50] as const
+export type LowSpaceGb = (typeof LOW_SPACE_OPTIONS)[number]
+export const SCHEDULE_OPTIONS: readonly ScanSchedule[] = ['off', 'daily', 'weekly', 'monthly']
 
 export const MIN_IDLE_OPTIONS = [30, 90, 180, 365] as const
 export type MinIdleDays = (typeof MIN_IDLE_OPTIONS)[number]
@@ -42,6 +53,9 @@ export const DEFAULT_SETTINGS: Settings = {
   userRules: [],
   disabledProfiles: [],
   findOrphans: false,
+  backgroundEnabled: false,
+  lowSpaceGb: 15,
+  schedule: 'off',
 }
 
 /** Porta de persistência das preferências. */
@@ -89,6 +103,9 @@ export function sanitizeSettings(raw: unknown): Settings {
     userRules: rules(r.userRules),
     disabledProfiles: paths(r.disabledProfiles),
     findOrphans: flag(r.findOrphans, DEFAULT_SETTINGS.findOrphans),
+    backgroundEnabled: flag(r.backgroundEnabled, DEFAULT_SETTINGS.backgroundEnabled),
+    lowSpaceGb: pick(r.lowSpaceGb, LOW_SPACE_OPTIONS, DEFAULT_SETTINGS.lowSpaceGb),
+    schedule: pick(r.schedule, SCHEDULE_OPTIONS, DEFAULT_SETTINGS.schedule),
   }
 }
 

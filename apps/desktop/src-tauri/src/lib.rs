@@ -22,7 +22,7 @@ pub use export::{
 pub use service::{
     approve_plan, build_plan, check_rule, classify, classify_custom, classify_projects,
     execute_tier, find_duplicates, preview_tier, report, run_survey, run_survey_in, safety_guard,
-    system_info, CallbackExecution, CallbackProgress, ProjectSearch, Session,
+    system_info, volume_usage, CallbackExecution, CallbackProgress, ProjectSearch, Session,
 };
 pub use update::{
     beta_manifest_url, manifest_url, releases_api_url, stable_manifest_url, DownloadProgress,

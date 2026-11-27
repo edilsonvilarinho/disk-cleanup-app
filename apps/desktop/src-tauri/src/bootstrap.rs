@@ -3,10 +3,13 @@
 //! Excluído da medição de cobertura (exige runtime Tauri/WebView).
 
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::ipc::{InvokeBody, Request};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, State, Url, Webview};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_updater::{Update, UpdaterExt};
@@ -20,7 +23,7 @@ use disk_cleanup_infrastructure::{
 
 use crate::dto::{
     ApprovalDto, ClassificationDto, DuplicatesDto, PlanDto, ReportDto, RuleCheckDto, StepDto,
-    SurveyDto, SurveyRequestDto, SystemInfoDto, TierRunDto, UserCustomizationDto,
+    SurveyDto, SurveyRequestDto, SystemInfoDto, TierRunDto, UserCustomizationDto, VolumeDto,
 };
 use crate::error::ErrorDto;
 use crate::export;
@@ -28,6 +31,23 @@ use crate::service::{self, CallbackExecution, CallbackProgress, Session};
 use crate::update::{manifest_url, releases_api_url, DownloadProgress, UpdateInfoDto};
 
 const PROGRESS_EVENT: &str = "survey-progress";
+const TRAY_SCAN_EVENT: &str = "tray-scan";
+const TRAY_ID: &str = "main-tray";
+
+/// Fechar a janela esconde na bandeja (quando a bandeja está ligada).
+#[derive(Debug, Default)]
+struct Background {
+    to_tray: AtomicBool,
+}
+
+/// Textos do menu da bandeja: vêm da interface (o núcleo não formata frase).
+#[derive(Debug, Deserialize)]
+struct TrayLabels {
+    open: String,
+    scan: String,
+    quit: String,
+    tooltip: String,
+}
 const EXECUTION_EVENT: &str = "execution-progress";
 const UPDATE_EVENT: &str = "update-progress";
 const OS: &str = std::env::consts::OS;
@@ -105,6 +125,57 @@ async fn find_duplicates(app: AppHandle) -> Result<DuplicatesDto, ErrorDto> {
     })
     .await
     .map_err(join_error)?
+}
+
+#[tauri::command]
+fn volume_usage(volume_root: String) -> Result<VolumeDto, ErrorDto> {
+    service::volume_usage(&SysinfoVolumeInfo, &volume_root)
+}
+
+fn show_main(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+/// Liga/desliga a bandeja. "Varrer agora" só emite um evento: quem varre é a
+/// interface (somente leitura); nada é executado a partir da bandeja.
+#[tauri::command]
+fn set_background(
+    app: AppHandle,
+    state: State<'_, Background>,
+    enabled: bool,
+    labels: TrayLabels,
+) -> Result<(), ErrorDto> {
+    state.to_tray.store(enabled, Ordering::Relaxed);
+    let _ = app.remove_tray_by_id(TRAY_ID);
+    if !enabled {
+        return Ok(());
+    }
+    let fail = |e: tauri::Error| ErrorDto::new("tray").with("detail", e);
+    let open = MenuItem::with_id(&app, "open", &labels.open, true, None::<&str>).map_err(fail)?;
+    let scan = MenuItem::with_id(&app, "scan", &labels.scan, true, None::<&str>).map_err(fail)?;
+    let quit = MenuItem::with_id(&app, "quit", &labels.quit, true, None::<&str>).map_err(fail)?;
+    let menu = Menu::with_items(&app, &[&open, &scan, &quit]).map_err(fail)?;
+    let mut builder = TrayIconBuilder::with_id(TRAY_ID)
+        .menu(&menu)
+        .tooltip(&labels.tooltip)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "open" => show_main(app),
+            "scan" => {
+                show_main(app);
+                let _ = app.emit(TRAY_SCAN_EVENT, ());
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        });
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    }
+    builder.build(&app).map_err(fail)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -356,7 +427,22 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(Session::default())
+        .manage(Background::default())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let to_tray = window
+                    .app_handle()
+                    .state::<Background>()
+                    .to_tray
+                    .load(Ordering::Relaxed);
+                if to_tray {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .manage(PendingUpdate::default())
         .invoke_handler(tauri::generate_handler![
             system_info,
@@ -364,6 +450,8 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
             classify,
             check_rule,
             find_duplicates,
+            volume_usage,
+            set_background,
             build_plan,
             approve_plan,
             preview_tier,

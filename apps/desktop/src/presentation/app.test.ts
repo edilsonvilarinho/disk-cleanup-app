@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createApp, defineComponent } from 'vue'
 import { createMemoryHistory } from 'vue-router'
 import type { DiskCleanupGateway } from '../application/gateway'
+import { backgroundPlugin, type BackgroundPort } from '../application/background'
 import { exporterPlugin, type ReportExporter } from '../application/exporter'
 import { gatewayPlugin } from '../application/gatewayPlugin'
 import { historyPlugin, memoryHistoryStorage, type HistoryStorage } from '../application/history'
@@ -13,6 +14,7 @@ import { usePlanStore } from '../application/stores/plan'
 import { useSettingsStore } from '../application/stores/settings'
 import { ThemeController } from '../application/theme'
 import { updaterPlugin, type UpdaterPort } from '../application/updater'
+import { fakeBackground } from '../test/fakeBackground'
 import { fakeGateway } from '../test/fakeGateway'
 import { fakeUpdater, updateInfo } from '../test/fakeUpdater'
 import { approval, candidate, classification, report, runA, runCTrash, stepsA, survey } from '../test/fixtures'
@@ -30,6 +32,7 @@ interface MountOptions {
   updater?: UpdaterPort
   history?: HistoryStorage
   exporter?: ReportExporter
+  background?: BackgroundPort
 }
 
 function fakeExporter(overrides: Partial<ReportExporter> = {}): ReportExporter {
@@ -50,6 +53,7 @@ async function mountApp(path: string, gateway: DiskCleanupGateway = fakeGateway(
   pinia.use(updaterPlugin(updater))
   pinia.use(historyPlugin(options.history ?? memoryHistoryStorage()))
   pinia.use(exporterPlugin(options.exporter ?? fakeExporter()))
+  pinia.use(backgroundPlugin(options.background ?? fakeBackground()))
   const router = createAppRouter(createMemoryHistory())
   const apply = vi.fn()
   const theme = new ThemeController(() => true, apply)
@@ -377,6 +381,67 @@ describe('Projetos na Classificação', () => {
     // tier sem projetos não mostra o filtro
     await wrapper.get('[data-test="tab-A"]').trigger('click')
     expect(wrapper.find('[data-test="min-idle"]').exists()).toBe(false)
+  })
+})
+
+describe('Monitoramento', () => {
+  it('avisa uma vez quando o livre está abaixo do limite; limite desligado nem mede', async () => {
+    const background = fakeBackground({ volumeUsage: vi.fn(async () => ({ ...survey.volume, freeBytes: 10 * GIB })) })
+    await mountApp('/', fakeGateway(), { background, saved: { lowSpaceGb: 15 } })
+    await flushPromises()
+    expect(background.notify).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(background.notify).mock.calls[0]![0]).toBe('Pouco espaço em C:\\')
+    expect(vi.mocked(background.notify).mock.calls[0]![1]).toContain('10,0 GB livres (limite 15 GB)')
+
+    const off = fakeBackground()
+    await mountApp('/', fakeGateway(), { background: off, saved: { lowSpaceGb: 0 } })
+    await flushPromises()
+    expect(off.volumeUsage).not.toHaveBeenCalled()
+  })
+
+  it('falha ao medir não derruba o app nem avisa', async () => {
+    const background = fakeBackground({ volumeUsage: vi.fn(async () => Promise.reject(new Error('sem volume'))) })
+    const { wrapper } = await mountApp('/', fakeGateway(), { background })
+    await flushPromises()
+    expect(background.notify).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test="statusbar"]').exists()).toBe(true)
+  })
+
+  it('varredura agendada roda sem varredura anterior e mostra a próxima na barra', async () => {
+    const { wrapper, gateway } = await mountApp('/', fakeGateway(), { saved: { schedule: 'weekly' } })
+    await flushPromises()
+    expect(gateway.runSurvey).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('[data-test="sb-next-scan"]').text()).toContain('Próxima varredura')
+    const quiet = await mountApp('/', fakeGateway())
+    await flushPromises()
+    expect(quiet.gateway.runSurvey).not.toHaveBeenCalled()
+    expect(quiet.wrapper.find('[data-test="sb-next-scan"]').exists()).toBe(false)
+  })
+
+  it('bandeja e "Varrer agora": liga com os textos traduzidos e varre só lendo', async () => {
+    const background = fakeBackground()
+    const { wrapper, gateway, router, saved } = await mountApp('/configuracoes', fakeGateway(), { background })
+    await flushPromises()
+    expect(wrapper.get('[data-test="never-auto"]').text()).toContain('nunca')
+    await wrapper.get('[data-test="bg-tray"] input').setValue(true)
+    await flushPromises()
+    expect(background.setBackground).toHaveBeenLastCalledWith(true, expect.objectContaining({ open: 'Abrir Disk Cleanup', quit: 'Sair' }))
+    expect(saved.at(-1)!.backgroundEnabled).toBe(true)
+    await wrapper.get('[data-test="low-space"]').setValue('25')
+    expect(saved.at(-1)!.lowSpaceGb).toBe(25)
+    await wrapper.get('[data-test="schedule"]').setValue('daily')
+    expect(saved.at(-1)!.schedule).toBe('daily')
+    background.trayScan()
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/')
+    expect(gateway.runSurvey).toHaveBeenCalled()
+  })
+
+  it('com a bandeja ligada nas preferências, liga ao abrir', async () => {
+    const background = fakeBackground({ setBackground: vi.fn(async () => Promise.reject(new Error('sem bandeja'))) })
+    await mountApp('/', fakeGateway(), { background, saved: { backgroundEnabled: true } })
+    await flushPromises()
+    expect(background.setBackground).toHaveBeenCalledWith(true, expect.objectContaining({ scan: 'Varrer agora (somente leitura)' }))
   })
 })
 
@@ -1012,6 +1077,9 @@ describe('Configurações', () => {
       userRules: [],
       disabledProfiles: [],
       findOrphans: false,
+      backgroundEnabled: false,
+      lowSpaceGb: 15,
+      schedule: 'off',
     })
   })
 
@@ -1143,6 +1211,7 @@ describe('ramos de apresentação', () => {
     const pinia = createPinia()
     pinia.use(gatewayPlugin(fakeGateway()))
     pinia.use(settingsPlugin({ load: () => null, save: () => {} }))
+    pinia.use(backgroundPlugin(fakeBackground()))
     const Probe = defineComponent({ setup: () => ({ i18n: useI18n() }), render: () => null })
     vi.stubGlobal('navigator', { languages: [], language: 'pt-BR' })
     expect(mount(Probe, { global: { plugins: [pinia] } }).vm.i18n.locale.value).toBe('pt')

@@ -23,9 +23,11 @@ disk-cleanup-application.workspace = true
 disk-cleanup-infrastructure.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-updater = "2"
 tauri-plugin-dialog = "2.8.4"
+# Aviso de pouco espaço. 2.8.1: publicada há mais de 2 semanas.
+tauri-plugin-notification = "=2.8.1"
 semver = "1"
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 

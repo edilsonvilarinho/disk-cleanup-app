@@ -1,3 +1,4 @@
+import { BrowserBackground, TauriBackground } from './background'
 import { EMPTY_CLASSIFY_REQUEST } from '../application/gateway'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyThemeToDocument, localStorageSettingsStorage, systemPrefersDark, trackPointer, watchSystemTheme } from './browserTheme'
@@ -190,6 +191,44 @@ describe('DemoGateway · regras próprias e perfis', () => {
   })
 })
 
+describe('Segundo plano', () => {
+  it('TauriBackground: volume, bandeja, evento e aviso pedindo permissão só quando precisa', async () => {
+    const invoke = vi.fn(async () => ({ freeBytes: 1 }))
+    const unlisten = vi.fn()
+    const listen = vi.fn(async () => unlisten)
+    const notifier = { granted: vi.fn(async () => false), request: vi.fn(async () => 'granted'), send: vi.fn() }
+    const bg = new TauriBackground(invoke as never, listen as never, notifier)
+    await bg.volumeUsage('C:\\')
+    expect(invoke).toHaveBeenCalledWith('volume_usage', { volumeRoot: 'C:\\' })
+    const labels = { open: 'a', scan: 'b', quit: 'c', tooltip: 'd' }
+    await bg.setBackground(true, labels)
+    expect(invoke).toHaveBeenCalledWith('set_background', { enabled: true, labels })
+    const cb = vi.fn()
+    expect(await bg.onTrayScan(cb)).toBe(unlisten)
+    expect(listen).toHaveBeenCalledWith('tray-scan', cb)
+    await bg.notify('t', 'b')
+    expect(notifier.send).toHaveBeenCalledWith({ title: 't', body: 'b' })
+    notifier.granted.mockResolvedValue(false)
+    notifier.request.mockResolvedValue('denied')
+    await bg.notify('t2', 'b2')
+    expect(notifier.send).toHaveBeenCalledTimes(1)
+    notifier.granted.mockResolvedValue(true)
+    await bg.notify('t3', 'b3')
+    expect(notifier.request).toHaveBeenCalledTimes(2)
+    expect(notifier.send).toHaveBeenCalledTimes(2)
+  })
+
+  it('BrowserBackground: sem bandeja nem aviso; volume de exemplo coerente', async () => {
+    const bg = new BrowserBackground()
+    const v = await bg.volumeUsage()
+    expect(v.usedBytes + v.freeBytes).toBe(v.totalBytes)
+    await expect(bg.notify()).resolves.toBeUndefined()
+    await expect(bg.setBackground()).resolves.toBeUndefined()
+    const stop = await bg.onTrayScan()
+    expect(stop()).toBeUndefined()
+  })
+})
+
 describe('browserTheme', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -210,6 +249,9 @@ describe('browserTheme', () => {
       userRules: [{ label: 'x', path: '/x/y/z', tier: 'C' as const }],
       disabledProfiles: ['rust'],
       findOrphans: false,
+      backgroundEnabled: true,
+      lowSpaceGb: 25 as const,
+      schedule: 'weekly' as const,
     }
     localStorageSettingsStorage.save(settings)
     expect(localStorageSettingsStorage.load()).toEqual(settings)

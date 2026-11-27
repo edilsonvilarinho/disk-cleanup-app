@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { ThemeMode } from '../../application/settings'
+import { LOW_SPACE_OPTIONS, SCHEDULE_OPTIONS, type LowSpaceGb, type ThemeMode } from '../../application/settings'
+import type { ScanSchedule } from '../../domain/monitor'
 import { useSettingsStore } from '../../application/stores/settings'
 import { useSystemStore } from '../../application/stores/system'
 import type { RuleCheckDto, UserRule } from '../../domain/models'
@@ -132,6 +133,31 @@ function addRoot() {
       <Transition name="fade">
         <p v-if="!settings.extraExclusions.length" class="muted" data-test="no-exclusions">{{ t('settings.noExclusions') }}</p>
       </Transition>
+    </section>
+
+    <section class="card" data-test="monitor-settings">
+      <h2>{{ t('settings.monitor') }}</h2>
+      <p class="small muted">{{ t('settings.monitorHint') }}</p>
+      <label class="option" data-test="bg-tray">
+        <input type="checkbox" :checked="settings.backgroundEnabled" @change="settings.setBackgroundEnabled(checked($event))" />
+        <span>
+          <strong>{{ t('settings.tray') }}</strong>
+          <span class="small muted" style="display: block">{{ t('settings.trayHint') }}</span>
+        </span>
+      </label>
+      <div class="kv" style="align-items: center">
+        <label class="small" for="low-space">{{ t('settings.lowSpace') }}</label>
+        <select id="low-space" class="select" data-test="low-space" :value="settings.lowSpaceGb" @change="settings.setLowSpaceGb(Number(($event.target as HTMLSelectElement).value) as LowSpaceGb)">
+          <option v-for="g in LOW_SPACE_OPTIONS" :key="g" :value="g">{{ g === 0 ? t('settings.lowSpaceOff') : `${g} GB` }}</option>
+        </select>
+      </div>
+      <div class="kv" style="align-items: center">
+        <label class="small" for="schedule">{{ t('settings.schedule') }}</label>
+        <select id="schedule" class="select" data-test="schedule" :value="settings.schedule" @change="settings.setSchedule(($event.target as HTMLSelectElement).value as ScanSchedule)">
+          <option v-for="s in SCHEDULE_OPTIONS" :key="s" :value="s">{{ t(`settings.schedule_${s}`) }}</option>
+        </select>
+      </div>
+      <p class="small muted" data-test="never-auto">{{ t('settings.neverAuto') }}</p>
     </section>
 
     <section class="card" data-test="user-rules-settings">

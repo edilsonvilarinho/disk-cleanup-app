@@ -2,7 +2,8 @@ import { defineStore } from 'pinia'
 import type { LanguagePreference } from '../../i18n/i18n'
 import type { UserRule } from '../../domain/models'
 import type { ClassifyRequest } from '../gateway'
-import { DEFAULT_SETTINGS, sanitizeSettings, type MinIdleDays, type Settings, type ThemeMode } from '../settings'
+import type { ScanSchedule } from '../../domain/monitor'
+import { DEFAULT_SETTINGS, sanitizeSettings, type LowSpaceGb, type MinIdleDays, type Settings, type ThemeMode } from '../settings'
 
 /** Acrescenta caminho aparado; `null` se vazio ou já existente (sem diferenciar maiúsculas). */
 function addPath(list: readonly string[], path: string): string[] | null {
@@ -42,6 +43,9 @@ export const useSettingsStore = defineStore('settings', {
         userRules: this.userRules.map((r) => ({ ...r })),
         disabledProfiles: [...this.disabledProfiles],
         findOrphans: this.findOrphans,
+        backgroundEnabled: this.backgroundEnabled,
+        lowSpaceGb: this.lowSpaceGb,
+        schedule: this.schedule,
       })
     },
     setLanguage(language: LanguagePreference) {
@@ -93,6 +97,18 @@ export const useSettingsStore = defineStore('settings', {
     },
     removeUserRule(path: string) {
       this.userRules = this.userRules.filter((r) => r.path !== path)
+      this.persist()
+    },
+    setBackgroundEnabled(enabled: boolean) {
+      this.backgroundEnabled = enabled
+      this.persist()
+    },
+    setLowSpaceGb(gb: LowSpaceGb) {
+      this.lowSpaceGb = gb
+      this.persist()
+    },
+    setSchedule(schedule: ScanSchedule) {
+      this.schedule = schedule
       this.persist()
     },
     setFindOrphans(enabled: boolean) {

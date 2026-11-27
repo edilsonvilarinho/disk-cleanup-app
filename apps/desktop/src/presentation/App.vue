@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useMonitor } from './monitor'
 import { onMounted, watch } from 'vue'
 import { useSettingsStore } from '../application/stores/settings'
 import { useSystemStore } from '../application/stores/system'
@@ -22,6 +23,9 @@ onMounted(() => {
   system.load()
   update.startup(settings.autoUpdate, settings.betaUpdates)
 })
+
+// Segundo plano: espaço livre, varredura agendada (leitura) e bandeja.
+useMonitor()
 </script>
 
 <template>

@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissoes da janela principal: so eventos do core (progresso da varredura).",
+  "description": "Permissoes da janela principal: eventos do core (progresso, bandeja) e notificacao de pouco espaco.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "notification:default"]
 }

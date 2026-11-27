@@ -739,3 +739,11 @@ fn orphans_only_when_enabled_in_the_settings() {
         ("orphan", Some(300), "D")
     );
 }
+
+#[test]
+fn volume_usage_reads_the_volume_without_scanning() {
+    use disk_cleanup_desktop_lib::volume_usage;
+    let dto = volume_usage(&Volume, r"C:\").unwrap();
+    assert!(dto.total_bytes > 0);
+    assert_eq!(dto.total_bytes, dto.free_bytes + dto.used_bytes);
+}

@@ -93,6 +93,10 @@ ele é substituído por um fake.
    desinstalação, parada há 90+ dias e fora da lista `[orphans].ignore` do catálogo. Heurística com falsos
    positivos medidos (saves de jogos, apps que não se registram): desligada por padrão, nunca pré-marcada,
    fora do plano padrão da CLI (`--orphans`). Sem fonte de programas instalados (Linux/macOS), não procura.
+14. Monitoramento só lê: mede o espaço livre a cada 10 min (`volume_usage`, sem varrer) e avisa uma vez ao
+   cruzar o limite (histerese de 10%); a varredura agendada é a mesma varredura somente leitura; a bandeja
+   só abre o app ou dispara "Varrer agora". Nenhuma limpeza roda sem aprovação. Bandeja e agendamento vêm
+   desligados; os textos do menu da bandeja vêm da interface traduzida.
 9. Arquivo grande (`TopFiles`, os 30 maiores ≥ 512 MiB da varredura) só é oferecido **dentro do perfil do
    usuário**, como tier D, nunca pré-marcado e fora do "marcar tier inteiro"; o destino padrão do tier D
    é a Lixeira.

@@ -37,6 +37,9 @@ describe('sanitizeSettings', () => {
       userRules: [],
       disabledProfiles: [],
       findOrphans: false,
+      backgroundEnabled: false,
+      lowSpaceGb: 15,
+      schedule: 'off',
     })
     expect(
       sanitizeSettings({
@@ -58,6 +61,9 @@ describe('sanitizeSettings', () => {
         ],
         disabledProfiles: ['node', 'node', 1],
         findOrphans: true,
+        backgroundEnabled: false,
+        lowSpaceGb: 15,
+        schedule: 'off',
       }),
     ).toEqual({
       language: 'en',
@@ -74,6 +80,9 @@ describe('sanitizeSettings', () => {
       ],
       disabledProfiles: ['node'],
       findOrphans: true,
+      backgroundEnabled: false,
+      lowSpaceGb: 15,
+      schedule: 'off',
     })
     expect(
       sanitizeSettings({ language: 'fr', theme: 'roxo', extraExclusions: 'x', defaultDepth: 7, autoUpdate: 'sim', betaUpdates: 1, projectRoots: 'x', minIdleDays: 45 }),
@@ -106,6 +115,9 @@ describe('settings store', () => {
       userRules: [],
       disabledProfiles: [],
       findOrphans: false,
+      backgroundEnabled: false,
+      lowSpaceGb: 15,
+      schedule: 'off',
     })
   })
 

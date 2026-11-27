@@ -20,7 +20,7 @@ use disk_cleanup_domain::{
 use crate::dto::{
     ApprovalDto, ClassificationDto, DuplicatesDto, ExecutionEventDto, ItemResultDto, PlanDto,
     ProfileDto, ReportDto, RuleCheckDto, StepDto, SurveyDto, SurveyRequestDto, SystemInfoDto,
-    TextDto, TierRunDto, UserCustomizationDto, UserRuleDto,
+    TextDto, TierRunDto, UserCustomizationDto, UserRuleDto, VolumeDto,
 };
 use crate::error::ErrorDto;
 
@@ -144,6 +144,11 @@ pub fn system_info(
             })
             .unwrap_or_default(),
     }
+}
+
+/// Espaço do volume, sem varrer: usado pelo monitoramento de pouco espaço.
+pub fn volume_usage(volumes: &dyn VolumeInfo, volume_root: &str) -> Result<VolumeDto, ErrorDto> {
+    Ok(VolumeDto::from(&volumes.usage(volume_root)?))
 }
 
 pub fn run_survey(
