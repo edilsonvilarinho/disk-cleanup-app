@@ -97,7 +97,7 @@ impl Plan {
             });
         }
         for path in candidate.action.touched_paths() {
-            if let Some(ex) = exclusions.matching(path) {
+            if let Some(ex) = exclusions.conflicting(path) {
                 return Err(PlanError::Excluded {
                     id: candidate.id.clone(),
                     path: path.to_string(),

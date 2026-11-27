@@ -175,7 +175,7 @@ impl<'a> ClassifyService<'a> {
         let (files, now) = self.large_files;
         for file in files {
             let id = format!("file:{}", file.path);
-            if let Some(ex) = report.exclusions.matching(&file.path) {
+            if let Some(ex) = report.exclusions.conflicting(&file.path) {
                 report.skipped.push(SkippedRule {
                     id,
                     reason: SkipReason::Excluded(ex.reason.clone()),
@@ -235,7 +235,7 @@ impl<'a> ClassifyService<'a> {
         exclusions: &ExclusionList,
         guard: &ToolchainGuard,
     ) -> Result<Candidate, SkipReason> {
-        if let Some(ex) = exclusions.matching(&found.path) {
+        if let Some(ex) = exclusions.conflicting(&found.path) {
             return Err(SkipReason::Excluded(ex.reason.clone()));
         }
         let size = self
@@ -276,7 +276,7 @@ impl<'a> ClassifyService<'a> {
     ) -> Result<Candidate, SkipReason> {
         let measured = expand_template(rule.target.measured_template(), self.env)
             .map_err(SkipReason::UnresolvedVariable)?;
-        if let Some(ex) = exclusions.matching(&measured) {
+        if let Some(ex) = exclusions.conflicting(&measured) {
             return Err(SkipReason::Excluded(ex.reason.clone()));
         }
         if !self.inspector.exists(&measured) {

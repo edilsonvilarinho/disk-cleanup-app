@@ -148,3 +148,16 @@ fn toolchain_guard_blocks_target_that_contains_a_path_entry() {
     );
     assert_eq!(guard.blocking_reason(r"C:\tools\other", &[]), None);
 }
+
+/// Alvo que CONTÉM uma exclusão também conflita: remover a pasta pai apagaria
+/// a pasta protegida junto.
+#[test]
+fn conflicting_covers_targets_inside_and_targets_containing_an_exclusion() {
+    use disk_cleanup_domain::{ExclusionList, LocalizedText};
+    let list = ExclusionList::default().with(r"C:\Windows\WinSxS", LocalizedText::same("winsxs"));
+    assert!(list.conflicting(r"C:\Windows\WinSxS\x").is_some());
+    assert!(list.conflicting(r"C:\Windows").is_some());
+    assert!(list.conflicting(r"c:\windows\").is_some());
+    assert!(list.conflicting(r"C:\Windows\Temp").is_none());
+    assert!(list.conflicting(r"C:\Win").is_none());
+}

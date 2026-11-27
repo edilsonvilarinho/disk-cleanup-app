@@ -276,3 +276,16 @@ fn disposal_defaults_codes_and_parsing() {
         .to_string()
         .contains('x'));
 }
+
+#[test]
+fn plan_rejects_a_target_that_contains_an_exclusion() {
+    let c = vec![candidate("pai", Tier::C, remove(r"C:\Windows"), 10)];
+    let ex = ExclusionList::default().with(
+        r"C:\Windows\Installer",
+        disk_cleanup_domain::LocalizedText::same("msi"),
+    );
+    assert!(matches!(
+        Plan::from_selection("C:", &c, &["pai"], &ex),
+        Err(PlanError::Excluded { ref path, .. }) if path == r"C:\Windows"
+    ));
+}

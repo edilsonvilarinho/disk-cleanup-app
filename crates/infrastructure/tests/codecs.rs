@@ -317,3 +317,51 @@ fn bundled_catalogs_have_project_profiles_and_roots() {
         }
     }
 }
+
+/// Nenhuma regra embutida pode conter (ou cair dentro de) uma exclusão: o
+/// endurecimento de `conflicting` não pode tirar alvos legítimos do catálogo.
+#[test]
+fn bundled_rules_never_touch_an_exclusion_after_expansion() {
+    use disk_cleanup_application::expand_template;
+    use disk_cleanup_infrastructure::{exclusions_for, SnapshotEnvironment};
+    let env = SnapshotEnvironment::from_pairs(
+        [
+            ("SystemDrive", "C:"),
+            ("SystemRoot", r"C:\Windows"),
+            ("USERPROFILE", r"C:\Users\u"),
+            ("LOCALAPPDATA", r"C:\Users\u\AppData\Local"),
+            ("APPDATA", r"C:\Users\u\AppData\Roaming"),
+            ("ProgramData", r"C:\ProgramData"),
+            ("ProgramFiles", r"C:\Program Files"),
+            ("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+            ("TEMP", r"C:\Users\u\AppData\Local\Temp"),
+            ("HOME", "/home/u"),
+        ]
+        .iter()
+        .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+        .collect(),
+    );
+    for os in ["windows", "linux", "macos"] {
+        let catalog = catalog_for(os).unwrap().load().unwrap();
+        let exclusions = catalog
+            .exclusions
+            .iter()
+            .fold(exclusions_for(os, &env), |l, e| {
+                l.with(
+                    &expand_template(&e.pattern, &env).unwrap_or_else(|_| e.pattern.clone()),
+                    e.reason.clone(),
+                )
+            });
+        for rule in &catalog.rules {
+            let Ok(path) = expand_template(rule.target.measured_template(), &env) else {
+                continue;
+            };
+            assert!(
+                exclusions.conflicting(&path).is_none(),
+                "{os}/{}: {path} toca a exclusão {:?}",
+                rule.id,
+                exclusions.conflicting(&path).map(|e| &e.pattern)
+            );
+        }
+    }
+}
